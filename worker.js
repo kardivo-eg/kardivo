@@ -18,6 +18,13 @@ async function api(req,env,url){
   if(path==="/api/me"&&method==="GET")return json({user:me});
   if(path==="/api/categories"&&method==="GET")return json((await env.DB.prepare("SELECT * FROM categories ORDER BY name COLLATE NOCASE").all()).results);
   if(path==="/api/products"&&method==="GET")return json(await productList(env,false));
+  const productSlugMatch=path.match(/^\/api\/products\/([^/]+)$/);
+  if(productSlugMatch&&method==="GET"){
+    const slug=decodeURIComponent(productSlugMatch[1]);
+    const product=await env.DB.prepare("SELECT p.*,c.name category_name,(SELECT COUNT(*) FROM inventory i WHERE i.product_id=p.id AND i.status='available') stock FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.slug=? AND p.active=1 LIMIT 1").bind(slug).first();
+    if(!product)return json({error:"Product not found."},404);
+    return json(product);
+  }
   if(path==="/api/settings/public"&&method==="GET"){
     const s=await settings(env);return json({instapay_enabled:s.instapay_enabled!=="0",vodafone_cash_enabled:s.vodafone_cash_enabled!=="0",telda_enabled:s.telda_enabled!=="0",whatsapp:s.whatsapp||"",support_text:s.support_text||"",store_name:s.store_name||"Kardivo",store_currency:s.store_currency||"EGP",logo_url:LOGO_URL});
   }
