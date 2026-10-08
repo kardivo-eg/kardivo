@@ -4,3 +4,8 @@ compatibility_date = "2026-10-08"
 
 [assets]
 directory = "./public"
+# ...
+[[d1_databases]]
+binding = "DB"
+database_id = "3c955451-b6fe-459e-95dd-b90bad198625"
+# ...
