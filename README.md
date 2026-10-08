@@ -55,3 +55,18 @@ Only that one user can be pinged, whatever a customer types. A Discord outage ne
 - Dynamic `sitemap.xml` and `robots.txt`.
 
 These changes use additive D1 migrations only (`ALTER TABLE` for new nullable/defaulted columns and a new `product_variants` table). Existing products, codes, orders, discounts, and users are preserved. R2 uploads use the first available binding among `R2`, `MEDIA`, `PAYMENT_PROOFS`, or `PRODUCT_ASSETS`.
+
+## New admin safety & operations tools
+
+The current Worker adds these capabilities without requiring a destructive database reset:
+
+- Product merger: preview first, then explicitly combine existing digital-code products into variants. Existing inventory rows and historical orders are preserved; source products are hidden rather than deleted.
+- Order lifecycle protection and manual expired-reservation cleanup.
+- Admin audit log for important administrative actions.
+- Revenue/average-order/cancellation dashboard metrics.
+- Low-stock Discord alerts from the admin dashboard.
+- Customer in-account order status notifications.
+- Verified-purchase product reviews with admin moderation.
+- Lightweight checkout conversion events for future analytics.
+
+The Worker creates only additive compatibility tables/columns at runtime. It does not replace the existing D1 schema or delete existing customer/order/inventory data automatically.
