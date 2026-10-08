@@ -1,22 +1,25 @@
-# Kardivo V4
+# Kardivo V5
 
-A complete rebuild of the Kardivo storefront and admin application for Cloudflare Workers + D1.
-
-## What V4 includes
-- Guest-first storefront and cart. Login is optional until checkout.
-- Customer accounts with order history and logout.
-- Admin dashboard with real product, category, inventory, discount, order, and payment-settings management.
-- Product search, category filters, sorting, featured products, stock badges, sale pricing, and cart persistence.
-- Manual payment flow for InstaPay, Vodafone Cash, and Telda. Only enabled methods are shown, and checkout reveals only the selected destination.
-- WhatsApp support link generated from the saved support number.
-- Exact Kardivo K-in-controller logo URL used directly. No fake circular K/orb replacement.
-- Existing D1 schema is retained and V4 is non-destructive.
+Cloudflare Workers + D1 storefront with an admin panel. Everything you'd normally edit in code is now editable from **Account → Admin dashboard → Settings**.
 
 ## Deploy
-1. Keep the existing D1 database ID in `wrangler.toml`.
-2. Keep your existing `ADMIN_EMAIL` and `ADMIN_PASSWORD` Worker secrets.
-3. Deploy with `wrangler deploy`.
-4. The admin account is created automatically if it does not already exist.
+1. Copy your existing `[[d1_databases]]` block into `wrangler.toml` (binding must be `DB`). Keep your `ADMIN_EMAIL` / `ADMIN_PASSWORD` secrets.
+2. `wrangler deploy`
+3. No manual SQL needed. On first request the Worker adds the few new columns/tables it needs and fills in default settings. Existing data is untouched.
 
-## Important
-The product image field is still URL-based. V4 does not pretend a local PNG upload exists when it doesn't. A real upload pipeline needs R2 or another storage backend.
+## Editable from the admin panel
+- Products (add, edit, hide/show, delete, **inline price editing**), categories, digital codes, discounts (with max uses and expiry)
+- Orders (search/filter, payment + delivery status, notes) and a customers list
+- Settings: store name, logo URL, currency label, accent color, announcement bar, all homepage text (hero, catalog, deals, how-it-works), footer, social links, support contact, payment destinations and on/off switches, pause orders, order-number prefix, max quantity, how long unpaid code orders hold stock, low-stock warning, show/hide stock counts, admin password change
+
+## What changed in V5
+- Product pages: added the missing `ASSETS` binding and `run_worker_first = ["/api/*"]`, a Worker fallback to `index.html`, and real in-app routing (no full reloads, back button works, nav links work from product pages).
+- Product cards rebuilt so the price row sits outside the link block and can't be clipped or hidden.
+- Stock is reserved when an order is placed, released on cancel/fail/refund or after the hold time, and a code order can't be marked paid without enough codes.
+- Customers see their codes in order history once an order is paid and fulfilled; guests can use **Track order** (order number + contact).
+- Discount codes: Apply button with live totals, clear error for invalid codes, usage limits.
+- Security: salted PBKDF2 passwords (old passwords upgrade automatically on next login), login/register/lookup rate limiting, Origin check, admin notes no longer leak to customers, settings keys whitelisted.
+
+## Still not included
+- Image upload (images are URLs). Needs R2 or similar.
+- Notifications (email/WhatsApp when an order arrives). Needs an email provider or WhatsApp API.
