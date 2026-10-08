@@ -7,7 +7,7 @@ const PBKDF2_ITER=50000;
 async function pbkdf2(pw,salt,iter){const k=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveBits"]);return hex(await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt,iterations:iter},k,256))}
 async function hashPassword(pw){const salt=crypto.getRandomValues(new Uint8Array(16));return `pbkdf2$${PBKDF2_ITER}$${hex(salt)}$${await pbkdf2(pw,salt,PBKDF2_ITER)}`}
 async function verifyPassword(pw,stored){stored=String(stored||"");if(stored.startsWith("pbkdf2$")){const [,it,sl,h]=stored.split("$");return (await pbkdf2(pw,new Uint8Array(sl.match(/../g).map(x=>parseInt(x,16))),Number(it)))===h}return (await sha(pw))===stored}
-const readJson=async req=>{try{return await readJson(req)}catch{return {}}};
+const readJson=async req=>{try{return await req.json()}catch{return {}}};
 const clean=s=>String(s??"").trim();
 const slugify=s=>{const r=clean(s).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")||`item-${Date.now()}`;return r==="api"?"api-1":r};
 const cookie=(value,maxAge)=>`kardivo_session=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
