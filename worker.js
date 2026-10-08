@@ -69,4 +69,4 @@ async function api(req,env,url){
   if(path==="/api/admin/settings"&&method==="PUT"){const body=await req.json();for(const [key,value] of Object.entries(body)){if(!/^[a-z0-9_]+$/.test(key))continue;await env.DB.prepare("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(key,String(value??"")).run()}return json({ok:true})}
   return json({error:"Not found"},404)
 }
-export default {async fetch(request,env){const url=new URL(request.url);if(url.pathname.startsWith("/api/")){try{return await api(request,env,url)}catch(error){console.error(error);return json({error:error?.message||"Server error"},500)}}const asset=await env.ASSETS.fetch(request);if(asset.status!==404)return asset;if(url.pathname.includes("."))return asset;return env.ASSETS.fetch(new Request(new URL("/index.html",request.url),request));}};
+export default {async fetch(request,env){const url=new URL(request.url);if(url.pathname.startsWith("/api/")){try{return await api(request,env,url)}catch(error){console.error(error);return json({error:error?.message||"Server error"},500)}}return env.ASSETS.fetch(request);}};
