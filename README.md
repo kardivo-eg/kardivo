@@ -20,3 +20,9 @@ A complete rebuild of the Kardivo storefront and admin application for Cloudflar
 
 ## Important
 The product image field is still URL-based. V4 does not pretend a local PNG upload exists when it doesn't. A real upload pipeline needs R2 or another storage backend.
+
+
+## Cloudflare D1 binding
+This package intentionally does NOT declare a `[[d1_databases]]` block in `wrangler.toml`. The existing Cloudflare Worker already has the production binding `DB -> kardivo-db`. Keep that dashboard binding enabled. Do not create or migrate a new database from this package.
+
+The Worker code expects `env.DB` to exist. After deployment, verify the Worker binding still shows `DB` mapped to `kardivo-db` in Cloudflare.
