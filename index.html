@@ -1,31 +1,20 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#08070d"><title>Kardivo | Digital Marketplace</title>
-<meta name="description" content="Kardivo — games, gift cards, subscriptions and digital products.">
-<link rel="stylesheet" href="/styles.css">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#08070d"><meta name="description" content="Kardivo digital gaming marketplace"><title>Kardivo | Digital gaming marketplace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<div class="topbar">DIGITAL GOODS · LOCAL PAYMENT · WHATSAPP SUPPORT</div>
-<header class="site-header">
-  <a class="brand" href="#home" aria-label="Kardivo home"><img src="https://i.ibb.co/rRqtGKkw/0db84367-e795-4617-835e-5e0a2bf2ff45.jpg" alt="Kardivo"></a>
-  <nav class="main-nav"><a href="#shop">Store</a><a href="#categories">Categories</a><a href="#deals">Deals</a><a href="#how">How it works</a></nav>
-  <div class="header-actions"><button id="searchBtn" class="ghost-btn">Search</button><button id="account" class="ghost-btn">Account</button><button id="cart" class="cart-btn">Cart <b id="count">0</b></button></div>
-</header>
+<div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+<header class="site-header"><div class="container nav"><a class="brand" href="#home" aria-label="Kardivo home"><img src="https://i.ibb.co/rRqtGKkw/0db84367-e795-4617-835e-5e0a2bf2ff45.jpg" alt="Kardivo"></a><nav><a href="#store">Store</a><a href="#deals">Deals</a><a href="#how">How it works</a></nav><div class="nav-actions"><button class="icon-btn" id="searchFocus" aria-label="Search">⌕</button><button class="account-btn" id="accountBtn">Account</button><button class="cart-btn" id="cartBtn">Cart <span id="cartCount">0</span></button></div></div></header>
 <main>
-<section id="home" class="hero">
-  <div class="hero-copy"><div class="eyebrow">KARDIVO DIGITAL MARKETPLACE</div><h1>YOUR DIGITAL<br><em>STORE, DONE RIGHT.</em></h1><p>Games, gift cards, subscriptions and digital goods without the clutter.</p>
-  <div class="hero-actions"><a class="primary" href="#shop">Shop now</a><a class="secondary" href="#categories">Browse categories</a></div>
-  <div class="hero-meta"><span>✓ Fast digital delivery</span><span>✓ Egyptian payment methods</span><span>✓ Guest checkout</span></div></div>
-  <div class="hero-art"><div class="art-glow"></div><img src="https://i.ibb.co/rRqtGKkw/0db84367-e795-4617-835e-5e0a2bf2ff45.jpg" alt="Kardivo logo" class="hero-logo"></div>
-</section>
-<section class="trust"><div><strong>FAST DELIVERY</strong><span>Digital fulfillment</span></div><div><strong>LOCAL PAYMENT</strong><span>InstaPay · Vodafone Cash · Telda</span></div><div><strong>WHATSAPP SUPPORT</strong><span>Payment verification when needed</span></div></section>
-<section id="categories" class="section"><div class="section-head"><div><div class="eyebrow">EXPLORE</div><h2>Shop by category</h2></div><a class="text-link" href="#shop">View all →</a></div><div id="categoryCards" class="category-grid"></div></section>
-<section id="shop" class="section shop-section"><div class="section-head"><div><div class="eyebrow">STORE</div><h2>Featured products</h2></div><div class="toolbar"><button id="searchBtn2" class="ghost-btn">Search</button><select id="sort"><option value="featured">Featured</option><option value="low">Price: low to high</option><option value="high">Price: high to low</option><option value="new">Newest</option></select></div></div><div id="activeCats" class="chips"></div><div id="products" class="product-grid"></div></section>
-<section id="deals" class="deal-banner"><div><div class="eyebrow">DEALS</div><h2>Better prices.<br><em>Less nonsense.</em></h2><p>Apply an eligible discount code during checkout.</p></div><a class="primary" href="#shop">Find a deal</a></section>
-<section id="how" class="section"><div class="eyebrow">HOW IT WORKS</div><h2>Three steps. <em>No account wall.</em></h2><div class="steps"><article><b>01</b><h3>Choose</h3><p>Browse and add products without signing in.</p></article><article><b>02</b><h3>Continue</h3><p>At checkout, log in, create an account, or continue as a guest.</p></article><article><b>03</b><h3>Pay & verify</h3><p>Pay the exact total locally, then send your receipt to support.</p></article></div></section>
+<section id="home" class="hero container"><div class="hero-copy"><span class="eyebrow">DIGITAL GOODS · EGYPT</span><h1>Game night,<br><em>sorted.</em></h1><p>Games, gift cards, subscriptions and digital products without the ancient ritual of hunting through twelve tabs.</p><div class="hero-actions"><a class="btn primary" href="#store">Browse store <span>↗</span></a><a class="btn ghost" href="#how">How it works</a></div><div class="trust-row"><span>✓ Guest checkout</span><span>✓ Manual payment</span><span>✓ Human support</span></div></div><div class="hero-visual"><div class="hero-frame"><div class="frame-grid"></div><img src="https://i.ibb.co/rRqtGKkw/0db84367-e795-4617-835e-5e0a2bf2ff45.jpg" alt="Kardivo K controller logo" class="hero-logo"><div class="hero-badge">KARDIVO<br><b>STORE</b></div></div></div></section>
+<section id="store" class="store container"><div class="section-head"><div><span class="eyebrow">THE CATALOG</span><h2>Pick your upgrade.</h2></div><div class="store-tools"><label class="search"><span>⌕</span><input id="search" placeholder="Search games, cards, subscriptions..."></label><select id="sort"><option value="featured">Featured</option><option value="newest">Newest</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="name">Name</option></select></div></div><div id="categories" class="chips"></div><div id="productGrid" class="product-grid"><div class="loading-card">Loading the catalog...</div></div></section>
+<section id="deals" class="deal-band container"><div><span class="eyebrow">SMART SHOPPING</span><h2>Deals that actually calculate.</h2><p>Use a valid discount code at checkout and the server recalculates the total. Humanity survives another spreadsheet.</p></div><div class="deal-points"><div><b>01</b><span>Clear pricing</span></div><div><b>02</b><span>Stock-aware carts</span></div><div><b>03</b><span>Exact payment total</span></div></div></section>
+<section id="how" class="how container"><div class="section-head"><div><span class="eyebrow">THE PROCESS</span><h2>Three steps. No ceremony.</h2></div></div><div class="steps"><article><b>01</b><h3>Build your cart</h3><p>Browse as a guest. Search, filter, sort, add. An account is not required just because websites enjoy collecting passwords.</p></article><article><b>02</b><h3>Choose payment</h3><p>At checkout, select an enabled InstaPay, Vodafone Cash, or Telda method and see the exact destination and total.</p></article><article><b>03</b><h3>Send proof</h3><p>Complete the payment, then send your order number and screenshot to Kardivo Support through WhatsApp.</p></article></div></section>
 </main>
-<footer><div><img src="https://i.ibb.co/rRqtGKkw/0db84367-e795-4617-835e-5e0a2bf2ff45.jpg" alt="Kardivo"><p>Digital products, without the circus.</p></div><div class="footer-links"><a href="#shop">Store</a><a href="#categories">Categories</a><a href="#deals">Deals</a><a href="#how">How it works</a></div><small>© Kardivo</small></footer>
-<div id="modal"></div><script src="/app.js"></script>
+<footer><div class="container footer-grid"><div><img src="https://i.ibb.co/rRqtGKkw/0db84367-e795-4617-835e-5e0a2bf2ff45.jpg" class="footer-logo" alt="Kardivo"><p>Digital goods, minus the nonsense.</p></div><div><span class="eyebrow">SUPPORT</span><p id="footerSupport">Configure support contact in Admin Settings.</p></div><div><span class="eyebrow">ACCOUNT</span><a href="#account" id="footerAccount">Orders & profile</a></div></div><div class="container footer-bottom"><span>Made by 3ellwa</span><span>© <span id="year"></span> Kardivo</span></div></footer>
+<div id="toast" class="toast"></div>
+<div id="modalRoot"></div>
+<script src="/app.js"></script>
 </body></html>

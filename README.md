@@ -1,29 +1,22 @@
 # Kardivo V4
 
-Full V4 rebuild of the Kardivo storefront and admin control center.
+A complete rebuild of the Kardivo storefront and admin application for Cloudflare Workers + D1.
+
+## What V4 includes
+- Guest-first storefront and cart. Login is optional until checkout.
+- Customer accounts with order history and logout.
+- Admin dashboard with real product, category, inventory, discount, order, and payment-settings management.
+- Product search, category filters, sorting, featured products, stock badges, sale pricing, and cart persistence.
+- Manual payment flow for InstaPay, Vodafone Cash, and Telda. Only enabled methods are shown, and checkout reveals only the selected destination.
+- WhatsApp support link generated from the saved support number.
+- Exact Kardivo K-in-controller logo URL used directly. No fake circular K/orb replacement.
+- Existing D1 schema is retained and V4 is non-destructive.
 
 ## Deploy
-1. Replace the GitHub repository contents with this folder.
-2. Commit and push.
-3. Redeploy the existing Cloudflare Worker.
-4. Keep the existing `ADMIN_EMAIL` and `ADMIN_PASSWORD` secrets.
-5. Keep the existing D1 database. Do **not** reset or recreate it.
+1. Keep the existing D1 database ID in `wrangler.toml`.
+2. Keep your existing `ADMIN_EMAIL` and `ADMIN_PASSWORD` Worker secrets.
+3. Deploy with `wrangler deploy`.
+4. The admin account is created automatically if it does not already exist.
 
-## Existing D1
-- Name: `kardivo-db`
-- ID: `3c955451-b6fe-459e-95dd-b90bad198625`
-
-## Admin controls
-- Product add/edit/hide/show/delete
-- Product price and old-price editing
-- Category add/edit/delete
-- Discount add/edit/delete, minimum order, expiry, active toggle
-- Digital code inventory add/delete
-- Order payment and fulfillment status
-- Payment method enable/disable and destination editing
-- WhatsApp/support settings
-
-## Logo
-The old circular K/orb is removed from the HTML. Header, hero and footer use the exact canonical logo supplied by the user via its direct ImgBB image URL.
-
-The exact image is referenced remotely because the image bytes were not available to this build runtime.
+## Important
+The product image field is still URL-based. V4 does not pretend a local PNG upload exists when it doesn't. A real upload pipeline needs R2 or another storage backend.
