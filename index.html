@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#09070f">
+  <title>Kardivo — Digital Marketplace</title>
+  <meta name="description" content="Kardivo — games, gift cards and digital products.">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="site-header">
+  <a class="brand" href="#" aria-label="Kardivo home">
+    <span class="brand-mark" aria-hidden="true">
+      <span class="k-line k-a"></span><span class="k-line k-b"></span><span class="k-line k-c"></span>
+      <span class="pad-cut"></span>
+    </span>
+    <span class="brand-name">Kardivo</span>
+  </a>
+  <nav class="main-nav">
+    <a href="#shop">Shop</a><a href="#deals">Deals</a><a href="#how">How it works</a>
+  </nav>
+  <div class="header-actions">
+    <button id="account" class="ghost-btn">Account</button>
+    <button id="cart" class="cart-btn">Cart <b id="count">0</b></button>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="hero-copy">
+      <div class="eyebrow">DIGITAL MARKETPLACE</div>
+      <h1>LEVEL UP YOUR<br><em>DIGITAL WORLD.</em></h1>
+      <p>Games, gift cards, subscriptions and digital products, all in one place.</p>
+      <div class="hero-actions">
+        <a class="primary" href="#shop">Browse products</a>
+        <a class="secondary" href="#how">How it works</a>
+      </div>
+      <div class="hero-note"><span></span> Shop as a guest. Create an account when you need one.</div>
+    </div>
+    <div class="hero-art" aria-hidden="true">
+      <div class="logo-orbit"></div>
+      <div class="logo-controller">
+        <span class="k-line k-a"></span><span class="k-line k-b"></span><span class="k-line k-c"></span>
+        <span class="pad-cut"></span>
+      </div>
+      <div class="art-glow"></div>
+    </div>
+  </section>
+
+  <section class="trust">
+    <div><strong>FAST DELIVERY</strong><span>Digital fulfillment</span></div>
+    <div><strong>LOCAL PAYMENT</strong><span>InstaPay · Vodafone Cash · Telda</span></div>
+    <div><strong>WHATSAPP SUPPORT</strong><span>Human help when needed</span></div>
+  </section>
+
+  <section id="shop" class="shop-section">
+    <div class="section-head">
+      <div><div class="eyebrow">SHOP</div><h2>Find your next <em>move.</em></h2></div>
+      <div id="cats" class="chips"></div>
+    </div>
+    <div id="products" class="product-grid"></div>
+  </section>
+
+  <section id="deals" class="deal-banner">
+    <div>
+      <div class="eyebrow">DEALS</div>
+      <h2>More value.<br><em>Less nonsense.</em></h2>
+      <p>Discounts are applied automatically when an eligible code is used at checkout.</p>
+    </div>
+    <a class="primary" href="#shop">Shop now</a>
+  </section>
+
+  <section id="how" class="how-section">
+    <div class="eyebrow">HOW IT WORKS</div>
+    <h2>Three steps. <em>No account wall.</em></h2>
+    <div class="steps">
+      <article><b>01</b><h3>Choose</h3><p>Browse and add products without signing in.</p></article>
+      <article><b>02</b><h3>Continue</h3><p>At checkout, sign in, create an account, or continue as a guest.</p></article>
+      <article><b>03</b><h3>Pay & verify</h3><p>Pay the exact total locally, then send the payment screenshot to WhatsApp.</p></article>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="footer-brand">
+    <span class="brand-mark small"><span class="k-line k-a"></span><span class="k-line k-b"></span><span class="k-line k-c"></span><span class="pad-cut"></span></span>
+    <strong>Kardivo</strong>
+  </div>
+  <span>Digital products, without the circus.</span>
+</footer>
+
+<div id="modal"></div>
+<script src="/app.js"></script>
+</body>
+</html>
