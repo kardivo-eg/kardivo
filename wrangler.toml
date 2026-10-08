@@ -4,8 +4,3 @@ compatibility_date = "2026-10-08"
 
 [assets]
 directory = "./public"
-
-[[d1_databases]]
-binding = "DB"
-database_name = "kardivo-db"
-database_id = "3c955451-b6fe-4595-95dd-b90bad198625"
