@@ -70,3 +70,15 @@ The current Worker adds these capabilities without requiring a destructive datab
 - Lightweight checkout conversion events for future analytics.
 
 The Worker creates only additive compatibility tables/columns at runtime. It does not replace the existing D1 schema or delete existing customer/order/inventory data automatically.
+
+## V9 safe admin tools
+- Built on the V7.1 working catalog/admin behavior; normal product listing and existing order flows are preserved.
+- **Combine products into variants** is an explicit admin tool. Preview is read-only. Execute does not delete or rewrite existing inventory codes or historical orders; it creates variant/source mappings and hides the selected source products. Undo is available until the generated variant has been used by a new order.
+- Operations dashboard adds revenue metrics, manual expired-reservation cleanup, and manual low-stock Discord alerts. No cleanup job runs automatically from the dashboard.
+- Admin audit log records important admin actions.
+- Verified customer reviews with admin approval.
+- Customer in-account notifications for payment/fulfilment status changes.
+- Checkout started/completed events for conversion measurement.
+
+### Data-safety guarantee
+No DROP/TRUNCATE/reset/mass migration is included. Existing `schema.sql` and `wrangler.toml` remain unchanged. The Worker only creates additive support tables (`variant_sources`, `audit_logs`, `checkout_events`, `product_reviews`, `customer_notifications`) when they do not exist. Existing products, inventory codes, orders, customers, discounts and settings are not automatically modified.
