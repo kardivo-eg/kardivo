@@ -17,7 +17,54 @@ function renderFooter(){const w=String(state.settings.whatsapp||"").replace(/\D/
 function renderCategories(){const el=$("#categories");el.innerHTML=`<button class="chip active" data-cat="all">All</button>`+state.categories.map(c=>`<button class="chip" data-cat="${c.id}">${escapeHTML(c.name)}</button>`).join("");$$('.chip').forEach(b=>b.onclick=()=>{state.category=b.dataset.cat;$$('.chip').forEach(x=>x.classList.toggle('active',x===b));renderProducts()})}
 function filtered(){let arr=[...state.products];if(state.category!=="all")arr=arr.filter(p=>String(p.category_id)===String(state.category));const q=state.query.toLowerCase();if(q)arr=arr.filter(p=>`${p.name} ${p.description} ${p.platform} ${p.region} ${p.category_name}`.toLowerCase().includes(q));switch(state.sort){case"newest":arr.sort((a,b)=>b.id-a.id);break;case"price-low":arr.sort((a,b)=>a.price-b.price);break;case"price-high":arr.sort((a,b)=>b.price-a.price);break;case"name":arr.sort((a,b)=>a.name.localeCompare(b.name));break;default:arr.sort((a,b)=>(b.featured-a.featured)||(b.id-a.id))}return arr}
 function renderProducts(){const el=$("#productGrid"),arr=filtered();if(!arr.length){el.innerHTML=`<div class="loading-card">No products match that search. The catalog has escaped your criteria.</div>`;return}el.innerHTML=arr.map(p=>{const sale=Number(p.old_price)>Number(p.price);const soldOut=p.delivery_type==="code"&&Number(p.stock)<=0;return `<article class="product-card" data-product-slug="${escapeHTML(p.slug)}" tabindex="0" role="link"><div class="product-image">${p.image_url?`<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(p.name)}" loading="lazy">`:`<div class="no-image">K</div>`}${sale?`<span class="sale">SALE</span>`:""}<span class="stock">${soldOut?"Sold out":p.delivery_type==="code"?`${p.stock} codes`:"Ready"}</span></div><div class="product-body"><div class="product-cat">${escapeHTML(p.category_name||"Digital")}</div><div class="product-name" title="${escapeHTML(p.name)}">${escapeHTML(p.name)}</div><div class="product-meta">${escapeHTML([p.platform,p.region].filter(Boolean).join(" · ")||p.delivery_type)}</div><div class="product-price-line"><span class="product-price-label">Price</span><strong class="product-price">${money(p.price)}</strong>${sale?`<span class="old">${money(p.old_price)}</span>`:""}</div><div class="price-row"><button class="add-btn" data-add="${p.id}" ${soldOut?"disabled":""}>${soldOut?"Sold out":"Add to cart"}</button></div></div></article>`}).join("");$$('[data-add]').forEach(b=>b.onclick=e=>{e.stopPropagation();addToCart(Number(b.dataset.add))});$$('[data-product-slug]').forEach(card=>{const go=()=>location.href=`/${encodeURIComponent(card.dataset.productSlug)}`;card.onclick=e=>{if(!e.target.closest('[data-add]'))go()};card.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}}})}
-function renderProductPage(slug){const p=state.products.find(x=>String(x.slug).toLowerCase()===String(slug).toLowerCase());const main=$("main");if(!main)return;if(!p){document.title="Product not found · Kardivo";main.innerHTML=`<section class="product-detail-shell"><div class="product-detail"><div class="eyebrow">404</div><h1>Product not found.</h1><p>This product link is no longer available.</p><a class="btn primary" href="/">Back to store</a></div></section>`;return}document.title=`${p.name} · Kardivo`;const sale=Number(p.old_price)>Number(p.price),soldOut=p.delivery_type==="code"&&Number(p.stock)<=0;main.innerHTML=`<section class="product-detail-shell"><div class="product-detail"><a class="back-link" href="/">← Back to store</a><div class="product-detail-grid"><div class="product-detail-image">${p.image_url?`<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(p.name)}">`:`<div class="no-image">K</div>`}</div><div class="product-detail-copy"><div class="product-cat">${escapeHTML(p.category_name||"Digital")}</div><h1>${escapeHTML(p.name)}</h1><div class="detail-price">${money(p.price)}${sale?`<span class="old">${money(p.old_price)}</span>`:""}</div><div class="detail-meta">${escapeHTML([p.platform,p.region].filter(Boolean).join(" · ")||p.delivery_type)} · ${soldOut?"Sold out":p.delivery_type==="code"?`${p.stock} codes available`:"Ready"}</div><p class="detail-description">${escapeHTML(p.description||"No description has been added yet.")}</p><button class="btn primary detail-add" ${soldOut?"disabled":""}>${soldOut?"Sold out":"Add to cart"}</button></div></div></div></section>`;document.querySelector('.detail-add')?.addEventListener('click',()=>addToCart(p.id));renderCartCount();}
+function renderProductPage(slug){
+  const p=state.products.find(x=>String(x.slug).toLowerCase()===String(slug).toLowerCase());
+  const main=$("main");
+  if(!main)return;
+  if(!p){
+    document.title="Product not found · Kardivo";
+    main.innerHTML=`<section class="product-detail-shell"><div class="product-detail not-found"><div class="product-kicker">KARDIVO / 404</div><h1>Product not found.</h1><p>This product link is no longer available.</p><a class="btn primary" href="/">Back to store <span>↗</span></a></div></section>`;
+    renderCartCount();
+    return;
+  }
+  document.title=`${p.name} · Kardivo`;
+  const sale=Number(p.old_price)>Number(p.price);
+  const soldOut=p.delivery_type==="code"&&Number(p.stock)<=0;
+  const related=state.products.filter(x=>x.id!==p.id&&x.category_id&&String(x.category_id)===String(p.category_id)).slice(0,4);
+  const tags=[p.platform,p.region].filter(Boolean);
+  const availability=soldOut?"Sold out":p.delivery_type==="code"?`${p.stock} codes available`:"Ready for manual fulfillment";
+  main.innerHTML=`<section class="product-detail-shell">
+    <div class="product-detail">
+      <div class="product-detail-top"><a class="back-link" href="/">← Back to store</a><button class="product-cart-link" id="detailCart">Cart <span id="detailCartCount">${state.cart.reduce((a,b)=>a+b.quantity,0)}</span></button></div>
+      <div class="product-detail-grid">
+        <div class="product-detail-media">
+          <div class="product-detail-image">${p.image_url?`<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(p.name)}">`:`<div class="detail-placeholder"><span>K</span><small>KARDIVO</small></div>`}${sale?`<span class="detail-sale">SALE</span>`:""}<div class="detail-image-shine"></div></div>
+          <div class="detail-trust"><span>✓ Secure checkout</span><span>✓ Guest purchase</span><span>✓ Human support</span></div>
+        </div>
+        <div class="product-detail-copy">
+          <div class="product-kicker">${escapeHTML(p.category_name||"DIGITAL PRODUCT")}</div>
+          <h1>${escapeHTML(p.name)}</h1>
+          <div class="detail-meta-row">${tags.length?tags.map(x=>`<span>${escapeHTML(x)}</span>`).join(""):"<span>Digital delivery</span>"}<span class="availability ${soldOut?'sold-out':''}">${escapeHTML(availability)}</span></div>
+          <div class="detail-price-wrap"><strong class="detail-price">${money(p.price)}</strong>${sale?`<span class="detail-old">${money(p.old_price)}</span><span class="detail-save">SAVE ${Math.round((1-Number(p.price)/Number(p.old_price))*100)}%</span>`:""}</div>
+          <div class="detail-purchase-card">
+            <div><span class="purchase-label">Your price</span><strong>${money(p.price)}</strong></div>
+            <button class="btn primary detail-add" ${soldOut?"disabled":""}>${soldOut?"Sold out":"Add to cart"}</button>
+            ${!soldOut?`<button class="btn ghost detail-buy" type="button">Buy now</button>`:""}
+          </div>
+          <div class="detail-description-block"><div class="detail-section-label">ABOUT THIS PRODUCT</div><p class="detail-description">${escapeHTML(p.description||"No description has been added yet.")}</p></div>
+          <div class="detail-specs"><div><span>Category</span><b>${escapeHTML(p.category_name||"Digital")}</b></div><div><span>Platform</span><b>${escapeHTML(p.platform||"Any")}</b></div><div><span>Region</span><b>${escapeHTML(p.region||"Not specified")}</b></div><div><span>Delivery</span><b>${escapeHTML(p.delivery_type==="code"?"Digital code":"Manual fulfillment")}</b></div></div>
+        </div>
+      </div>
+      ${related.length?`<div class="related-products"><div class="related-head"><div><div class="product-kicker">KEEP BROWSING</div><h2>More from this category</h2></div><a href="/#store">View all ↗</a></div><div class="related-grid">${related.map(r=>{const rsale=Number(r.old_price)>Number(r.price);return `<article class="related-card" data-related-slug="${escapeHTML(r.slug)}"><div class="related-image">${r.image_url?`<img src="${escapeHTML(r.image_url)}" alt="${escapeHTML(r.name)}" loading="lazy">`:`<span>K</span>`}${rsale?`<i>SALE</i>`:""}</div><div class="related-body"><small>${escapeHTML(r.category_name||"Digital")}</small><b>${escapeHTML(r.name)}</b><strong>${money(r.price)}</strong></div></article>`}).join("")}</div></div>`:""}
+    </div>
+  </section>`;
+  $("#detailCart")?.addEventListener("click",openCart);
+  $(".detail-add")?.addEventListener("click",()=>addToCart(p.id));
+  $(".detail-buy")?.addEventListener("click",()=>{addToCart(p.id);setTimeout(openCart,50)});
+  $$('[data-related-slug]').forEach(card=>card.onclick=()=>location.href=`/${encodeURIComponent(card.dataset.relatedSlug)}`);
+  renderCartCount();
+}
+
 function addToCart(id){const p=state.products.find(x=>x.id===id);if(!p)return;const row=state.cart.find(x=>x.product_id===id);if(row)row.quantity=Math.min(99,row.quantity+1);else state.cart.push({product_id:id,quantity:1});saveCart();toast(`${p.name} added to cart.`)}
 function cartItems(){return state.cart.map(i=>{const p=state.products.find(x=>x.id===i.product_id);return p?{...i,p}:null}).filter(Boolean)}
 function renderCartCount(){$("#cartCount").textContent=state.cart.reduce((a,b)=>a+b.quantity,0)}
