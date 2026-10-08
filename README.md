@@ -41,3 +41,17 @@ Only that one user can be pinged, whatever a customer types. A Discord outage ne
 ## Still not included
 - Image upload (images are URLs). Needs R2 or similar.
 - Notifications (email/WhatsApp when an order arrives). Needs an email provider or WhatsApp API.
+
+
+## V7.1 additions
+- Customer-visible delivery messages on orders for manual products.
+- Payment-proof image upload at checkout and Track order; proofs are stored in R2 and visible to admins.
+- Admin **Mark paid & deliver** action and Discord alerts include a direct admin-order URL.
+- Per-IP order throttling to reduce stock-hoarding/bot reservations.
+- Discount usage is released when an order is cancelled or auto-expired.
+- Product variants/denominations with variant-specific prices and digital-code stock pools.
+- Optional Arabic product names/descriptions and Arabic category names, falling back to English.
+- Product image upload through R2, plus per-product social preview metadata.
+- Dynamic `sitemap.xml` and `robots.txt`.
+
+These changes use additive D1 migrations only (`ALTER TABLE` for new nullable/defaulted columns and a new `product_variants` table). Existing products, codes, orders, discounts, and users are preserved. R2 uploads use the first available binding among `R2`, `MEDIA`, `PAYMENT_PROOFS`, or `PRODUCT_ASSETS`.
