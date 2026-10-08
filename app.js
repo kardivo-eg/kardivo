@@ -12,7 +12,7 @@ async function api(path,options={}){
 function saveCart(){localStorage.kardivo_cart_v2=JSON.stringify(cart);$('#count').textContent=cart.reduce((a,x)=>a+x.q,0)}
 function closeModal(){ $('#modal').innerHTML='' }
 function modal(html){$('#modal').innerHTML=`<div class="modal show"><div class="box"><button class="close" onclick="closeModal()">×</button>${html}</div></div>`}
-function logoFallback(){return `<span class="brand-mark" aria-hidden="true"><span class="k-line k-a"></span><span class="k-line k-b"></span><span class="k-line k-c"></span><span class="pad-cut"></span></span>`}
+function logoFallback(){return `<img src="https://i.ibb.co/rRqtGKkw/0db84367-e795-4617-835e-5e0a2bf2ff45.jpg" alt="Kardivo" style="width:55%;height:auto;object-fit:contain">`}
 
 async function boot(){
   try{
@@ -24,9 +24,11 @@ async function boot(){
   }
 }
 function renderCats(){
-  $('#cats').innerHTML=`<button class="chip active" onclick="render('all',this)">All</button>`+
-    C.map(c=>`<button class="chip" onclick="render(${c.id},this)">${esc(c.name)}</button>`).join('');
+  const icons=['🎮','🎁','⭐','⚡','🧩','💳','🕹️','🔑'];
+  $('#categoryCards').innerHTML=C.map((c,i)=>`<button class="category-card" onclick="chooseCat(${c.id})"><span class="category-icon">${icons[i%icons.length]}</span><b>${esc(c.name)}</b><small>Browse products</small></button>`).join('');
+  $('#activeCats').innerHTML=`<button class="chip active" onclick="chooseCat('all')">All</button>`+C.map(c=>`<button class="chip" onclick="chooseCat(${c.id})">${esc(c.name)}</button>`).join('');
 }
+function chooseCat(id){render(id);document.querySelector('#shop').scrollIntoView({behavior:'smooth'})}
 function render(cat='all',btn){
   document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));if(btn)btn.classList.add('active');
   const list=P.filter(p=>cat==='all'||p.category_id==cat);
@@ -75,17 +77,12 @@ async function loginThenCheckout(e){e.preventDefault();try{U=(await api('/api/au
 function checkoutRegister(){modal(`<h2>Create an account</h2><form onsubmit="registerThenCheckout(event)"><input id="nm" placeholder="Name" required><input id="em" type="email" placeholder="Email" required><input id="pw" type="password" minlength="6" placeholder="Password" required><button class="primary">Create & continue</button></form>`)}
 async function registerThenCheckout(e){e.preventDefault();try{U=(await api('/api/auth/register',{method:'POST',body:JSON.stringify({name:$('#nm').value,email:$('#em').value,password:$('#pw').value})})).user;checkoutForm()}catch(x){alert(x.message)}}
 function guestCheckout(){checkoutForm(true)}
-function checkoutForm(guest=false){
-  modal(`<h2>Checkout</h2>${guest?`<p class="muted">Guest checkout. We only need enough information to identify this order.</p>
-  <input id="gn" placeholder="Your name" required><input id="gc" placeholder="WhatsApp number or email" required>`:
-  `<p class="muted">Signed in as ${esc(U.email)}. Your order will be saved to your account.</p>`}
-  <select id="pm"><option value="instapay">InstaPay</option><option value="vodafone_cash">Vodafone Cash</option><option value="telda">Telda</option></select>
-  <input id="dc" placeholder="Discount code (optional)">
-  <button class="primary" onclick="place(${guest})">Continue to payment</button>`);
-}
+function checkoutForm(guest=false){const methods=[['instapay','InstaPay'],['vodafone_cash','Vodafone Cash'],['telda','Telda']].filter(([k])=>S[k]&&S[k+'_enabled']!=='0');if(!methods.length){modal('<h2>Payments unavailable</h2><p class="muted">No payment method is currently enabled. Please contact support.</p>');return}window.selectedPay=methods[0][0];modal(`<h2>Checkout</h2>${guest?`<p class="muted">Guest checkout. We only need enough information to identify this order.</p><input id="gn" placeholder="Your name" required><input id="gc" placeholder="WhatsApp number or email" required>`:`<p class="muted">Signed in as ${esc(U.email)}. Your order will be saved to your account.</p>`}<div class="payment-choices">${methods.map(([k,n],i)=>`<button type="button" class="payment-choice ${i===0?'selected':''}" onclick="selectPayment('${k}',this)"><b>${n}</b><span>Pay exact total</span></button>`).join('')}</div><div id="paymentDestination" class="notice"><b>${methods[0][1]}</b><br>${esc(S[methods[0][0]])}</div><input id="dc" placeholder="Discount code (optional)"><button class="primary wide" onclick="place(${guest})">Continue to payment</button>`)}
+function selectPayment(k,el){window.selectedPay=k;document.querySelectorAll('.payment-choice').forEach(x=>x.classList.remove('selected'));el.classList.add('selected');$('#paymentDestination').innerHTML=`<b>${k==='instapay'?'InstaPay':k==='vodafone_cash'?'Vodafone Cash':'Telda'}</b><br>${esc(S[k]||'Not configured')}`}
+
 async function place(guest){
   try{
-    const payload={items:cart.map(x=>({product_id:x.id,quantity:x.q})),payment_method:$('#pm').value,discount_code:$('#dc').value};
+    const payload={items:cart.map(x=>({product_id:x.id,quantity:x.q})),payment_method:window.selectedPay,discount_code:$('#dc').value};
     if(guest){payload.guest_name=$('#gn').value.trim();payload.guest_contact=$('#gc').value.trim()}
     const d=await api('/api/orders',{method:'POST',body:JSON.stringify(payload)});
     cart=[];saveCart();
@@ -99,7 +96,7 @@ async function admin(){
   try{
     const [p,o,d,i]=await Promise.all([api('/api/admin/products'),api('/api/admin/orders'),api('/api/admin/discounts'),api('/api/admin/inventory')]);
     window.AD={p,o,d,i};modal(`<h2>Kardivo Admin</h2><div class="admin-actions">
-      <button onclick="adminProducts()">Products</button><button onclick="adminOrders()">Orders</button><button onclick="adminDiscounts()">Discounts</button><button onclick="adminInventory()">Inventory</button><button onclick="adminSettings()">Settings</button></div><div id="A"></div>`);adminProducts();
+      <button onclick="adminProducts()">Products</button><button onclick="adminOrders()">Orders</button><button onclick="adminDiscounts()">Discounts</button><button onclick="adminInventory()">Inventory</button><button onclick="adminCategories()">Categories</button><button onclick="adminSettings()">Payments</button></div><div id="A"></div>`);adminProducts();
   }catch(e){alert(e.message)}
 }
 function adminProducts(){
@@ -121,6 +118,8 @@ function adminDiscounts(){A.innerHTML=`<h3>Discounts</h3><form onsubmit="disc(ev
 async function disc(e){e.preventDefault();await api('/api/admin/discounts',{method:'POST',body:JSON.stringify({code:code.value,type:type.value,amount:amount.value,min_order:min.value})});admin()}
 function adminInventory(){A.innerHTML=`<h3>Digital code inventory</h3><form onsubmit="inv(event)"><select id="prod">${AD.p.filter(p=>p.delivery_type==='code').map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><textarea id="codes" placeholder="One code per line"></textarea><button class="primary">Add codes</button></form>`}
 async function inv(e){e.preventDefault();await api('/api/admin/inventory',{method:'POST',body:JSON.stringify({product_id:prod.value,codes:codes.value})});admin()}
-async function adminSettings(){const s=await api('/api/admin/settings');A.innerHTML=`<h3>Payment settings</h3><form onsubmit="settings(event)"><input id="si" placeholder="InstaPay" value="${esc(s.instapay)}"><input id="sv" placeholder="Vodafone Cash" value="${esc(s.vodafone_cash)}"><input id="st" placeholder="Telda" value="${esc(s.telda)}"><input id="sw" placeholder="WhatsApp number" value="${esc(s.whatsapp)}"><textarea id="ss">${esc(s.support_text)}</textarea><button class="primary">Save</button></form>`}
-async function settings(e){e.preventDefault();await api('/api/admin/settings',{method:'PUT',body:JSON.stringify({instapay:si.value,vodafone_cash:sv.value,telda:st.value,whatsapp:sw.value,support_text:ss.value})});admin()}
+async function adminCategories(){A.innerHTML=`<div class="admin-head"><h3>Categories</h3></div><form onsubmit="addCategory(event)"><input id="catName" placeholder="Category name" required><button class="primary">Add category</button></form><div class="cat-admin">${C.map(c=>`<div><b>${esc(c.name)}</b><span>${esc(c.slug)}</span></div>`).join('')}</div>`}
+async function addCategory(e){e.preventDefault();await api('/api/admin/categories',{method:'POST',body:JSON.stringify({name:$('#catName').value})});[C]=await Promise.all([api('/api/categories')]);admin()}
+async function adminSettings(){const s=await api('/api/admin/settings');A.innerHTML=`<h3>Payment methods</h3><p class="muted">Only enabled methods appear at checkout.</p><form onsubmit="settings(event"><label class="checkline"><input id="ei" type="checkbox" ${s.instapay_enabled!=='0'?'checked':''}> Enable InstaPay</label><input id="si" placeholder="InstaPay destination" value="${esc(s.instapay)}"><label class="checkline"><input id="ev" type="checkbox" ${s.vodafone_cash_enabled!=='0'?'checked':''}> Enable Vodafone Cash</label><input id="sv" placeholder="Vodafone Cash destination" value="${esc(s.vodafone_cash)}"><label class="checkline"><input id="et" type="checkbox" ${s.telda_enabled!=='0'?'checked':''}> Enable Telda</label><input id="st" placeholder="Telda destination" value="${esc(s.telda)}"><input id="sw" placeholder="WhatsApp number" value="${esc(s.whatsapp)}"><textarea id="ss" placeholder="Support text">${esc(s.support_text)}</textarea><button class="primary">Save payment settings</button></form>`}
+async function settings(e){e.preventDefault();await api('/api/admin/settings',{method:'PUT',body:JSON.stringify({instapay_enabled:ei.checked?'1':'0',instapay:si.value,vodafone_cash_enabled:ev.checked?'1':'0',vodafone_cash:sv.value,telda_enabled:et.checked?'1':'0',telda:st.value,whatsapp:sw.value,support_text:ss.value})});admin()}
 $('#cart').onclick=()=>cartView();$('#account').onclick=account;boot();

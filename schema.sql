@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL DEF
 INSERT OR IGNORE INTO settings VALUES('instapay','');
 INSERT OR IGNORE INTO settings VALUES('vodafone_cash','');
 INSERT OR IGNORE INTO settings VALUES('telda','');
+INSERT OR IGNORE INTO settings VALUES('instapay_enabled','1');
+INSERT OR IGNORE INTO settings VALUES('vodafone_cash_enabled','1');
+INSERT OR IGNORE INTO settings VALUES('telda_enabled','1');
 INSERT OR IGNORE INTO settings VALUES('whatsapp','');
 INSERT OR IGNORE INTO settings VALUES('support_text','Send your payment screenshot and order number to Kardivo Support.');
 INSERT OR IGNORE INTO categories(name,slug) VALUES('Games','games'),('Gift Cards','gift-cards'),('Subscriptions','subscriptions'),('Digital','digital');
