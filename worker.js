@@ -16,6 +16,17 @@ async function currentUser(req,env){const raw=req.headers.get("Cookie")||"",matc
 let adminChecked=false,schemaReady=false;
 async function ensureAdmin(env){if(adminChecked||!env.ADMIN_EMAIL||!env.ADMIN_PASSWORD)return;const email=clean(env.ADMIN_EMAIL).toLowerCase();const exists=await env.DB.prepare("SELECT id FROM users WHERE email=?").bind(email).first();if(!exists)await env.DB.prepare("INSERT INTO users(name,email,password_hash,role) VALUES(?,?,?,'admin')").bind("Kardivo Admin",email,await hashPassword(env.ADMIN_PASSWORD)).run();adminChecked=true}
 const SECRET_KEYS=["instapay","vodafone_cash","telda"];
+// Discord alert for new orders. Needs the DISCORD_WEBHOOK_URL secret; DISCORD_USER_ID (var) is who gets pinged.
+// Customer-supplied text only goes inside the embed and allowed_mentions is locked to one user id, so a customer can never ping @everyone or anyone else.
+function notifyDiscord(env,ctx,title,fields){
+  const hook=env.DISCORD_WEBHOOK_URL;if(!hook)return;
+  const uid=String(env.DISCORD_USER_ID||"").replace(/\D/g,""),cut=(v,n)=>String(v||"-").slice(0,n)||"-";
+  const body={content:(uid?`<@${uid}> `:"")+"New order",allowed_mentions:uid?{users:[uid]}:{parse:[]},
+    embeds:[{title:cut(title,200),color:0x8b5cf6,timestamp:new Date().toISOString(),fields:fields.slice(0,10).map(([name,value,inline])=>({name:cut(name,200),value:cut(value,1000),inline:!!inline}))}]};
+  const task=fetch(hook,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}).then(r=>{if(!r.ok)console.error("discord webhook",r.status)}).catch(e=>console.error("discord webhook",e));
+  if(ctx&&ctx.waitUntil)ctx.waitUntil(task)
+}
+
 const DEFAULTS={store_name:"Kardivo",logo_url:LOGO_URL,store_currency:"EGP",accent_color:"#8b5cf6",announcement:"",meta_title:"Digital gaming marketplace",meta_description:"Kardivo digital gaming marketplace",
 orders_open:"1",orders_closed_text:"Orders are temporarily paused. Please check back soon.",order_prefix:"KDV",max_qty:"10",reserve_hours:"24",low_stock_threshold:"3",show_stock:"1",
 hero_eyebrow:"DIGITAL GOODS · EGYPT",hero_title:"Game night,\nsorted.",hero_text:"Games, gift cards, subscriptions and digital products without the ancient ritual of hunting through twelve tabs.",hero_cta:"Browse store",hero_cta2:"How it works",trust_1:"✓ Guest checkout",trust_2:"✓ Manual payment",trust_3:"✓ Human support",
@@ -23,7 +34,8 @@ catalog_eyebrow:"THE CATALOG",catalog_title:"Pick your upgrade.",search_placehol
 deals_eyebrow:"SMART SHOPPING",deals_title:"Deals that actually calculate.",deals_text:"Use a valid discount code at checkout and the server recalculates the total.",deal_1:"Clear pricing",deal_2:"Stock-aware carts",deal_3:"Exact payment total",
 how_eyebrow:"THE PROCESS",how_title:"Three steps. No ceremony.",step1_title:"Build your cart",step1_text:"Browse as a guest. Search, filter, sort, add. An account is not required.",step2_title:"Choose payment",step2_text:"At checkout, select an enabled InstaPay, Vodafone Cash, or Telda method and see the exact destination and total.",step3_title:"Send proof",step3_text:"Complete the payment, then send your order number and screenshot to Kardivo Support through WhatsApp.",
 footer_tagline:"Digital goods, minus the nonsense.",footer_credit:"Made by 3ellwa",
-instapay:"",vodafone_cash:"",telda:"",instapay_enabled:"1",vodafone_cash_enabled:"1",telda_enabled:"1",whatsapp:"",support_text:"Send your payment screenshot and order number to Kardivo Support.",support_email:"",instagram:"",facebook:"",tiktok:""};
+instapay:"",vodafone_cash:"",telda:"",instapay_enabled:"1",vodafone_cash_enabled:"1",telda_enabled:"1",whatsapp:"",support_text:"Send your payment screenshot and order number to Kardivo Support.",support_email:"",instagram:"",facebook:"",tiktok:"",
+"announcement_ar":"","meta_title_ar":"متجر ألعاب ومنتجات رقمية","meta_description_ar":"Kardivo - متجرك للألعاب وكروت الهدايا والاشتراكات الرقمية في مصر.","orders_closed_text_ar":"استقبال الطلبات واقف مؤقتاً دلوقتي. ارجع تاني بعد شوية.","hero_eyebrow_ar":"منتجات رقمية · مصر","hero_title_ar":"سهرة الجيمنج\nجاهزة.","hero_text_ar":"ألعاب وكروت هدايا واشتراكات ومنتجات رقمية، من غير ما تلف على اتناشر تاب وتتعب نفسك.","hero_cta_ar":"شوف المتجر","hero_cta2_ar":"إزاي بتطلب؟","trust_1_ar":"✓ اطلب كضيف من غير حساب","trust_2_ar":"✓ دفع يدوي بالتحويل","trust_3_ar":"✓ دعم من ناس حقيقيين","catalog_eyebrow_ar":"الكتالوج","catalog_title_ar":"اختار اللي نفسك فيه.","search_placeholder_ar":"دوّر على ألعاب، كروت، اشتراكات...","deals_eyebrow_ar":"وفّر فلوسك","deals_title_ar":"خصومات حسابها مظبوط.","deals_text_ar":"حط كود خصم صالح وانت بتأكد الطلب، والموقع هيحسبلك الإجمالي الجديد أوتوماتيك.","deal_1_ar":"أسعار واضحة","deal_2_ar":"السلة بتعرف المتاح","deal_3_ar":"الإجمالي مظبوط للجنيه","how_eyebrow_ar":"الخطوات","how_title_ar":"تلات خطوات من غير تعقيد.","step1_title_ar":"جهّز سلتك","step1_text_ar":"اتفرج وانت ضيف: دوّر، رتّب، وضيف للسلة. مش لازم تعمل حساب.","step2_title_ar":"اختار طريقة الدفع","step2_text_ar":"وانت بتأكد الطلب، اختار إنستاباي أو فودافون كاش أو تيلدا، وهتشوف الرقم اللي هتحوّل عليه والمبلغ بالظبط.","step3_title_ar":"ابعت إثبات الدفع","step3_text_ar":"حوّل المبلغ، وبعدها ابعت رقم الطلب وسكرين شوت التحويل لدعم Kardivo على واتساب.","support_text_ar":"ابعت سكرين شوت التحويل ورقم الطلب لدعم Kardivo.","footer_tagline_ar":"منتجات رقمية من غير وجع دماغ.","footer_credit_ar":"تنفيذ 3ellwa"};
 async function ensureSchema(env){if(schemaReady)return;
  const cols=async t=>(await env.DB.prepare(`PRAGMA table_info(${t})`).all()).results.map(r=>r.name);
  const add=async(t,c,def)=>{try{if(!(await cols(t)).includes(c))await env.DB.prepare(`ALTER TABLE ${t} ADD COLUMN ${c} ${def}`).run()}catch(e){if(!/duplicate column/i.test(String(e.message)))throw e}};
@@ -55,7 +67,7 @@ async function settings(env){const rows=(await env.DB.prepare("SELECT key,value 
 async function productList(env,includeInactive=false){const where=includeInactive?"":"WHERE p.active=1";return (await env.DB.prepare(`SELECT p.*,c.name category_name,(SELECT COUNT(*) FROM inventory i WHERE i.product_id=p.id AND i.status='available') stock FROM products p LEFT JOIN categories c ON c.id=p.category_id ${where} ORDER BY p.featured DESC,p.id DESC`).all()).results}
 function validateProduct(b){if(!clean(b.name))return "Product name is required.";if(!Number.isFinite(Number(b.price))||Number(b.price)<0)return "Price must be a valid non-negative number.";return null}
 async function requireAdmin(req,env){const me=await currentUser(req,env);return me&&me.role==="admin"?me:null}
-async function api(req,env,url){
+async function api(req,env,url,ctx){
   if(!env.DB)return json({error:"D1 binding DB is missing. Add it in wrangler.toml or the Cloudflare dashboard."},500);
   await ensureSchema(env);await ensureAdmin(env);const method=req.method,path=url.pathname,me=await currentUser(req,env);
   if(method!=="GET"&&method!=="HEAD"){const o=req.headers.get("Origin");if(o&&new URL(o).host!==url.host)return json({error:"Bad origin."},403)}
@@ -86,7 +98,7 @@ async function api(req,env,url){
   if(path==="/api/orders/lookup"&&method==="POST"){const b=await readJson(req);if(!await throttle(env,`lookup:${ipOf(req)}`,15))return json({error:"Too many attempts. Try again later."},429);const num=clean(b.order_number).toUpperCase(),contact=clean(b.contact).toLowerCase();if(!num||!contact)return json({error:"Enter your order number and contact."},400);const list=await ordersWithCodes(env,"UPPER(o.order_number)=? AND (LOWER(o.guest_contact)=? OR o.user_id IN (SELECT id FROM users WHERE LOWER(email)=?))",num,contact,contact);if(!list.length)return json({error:"No order matches those details."},404);return json(list[0])}
   if(path==="/api/discount/check"&&method==="POST"){const b=await readJson(req),s=await allSettings(env);if(!await throttle(env,`disc:${ipOf(req)}`,30))return json({error:"Too many attempts. Try again later."},429);const cart=await priceCart(env,b.items,s);if(cart.error)return json({error:cart.error},400);const dc=await calcDiscount(env,b.code,cart.subtotal);if(dc.error)return json({error:dc.error},400);return json({subtotal:cart.subtotal,discount:dc.discount,total:money(cart.subtotal-dc.discount)})}
   if(path==="/api/orders"&&method==="POST"){
-    const b=await readJson(req),s=await allSettings(env);if(s.orders_open==="0")return json({error:s.orders_closed_text},503);
+    const b=await readJson(req),s=await allSettings(env);if(s.orders_open==="0")return json({error:(b.lang==="ar"&&clean(s.orders_closed_text_ar))||s.orders_closed_text},503);
     if(!me&&(!clean(b.guest_name)||!clean(b.guest_contact)))return json({error:"Guest name and contact are required."},400);
     await expireReservations(env,s);const cart=await priceCart(env,b.items,s);if(cart.error)return json({error:cart.error},400);
     const dc=await calcDiscount(env,b.discount_code,cart.subtotal);if(dc.error)return json({error:dc.error},400);
@@ -97,8 +109,9 @@ async function api(req,env,url){
     for(const item of cart.normalized){const p=cart.map.get(item.product_id);await env.DB.prepare("INSERT INTO order_items(order_id,product_id,product_name,quantity,unit_price,delivery_type) VALUES(?,?,?,?,?,?)").bind(orderId,p.id,p.name,item.quantity,p.price,p.delivery_type).run()}
     for(const item of cart.normalized){const p=cart.map.get(item.product_id);if(p.delivery_type==="code"&&!await reserveCodes(env,orderId,p.id,item.quantity)){await env.DB.prepare("UPDATE inventory SET status='available',order_id=NULL WHERE order_id=? AND status='reserved'").bind(orderId).run();await env.DB.prepare("DELETE FROM orders WHERE id=?").bind(orderId).run();return json({error:`Not enough stock for ${p.name}.`},409)}}
     if(dc.code)await env.DB.prepare("UPDATE discounts SET used_count=COALESCE(used_count,0)+1 WHERE code=?").bind(dc.code).run();
-    const cur=clean(s.store_currency)||"EGP",wa=s.whatsapp?`https://wa.me/${s.whatsapp.replace(/\D/g,"")}?text=${encodeURIComponent(`Hello ${s.store_name} Support\nOrder: ${orderNumber}\nTotal: ${total.toFixed(2)} ${cur}\nPayment method: ${pm}`)}`:"";
-    return json({order_number:orderNumber,total,subtotal,discount,payment_method:pm,destination:s[pm],whatsapp:wa,support_text:s.support_text||""},201)
+    const cur=clean(s.store_currency)||"EGP",ar=b.lang==="ar",PAY_AR={instapay:"إنستاباي",vodafone_cash:"فودافون كاش",telda:"تيلدا"},waText=ar?`أهلاً فريق دعم ${s.store_name}\nرقم الطلب: ${orderNumber}\nالإجمالي: ${total.toFixed(2)} ${cur==="EGP"?"ج.م":cur}\nطريقة الدفع: ${PAY_AR[pm]||pm}`:`Hello ${s.store_name} Support\nOrder: ${orderNumber}\nTotal: ${total.toFixed(2)} ${cur}\nPayment method: ${pm}`,wa=s.whatsapp?`https://wa.me/${s.whatsapp.replace(/\D/g,"")}?text=${encodeURIComponent(waText)}`:"";
+    notifyDiscord(env,ctx,`Order ${orderNumber}`,[["Total",`${total.toFixed(2)} ${cur}`,true],["Payment",pm,true],["Customer",`${me?me.name:guestName} - ${me?me.email:guestContact}`],["Items",cart.normalized.map(it=>`${cart.map.get(it.product_id).name} x ${it.quantity}`).join("\n")],...(dc.code?[["Discount code",dc.code,true]]:[])]);
+    return json({order_number:orderNumber,total,subtotal,discount,payment_method:pm,destination:s[pm],whatsapp:wa,support_text:(ar&&clean(s.support_text_ar))||s.support_text||""},201)
   }
   if(path.startsWith("/api/admin/")){const admin=await requireAdmin(req,env);if(!admin)return json({error:"Admin access required."},403)}
   if(path==="/api/admin/summary"&&method==="GET"){
@@ -139,8 +152,8 @@ async function api(req,env,url){
   if(path==="/api/admin/password"&&method==="POST"){const b=await readJson(req),np=String(b.new_password||"");const row=await env.DB.prepare("SELECT password_hash FROM users WHERE id=?").bind(me.id).first();if(!row||!await verifyPassword(String(b.current_password||""),row.password_hash))return json({error:"Current password is incorrect."},400);if(np.length<8)return json({error:"New password must be at least 8 characters."},400);await env.DB.prepare("UPDATE users SET password_hash=? WHERE id=?").bind(await hashPassword(np),me.id).run();return json({ok:true})}
   return json({error:"Not found"},404)
 }
-export default {async fetch(request,env){const url=new URL(request.url);
-  if(url.pathname.startsWith("/api/")){try{return await api(request,env,url)}catch(error){console.error(error);return json({error:error?.message||"Server error"},500)}}
+export default {async fetch(request,env,ctx){const url=new URL(request.url);
+  if(url.pathname.startsWith("/api/")){try{return await api(request,env,url,ctx)}catch(error){console.error(error);return json({error:error?.message||"Server error"},500)}}
   if(!env.ASSETS)return new Response('Static assets binding missing. Add binding = "ASSETS" under [assets] in wrangler.toml.',{status:500});
   let res=await env.ASSETS.fetch(request);
   if(res.status===404&&request.method==="GET"&&(request.headers.get("accept")||"").includes("text/html"))res=await env.ASSETS.fetch(new Request(new URL("/index.html",url),request));
