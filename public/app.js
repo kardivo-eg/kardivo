@@ -1,181 +1,2062 @@
-const state={products:[],categories:[],settings:{},cart:loadCart(),user:null,category:"all",query:"",sort:"featured",admin:{tab:"dashboard",data:{}}};
-const AR={"Cart": "السلة", "Store": "المتجر", "Deals": "العروض", "How it works": "إزاي بتطلب؟", "Track order": "تتبّع الطلب", "Account": "حسابي", "Home": "الرئيسية", "Search": "بحث", "STORE": "المتجر", "Search...": "دوّر...", "Featured": "المميّز", "Newest": "الأحدث", "Price: low to high": "السعر: من الأقل للأعلى", "Price: high to low": "السعر: من الأعلى للأقل", "Name": "الاسم", "Loading the catalog...": "بنحمّل المنتجات...", "SUPPORT": "الدعم", "ACCOUNT": "حسابك", "Orders & profile": "طلباتي وحسابي", "WhatsApp support": "الدعم على واتساب", "All": "الكل", "★ Featured": "★ المميّز", "No products match that search.": "مفيش منتجات بالاسم ده.", "No products yet.": "لسه مفيش منتجات.", "Sold out": "خلصت الكمية", "{0} left": "فاضل {0}", "In stock": "متوفر", "Ready": "جاهز", "View {0}": "شوف {0}", "SALE": "خصم", "Digital": "رقمي", "Add": "ضيف", "Loading product...": "بنحمّل المنتج...", "DIGITAL PRODUCT": "منتج رقمي", "{0} in stock": "متوفر منه {0}", "Manual delivery": "تسليم يدوي", "No description has been added for this product yet.": "لسه مفيش وصف للمنتج ده.", "Add to cart": "ضيف للسلة", "Back to store": "ارجع للمتجر", "Product not found": "المنتج مش موجود", "Product not found.": "المنتج مش موجود.", "This product may have been removed or the link is outdated.": "ممكن المنتج ده اتشال أو اللينك قديم.", "Sold out.": "الكمية خلصت.", "Maximum {0} per order.": "الحد الأقصى {0} في الطلب الواحد.", "{0} added to cart.": "{0} اتضاف للسلة.", "Your cart": "السلة بتاعتك", "Your cart is empty. Humanity's oldest shopping problem.": "السلة فاضية… أقدم مشكلة في تاريخ التسوق!", "{0} each": "{0} للقطعة", "Remove": "شيل", "Subtotal": "المجموع", "Continue shopping": "كمّل تسوق", "Continue to checkout": "كمّل للدفع", "Orders are paused.": "الطلبات واقفة دلوقتي.", "Checkout": "إتمام الطلب", "You can check out as a guest. To keep order history, log in or create an account before placing the order.": "تقدر تطلب كضيف من غير حساب. ولو عايز تحتفظ بسجل طلباتك، سجّل دخول أو اعمل حساب قبل ما تأكد الطلب.", "Your name": "اسمك", "Contact (WhatsApp or phone)": "رقم للتواصل (واتساب أو موبايل)", "WhatsApp or phone": "رقم الواتساب أو الموبايل", "Discount code": "كود الخصم", "Optional code": "الكود (اختياري)", "Apply": "طبّق", "Discount": "الخصم", "Total": "الإجمالي", "Payment method": "طريقة الدفع", "Back": "رجوع", "Place order": "أكّد الطلب", "Discount applied.": "الخصم اتطبّق.", "Enter a code to apply.": "اكتب كود الخصم الأول.", "Details shown after you order": "التفاصيل هتظهرلك بعد تأكيد الطلب", "No payment methods are available right now. Please contact support.": "مفيش طرق دفع متاحة دلوقتي. كلّم الدعم لو سمحت.", "Choose a payment method.": "اختار طريقة الدفع.", "Name and contact are required.": "الاسم ورقم التواصل مطلوبين.", "Order placed": "الطلب اتسجّل", "Order <b>{0}</b> created. Save this number.": "طلبك رقم <b>{0}</b> اتسجّل. احتفظ بالرقم ده.", "Total to pay": "المطلوب دفعه", "Payment": "الدفع", "Send payment to": "حوّل المبلغ على", "You can check this order any time with \"Track order\" using the order number and the contact you entered.": "تقدر تتابع الطلب في أي وقت من «تتبّع الطلب» برقم الطلب ورقم التواصل اللي كتبته.", "Open WhatsApp Support": "افتح واتساب الدعم", "Done": "تمام", "Log in": "تسجيل الدخول", "Create account": "إنشاء حساب", "Continue as guest": "كمّل كضيف", "Email": "الإيميل", "Password": "الباسورد", "Welcome back, {0}.": "نورتنا تاني يا {0}.", "Account created.": "الحساب اتعمل بنجاح.", "Hi, {0}": "أهلاً يا {0}", "Administrator account": "حساب أدمن", "Customer account": "حساب عميل", "Order history": "طلباتك السابقة", "No orders yet.": "لسه مفيش طلبات.", "Admin dashboard": "لوحة التحكم", "Log out": "تسجيل الخروج", "Logged out.": "اتسجّل خروجك.", "Payment: {0} · Delivery: {1} · {2}": "الدفع: {0} · التسليم: {1} · {2}", "Your codes": "أكوادك", "Copy": "نسخ", "Copied.": "اتنسخ.", "Track your order": "تتبّع طلبك", "Order number": "رقم الطلب", "Contact you used (WhatsApp / phone / account email)": "رقم التواصل اللي استخدمته (واتساب / موبايل / إيميل الحساب)",  "Find order": "دوّر على الطلب", "Delivery message":"رسالة التسليم", "Payment proof":"إثبات الدفع", "Upload payment proof":"ارفع إثبات الدفع", "Upload screenshot":"ارفع سكرين شوت", "Choose option":"اختار الخيار", "Choose options":"اختار الخيارات", "Variant":"الخيار", "Ready":"جاهز", "Manual delivery":"تسليم يدوي", "Mark paid & deliver":"علّم مدفوع وسلّم", "Image upload":"رفع صورة", "Name (Arabic)":"الاسم بالعربي", "Description (Arabic)":"الوصف بالعربي", "Category name (Arabic)":"اسم القسم بالعربي", "Variants / denominations":"الخيارات / الفئات", "Option name":"اسم الخيار", "No variants":"مفيش خيارات", "Proof uploaded.":"إثبات الدفع اترفع.", "Choose a file first.":"اختار ملف الأول.", "Upload image":"ارفع صورة", "Image uploaded.":"الصورة اترفعت."};
-const ERR_AR={"Cart is empty.": "السلة فاضية.", "Choose an enabled payment method.": "اختار طريقة دفع متاحة.", "Enter a valid name, email, and password of at least 8 characters.": "اكتب اسم وإيميل صح وباسورد 8 حروف على الأقل.", "Email already exists.": "الإيميل ده مسجّل قبل كده.", "Enter your order number and contact.": "اكتب رقم الطلب ورقم التواصل.", "Guest name and contact are required.": "الاسم ورقم التواصل مطلوبين.", "Invalid email or password.": "الإيميل أو الباسورد غلط.", "Login required.": "لازم تسجّل دخول الأول.", "No order matches those details.": "مفيش طلب بالبيانات دي.", "One of the products is no longer available.": "واحد من المنتجات ما بقاش متاح.", "Order not found.": "الطلب مش موجود.", "Product not found.": "المنتج مش موجود.", "This discount code is invalid, expired, or doesn't apply to your cart.": "كود الخصم ده غلط أو منتهي أو مش بينطبق على السلة بتاعتك.", "Too many attempts. Try again later.": "محاولات كتير. جرّب تاني بعد شوية.", "Too many login attempts. Try again in 15 minutes.": "محاولات دخول كتير. جرّب تاني بعد 15 دقيقة.", "Bad origin.": "الطلب ده مش مسموح.", "Admin access required.": "ده للأدمن بس.", "Not found": "مش موجود"};
-const STATUS_AR={"awaiting_payment": "مستني الدفع", "paid": "اتدفع", "failed": "الدفع فشل", "refunded": "اتسترجع", "pending": "قيد الانتظار", "processing": "بيتجهّز", "fulfilled": "اتسلّم", "cancelled": "اتلغى"};
-const PAY_AR={instapay:"إنستاباي",vodafone_cash:"فودافون كاش",telda:"تيلدا"};
-state.lang=(()=>{try{return localStorage.getItem("kardivo_lang")==="en"?"en":"ar"}catch{return"ar"}})();
-function t(k,...a){const s=(state.lang==="ar"&&AR[k])||k;return a.length?s.replace(/\{(\d)\}/g,(_,i)=>a[i]??""):s}
-function S(k){const s=state.settings;if(state.lang==="ar"){const a=s[k+"_ar"];if(a!=null&&String(a).trim()!=="")return a}return s[k]}
-function tr(m){if(state.lang!=="ar"||state.adminOpen)return m;if(ERR_AR[m])return ERR_AR[m];let x;if(x=/^Not enough stock for (.+)\.$/.exec(m))return `مفيش كمية كفاية من ${x[1]}.`;if(x=/^Request failed \((\d+)\)$/.exec(m))return `حصلت مشكلة في الطلب (${x[1]}).`;if(/failed to fetch|networkerror|load failed/i.test(m))return"الاتصال بالسيرفر فشل. اتأكد من النت وجرّب تاني.";return m}
-const arrow=()=>state.lang==="ar"?"↖":"↗";
-const dlv=p=>state.lang==="ar"?(p.delivery_type==="code"?"كود رقمي":"تسليم يدوي"):p.delivery_type;
-const statusName=x=>{const k=String(x||"");return state.lang==="ar"&&STATUS_AR[k]?STATUS_AR[k]:k.replace(/_/g," ")};
-function translateStatic(root=document){root.querySelectorAll("[data-i18n]").forEach(el=>el.textContent=t(el.dataset.i18n));root.querySelectorAll("[data-i18n-ph]").forEach(el=>el.placeholder=t(el.dataset.i18nPh));root.querySelectorAll("[data-i18n-aria]").forEach(el=>el.setAttribute("aria-label",t(el.dataset.i18nAria)));root.querySelectorAll("[data-arrow]").forEach(el=>el.textContent=arrow())}
-function setDir(){const h=document.documentElement,ar=state.lang==="ar";h.lang=state.lang;h.dir=ar?"rtl":"ltr";const b=$("#langBtn");if(b){b.textContent=ar?"EN":"AR";b.title=ar?"Switch to English":"التبديل للعربي";b.setAttribute("aria-label",b.title)}}
-function applyLang(){setDir();translateStatic();if(!state.ready)return;applySettings();renderFooter();renderCartCount();if(isProductRoute())openProductPage(decodeURIComponent(location.pathname.slice(1)).replace(/\/$/,""));else{renderCategories();renderProducts()}}
-function setLang(l){state.lang=l==="en"?"en":"ar";try{localStorage.setItem("kardivo_lang",state.lang)}catch{}applyLang()}
-const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const logo="https://i.ibb.co/rRqtGKkw/0db84367-e795-4617-835e-5e0a2bf2ff45.jpg";
-function loadCart(){try{return JSON.parse(localStorage.getItem("kardivo_cart")||"[]")}catch{return[]}}
-function saveCart(){localStorage.setItem("kardivo_cart",JSON.stringify(state.cart));renderCartCount()}
-function escapeHTML(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]))}
-function money(v){let c=state.settings.store_currency||"EGP";if(state.lang==="ar"&&String(c).toUpperCase()==="EGP")c="ج.م";return `${Number(v||0).toFixed(2)} ${c}`}
-function pName(p){return state.lang==="ar"&&String(p?.name_ar||"").trim()?p.name_ar:p?.name||""}
-function pDesc(p){return state.lang==="ar"&&String(p?.description_ar||"").trim()?p.description_ar:p?.description||""}
-function cName(c){return state.lang==="ar"&&String(c?.name_ar||"").trim()?c.name_ar:c?.name||""}
-function variantStock(p,v){return Number(v?.stock??0)}
-function cartKey(i){return `${i.product_id}:${i.variant_id||0}`}
-function slugifyClient(s){return String(s||"").toLowerCase().trim().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")}
-function toast(message){const el=$("#toast");el.textContent=message;el.classList.add("show");clearTimeout(window.__toast);window.__toast=setTimeout(()=>el.classList.remove("show"),2800)}
-async function api(path,options={}){const res=await fetch(path,{credentials:"same-origin",headers:{"content-type":"application/json",...(options.headers||{})},...options});let body={};try{body=await res.json()}catch{}if(!res.ok)throw new Error(tr(body.error||`Request failed (${res.status})`));return body}
-async function boot(){
-  homeHTML=$("main").innerHTML;$("#year").textContent=new Date().getFullYear();
-  try{const [products,categories,settings,me]=await Promise.all([api("/api/products"),api("/api/categories"),api("/api/settings/public"),api("/api/me")]);state.products=products;state.categories=categories;state.settings=settings;state.user=me.user;
-    state.cart=state.cart.filter(i=>products.some(p=>p.id===i.product_id));saveCart();applySettings();renderFooter();renderCartCount();await route();state.ready=true;if(location.hash==="#account")openAccount();if(state.user?.role==="admin"&&new URLSearchParams(location.search).has("admin_order")){const oid=Number(new URLSearchParams(location.search).get("admin_order"));await openAdmin();if(oid)orderForm(oid)}}
-  catch(e){console.error(e);toast(tr(e.message))}
-}
-function renderFooter(){const s=state.settings,w=String(s.whatsapp||"").replace(/\D/g,""),parts=[];if(w)parts.push(`<a href="https://wa.me/${w}" target="_blank" rel="noreferrer">${t("WhatsApp support")}</a>`);if(s.support_email)parts.push(`<a href="mailto:${escapeHTML(s.support_email)}">${escapeHTML(s.support_email)}</a>`);$("#footerSupport").innerHTML=parts.length?parts.join("<br>"):escapeHTML(S("support_text")||"");const soc=[["instagram","Instagram"],["facebook","Facebook"],["tiktok","TikTok"]].filter(([k])=>/^https?:\/\//i.test(s[k]||""));$("#footerSocial").innerHTML=soc.map(([k,n])=>`<a href="${escapeHTML(s[k])}" target="_blank" rel="noreferrer">${n}</a>`).join(" · ")}
-function renderCategories(){const el=$("#categories");if(!el)return;el.innerHTML=`<button class="chip ${state.category==="all"?"active":""}" data-cat="all">${t("All")}</button>`+(state.products.some(p=>Number(p.featured))?`<button class="chip ${state.category==="featured"?"active":""}" data-cat="featured">${t("★ Featured")}</button>`:"")+state.categories.map(c=>`<button class="chip ${String(state.category)===String(c.id)?"active":""}" data-cat="${c.id}">${escapeHTML(cName(c))}</button>`).join("");$$(".chip").forEach(b=>b.onclick=()=>{state.category=b.dataset.cat;$$(".chip").forEach(x=>x.classList.toggle("active",x===b));renderProducts()})}
-function filtered(){let arr=[...state.products];if(state.category==="featured")arr=arr.filter(p=>Number(p.featured));else if(state.category!=="all")arr=arr.filter(p=>String(p.category_id)===String(state.category));const q=state.query.toLowerCase();if(q)arr=arr.filter(p=>`${pName(p)} ${pDesc(p)} ${p.platform} ${p.region} ${cName({name:p.category_name,name_ar:p.category_name_ar})}`.toLowerCase().includes(q));switch(state.sort){case"newest":arr.sort((a,b)=>b.id-a.id);break;case"price-low":arr.sort((a,b)=>a.price-b.price);break;case"price-high":arr.sort((a,b)=>b.price-a.price);break;case"name":arr.sort((a,b)=>a.name.localeCompare(b.name));break;default:arr.sort((a,b)=>(b.featured-a.featured)||(b.id-a.id))}return arr}
-function renderProducts(){const el=$("#productGrid");if(!el)return;const arr=filtered();if(!arr.length){el.innerHTML=`<div class="loading-card">${state.products.length?t("No products match that search."):t("No products yet.")}</div>`;return}
- const showStock=state.settings.show_stock!==false;
- el.innerHTML=arr.map(p=>{const variants=(p.variants||[]).filter(v=>Number(v.active)!==0),displayPrice=variants.length?Math.min(...variants.map(v=>Number(v.price))):Number(p.price),displayOld=variants.length?Math.min(...variants.filter(v=>v.old_price!=null).map(v=>Number(v.old_price))):Number(p.old_price),sale=Number(displayOld)>displayPrice,totalStock=variants.length?variants.reduce((n,v)=>n+Number(v.stock||0),0):Number(p.stock),soldOut=p.delivery_type==="code"&&totalStock<=0,badge=soldOut?t("Sold out"):p.delivery_type==="code"?(showStock?t("{0} left",totalStock):t("In stock")):t("Ready"),href="/"+encodeURIComponent(p.slug),name=pName(p),cat=cName({name:p.category_name,name_ar:p.category_name_ar});
- return `<article class="product-card product-card-link"><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}",name))}"><div class="product-image">${p.image_url?`<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(name)}" loading="lazy">`:`<div class="no-image">K</div>`}${sale?`<span class="sale">${t("SALE")}</span>`:""}<span class="stock">${badge}</span></div><div class="product-body"><div class="product-cat">${escapeHTML(cat||t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform,p.region].filter(Boolean).join(" · ")||dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length?`${t("From")} `:""}${money(displayPrice)}${sale?`<span class="old">${money(displayOld)}</span>`:""}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut?"disabled":""}>${soldOut?t("Sold out"):variants.length?t("Choose options"):t("Add")}</button></div></article>`}).join("");
- $$("[data-add]").forEach(b=>b.onclick=()=>{const p=state.products.find(x=>x.id===Number(b.dataset.add));if(p?.variants?.length)navigate("/"+encodeURIComponent(p.slug));else addToCart(Number(b.dataset.add))})}
-async function openProductPage(slug){
- document.body.classList.add("product-route");const main=$("main");main.innerHTML=`<section class="product-page container"><div class="product-page-loading loading-card">${t("Loading product...")}</div></section>`;window.scrollTo(0,0);
- try{const p=await api(`/api/products/${encodeURIComponent(slug)}`),variants=(p.variants||[]).filter(v=>Number(v.active)!==0),sn=state.settings.store_name||"Kardivo",name=pName(p),desc=pDesc(p),totalStock=variants.length?variants.reduce((n,v)=>n+Number(v.stock||0),0):Number(p.stock),soldOut=p.delivery_type==="code"&&(variants.length?totalStock<=0:Number(p.stock)<=0);document.title=`${name} | ${sn}`;
- const first=variants[0],price=variants.length?Number(first.price):Number(p.price),old=variants.length?Number(first.old_price||0):Number(p.old_price||0);
- main.innerHTML=`<section class="product-page container"><div class="product-breadcrumb"><a href="/" data-home>${t("Store")}</a><span>/</span><span>${escapeHTML(name)}</span></div><div class="product-detail"><div class="product-detail-media">${p.image_url?`<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(name)}">`:`<div class="product-detail-placeholder">K</div>`}</div><div class="product-detail-copy"><span class="eyebrow">${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar})||t("DIGITAL PRODUCT"))}</span><h1>${escapeHTML(name)}</h1><div class="product-detail-price" id="productPrice">${money(price)} ${old>price?`<del>${money(old)}</del>`:""}</div><div class="product-detail-meta">${[p.platform,p.region,p.delivery_type==="code"?(state.settings.show_stock!==false?t("{0} in stock",totalStock):(soldOut?t("Sold out"):t("In stock"))):t("Manual delivery")].filter(Boolean).map(x=>`<span>${escapeHTML(x)}</span>`).join("")}</div>${variants.length?`<div class="field" style="margin:18px 0"><label>${t("Choose option")}</label><select id="productVariant">${variants.map((v,i)=>`<option value="${v.id}" ${i===0?"selected":""} data-price="${v.price}" data-old="${v.old_price||0}" data-stock="${v.stock||0}">${escapeHTML(v.name)}${p.delivery_type==="code"&&state.settings.show_stock!==false?` — ${v.stock||0} ${t("left")}`:""}</option>`).join("")}</select></div>`:""}<div class="product-description">${desc?escapeHTML(desc).replace(/\n/g,"<br>"):t("No description has been added for this product yet.")}</div>${(p.reviews||[]).length?`<div class="admin-panel" style="margin-top:20px"><h3>Customer reviews</h3>${p.reviews.map(r=>`<div class="line" style="padding:10px 0"><span><b>${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</b><br><small>${escapeHTML(r.user_name||'Verified customer')}</small></span><span style="max-width:55%">${escapeHTML(r.body||'')}</span></div>`).join('')}</div>`:''}<div class="product-detail-actions"><button class="btn primary" id="productAdd" ${soldOut?"disabled":""}>${soldOut?t("Sold out"):variants.length?t("Add to cart"):t("Add to cart")}</button><a class="btn ghost" href="/" data-home>${t("Back to store")}</a></div></div></div></section>`;
- const updateVariant=()=>{const sel=$("#productVariant");if(!sel)return;const o=sel.selectedOptions[0],pr=Number(o.dataset.price),ol=Number(o.dataset.old);$("#productPrice").innerHTML=`${money(pr)} ${ol>pr?`<del>${money(ol)}</del>`:""}`;const st=p.delivery_type==="code"&&Number(o.dataset.stock)<=0;$("#productAdd").disabled=st;$("#productAdd").textContent=st?t("Sold out"):t("Add to cart")};$("#productVariant")?.addEventListener("change",updateVariant);updateVariant();
- $("#productAdd").onclick=()=>addToCart(p.id,$("#productVariant")?.value?Number($("#productVariant").value):null);
- }catch(e){document.title=t("Product not found");main.innerHTML=`<section class="product-page container"><div class="empty product-not-found"><span class="eyebrow">404</span><h1>${t("Product not found.")}</h1><p>${t("This product may have been removed or the link is outdated.")}</p><a class="btn primary" href="/" data-home>${t("Back to store")}</a></div></section>`}}
-function addToCart(id,variant_id=null){const p=state.products.find(x=>x.id===id);if(!p)return;const v=(p.variants||[]).find(x=>Number(x.id)===Number(variant_id));const max=Number(state.settings.max_qty)||10,stock=p.delivery_type==="code"?(v?Number(v.stock):Number(p.stock)):max,cap=Math.min(max,stock),row=state.cart.find(x=>x.product_id===id&&Number(x.variant_id||0)===Number(variant_id||0)),cur=row?row.quantity:0;if(cur>=cap){toast(cap<=0?t("Sold out."):t("Maximum {0} per order.",cap));return}if(row)row.quantity++;else state.cart.push({product_id:id,variant_id:variant_id||null,quantity:1});saveCart();toast(t("{0} added to cart.",pName(p)))}
-function cartItems(){return state.cart.map(i=>{const p=state.products.find(x=>x.id===i.product_id);return p?{...i,p}:null}).filter(Boolean)}
-function renderCartCount(){$("#cartCount").textContent=state.cart.reduce((a,b)=>a+b.quantity,0)}
-function openModal(title,body,wide=false){$("#modalRoot").innerHTML=`<div class="modal-backdrop" id="backdrop"><div class="modal ${wide?"wide":""}" ${state.adminOpen?'dir="ltr"':""}><div class="modal-head"><h2>${title}</h2><button class="close" id="closeModal">×</button></div><div class="modal-body">${body}</div></div></div>`;$("#closeModal").onclick=closeModal;$("#backdrop").onclick=e=>{if(e.target.id==="backdrop")closeModal()}}
-function closeModal(){state.adminOpen=false;$("#modalRoot").innerHTML=""}
-function openCart(){const items=cartItems();if(!items.length){openModal(t("Your cart"),`<div class="empty">${t("Your cart is empty. Humanity's oldest shopping problem.")}</div>`);return}const subtotal=items.reduce((s,i)=>s+Number(i.p.variants?.find(v=>Number(v.id)===Number(i.variant_id))?.price??i.p.price)*i.quantity,0);openModal(t("Your cart"),`<div>${items.map(i=>{const v=i.p.variants?.find(x=>Number(x.id)===Number(i.variant_id)),label=v?`<br><small>${escapeHTML(v.name)}</small>`:"",price=Number(v?.price??i.p.price);return `<div class="line"><span><b>${escapeHTML(pName(i.p))}</b>${label}<br><small>${t("{0} each",money(price))}</small></span><span><button class="mini" data-minus="${escapeHTML(cartKey(i))}">−</button> <b>${i.quantity}</b> <button class="mini" data-plus="${escapeHTML(cartKey(i))}">+</button> <button class="mini danger" data-remove="${escapeHTML(cartKey(i))}">${t("Remove")}</button></span></div>`}).join("")}</div><div class="line total"><span>${t("Subtotal")}</span><span>${money(subtotal)}</span></div><div class="modal-actions"><button class="btn ghost" id="continueShopping">${t("Continue shopping")}</button><button class="btn primary" id="checkoutBtn">${t("Continue to checkout")}</button></div>`);$$('[data-minus]').forEach(b=>b.onclick=()=>changeQty(b.dataset.minus,-1));$$('[data-plus]').forEach(b=>b.onclick=()=>changeQty(b.dataset.plus,1));$$('[data-remove]').forEach(b=>b.onclick=()=>{state.cart=state.cart.filter(x=>cartKey(x)!==b.dataset.remove);saveCart();openCart()});$("#continueShopping").onclick=closeModal;$("#checkoutBtn").onclick=openCheckout}
-function changeQty(key,d){const row=state.cart.find(x=>cartKey(x)===key);if(!row)return;const p=state.products.find(x=>x.id===row.product_id);if(!p)return;const v=p.variants?.find(x=>Number(x.id)===Number(row.variant_id));const max=Number(state.settings.max_qty)||10,cap=p.delivery_type==="code"?Math.min(max,Number(v?.stock??p.stock)):max;if(d>0){if(row.quantity>=cap){toast(cap<=0?t("Sold out."):t("Maximum {0} per order.",cap));return}row.quantity++}else{row.quantity--;if(row.quantity<=0)state.cart=state.cart.filter(x=>cartKey(x)!==key)}saveCart();openCart()}
-function openCheckout(){const items=cartItems();if(!items.length)return;fetch("/api/checkout-events",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({event:"checkout_started",session_key:localStorage.getItem("kardivo_checkout_session")||crypto.randomUUID()})}).catch(()=>{});if(state.settings.orders_open===false){toast(S("orders_closed_text")||t("Orders are paused."));return}
- const subtotal=items.reduce((a,i)=>{const v=i.p.variants?.find(x=>Number(x.id)===Number(i.variant_id));return a+Number(v?.price??i.p.price)*i.quantity},0);
- openModal(t("Checkout"),`<div class="notice">${t("You can check out as a guest. To keep order history, log in or create an account before placing the order.")}</div><div class="form-grid" style="margin-top:14px"><div class="field"><label>${t("Name")}</label><input id="guestName" placeholder="${t("Your name")}"></div><div class="field"><label>${t("Contact (WhatsApp or phone)")}</label><input id="guestContact" placeholder="${t("WhatsApp or phone")}"></div></div><div class="field"><label>${t("Discount code")}</label><div style="display:flex;gap:8px"><input id="discountCode" placeholder="${t("Optional code")}" style="flex:1"><button type="button" class="btn ghost" id="applyDiscount">${t("Apply")}</button></div></div><div class="field"><label>${t("Payment proof")} <small>(${t("optional")})</small></label><input id="checkoutProof" type="file" accept="image/*"></div><div class="checkout-summary"><div class="line"><span>${t("Subtotal")}</span><span id="coSubtotal">${money(subtotal)}</span></div><div class="line"><span>${t("Discount")}</span><span id="coDiscount">${money(0)}</span></div><div class="line total"><span>${t("Total")}</span><span id="coTotal">${money(subtotal)}</span></div></div><div style="margin-top:18px"><b>${t("Payment method")}</b><div class="payment-grid" id="payments"></div></div><div class="modal-actions"><button class="btn ghost" id="backCart">${t("Back")}</button><button class="btn primary" id="placeOrder">${t("Place order")}</button></div>`);
- $("#backCart").onclick=openCart;renderPaymentOptions();if(state.user){$("#guestName").value=state.user.name;$("#guestContact").value=state.user.email}
- $("#applyDiscount").onclick=async()=>{try{const r=await api("/api/discount/check",{method:"POST",body:JSON.stringify({items:state.cart,code:$("#discountCode").value})});$("#coSubtotal").textContent=money(r.subtotal);$("#coDiscount").textContent="− "+money(r.discount);$("#coTotal").textContent=money(r.total);toast(r.discount?t("Discount applied."):t("Enter a code to apply."))}catch(e){toast(e.message)}}
-}
-async function uploadPaymentProof(orderId,file,contact=""){if(!file)return;const fd=new FormData();fd.append("file",file);const res=await fetch(`/api/orders/${orderId}/payment-proof`,{method:"POST",credentials:"same-origin",headers:contact?{"X-Order-Contact":contact}: {},body:fd});let body={};try{body=await res.json()}catch{}if(!res.ok)throw new Error(tr(body.error||`Request failed (${res.status})`));return body}
-function renderPaymentOptions(){const methods=PAY.filter(([k])=>state.settings[k+"_ready"]),el=$("#payments");el.innerHTML=methods.length?methods.map(([k,n])=>`<button type="button" class="pay-option" data-pay="${k}"><b>${payName(k)}</b><br><small>${t("Details shown after you order")}</small></button>`).join(""):`<div class="notice">${t("No payment methods are available right now. Please contact support.")}</div>`;$$("[data-pay]").forEach(b=>b.onclick=()=>{state.selectedPayment=b.dataset.pay;$$("[data-pay]").forEach(x=>x.classList.toggle("active",x===b))});if(methods[0])$("[data-pay]").click();else state.selectedPayment=""}
-async function placeOrder(){const items=state.cart.map(i=>({product_id:i.product_id,variant_id:i.variant_id||null,quantity:i.quantity})),guestName=$("#guestName").value.trim(),guestContact=$("#guestContact").value.trim(),proof=$("#checkoutProof")?.files?.[0];if(!state.selectedPayment){toast(t("Choose a payment method."));return}if(!state.user&&(!guestName||!guestContact)){toast(t("Name and contact are required."));return}
- try{$("#placeOrder").disabled=true;const r=await api("/api/orders",{method:"POST",body:JSON.stringify({items,lang:state.lang,guest_name:guestName,guest_contact:guestContact,discount_code:$("#discountCode").value,payment_method:state.selectedPayment})});let proofMsg="";if(proof)try{await uploadPaymentProof(r.order_id,proof,state.user?"":guestContact);proofMsg=t("Proof uploaded.")}catch(e){proofMsg=e.message}fetch("/api/checkout-events",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({event:"checkout_completed",order_id:r.order_id,session_key:localStorage.getItem("kardivo_checkout_session")||""})}).catch(()=>{});state.cart=[];saveCart();refreshStore().catch(()=>{});
- openModal(t("Order placed"),`<div class="notice success-text">${t("Order <b>{0}</b> created. Save this number.",escapeHTML(r.order_number))}</div><div class="checkout-summary" style="margin-top:14px"><div class="line"><span>${t("Total to pay")}</span><b>${money(r.total)}</b></div><div class="line"><span>${t("Payment")}</span><b>${escapeHTML(payName(r.payment_method))}</b></div><div class="destination"><b>${t("Send payment to")}</b><code>${escapeHTML(r.destination)}</code></div><p style="color:#aaa1b1;font-size:12px">${escapeHTML(r.support_text)}</p>${proofMsg?`<p style="color:#aaa1b1;font-size:12px">${escapeHTML(proofMsg)}</p>`:""}<p style="color:#aaa1b1;font-size:12px">${t('You can check this order any time with "Track order" using the order number and the contact you entered.')}</p></div><div class="modal-actions">${r.whatsapp?`<a class="btn primary" href="${escapeHTML(r.whatsapp)}" target="_blank" rel="noreferrer">${t("Open WhatsApp Support")} ${arrow()}</a>`:""}<button class="btn ghost" id="doneOrder">${t("Done")}</button></div>`);$("#doneOrder").onclick=closeModal}
- catch(e){toast(e.message);$("#placeOrder").disabled=false}}
-function openAccount(){if(state.user)openUserAccount();else openAuth()}
-function openAuth(){openModal(t("Account"),`<div class="auth-tabs"><button class="active" id="loginTab">${t("Log in")}</button><button id="registerTab">${t("Create account")}</button><button id="guestTab">${t("Continue as guest")}</button></div><div id="authForm"></div>`);showLogin();$("#loginTab").onclick=showLogin;$("#registerTab").onclick=showRegister;$("#guestTab").onclick=()=>{closeModal();openCart()}}
-function showLogin(){$("#authForm").innerHTML=`<form id="loginForm"><div class="field"><label>${t("Email")}</label><input id="email" type="email" required></div><div class="field"><label>${t("Password")}</label><input id="password" type="password" required></div><button class="btn primary" type="submit">${t("Log in")}</button></form>`;authTabs("loginTab");$("#loginForm").onsubmit=async e=>{e.preventDefault();try{const r=await api("/api/auth/login",{method:"POST",body:JSON.stringify({email:$("#email").value,password:$("#password").value})});state.user=r.user;toast(t("Welcome back, {0}.",r.user.name));closeModal()}catch(err){toast(err.message)}}}
-function showRegister(){$("#authForm").innerHTML=`<form id="registerForm"><div class="field"><label>${t("Name")}</label><input id="name" required></div><div class="field"><label>${t("Email")}</label><input id="email" type="email" required></div><div class="field"><label>${t("Password")}</label><input id="password" type="password" minlength="8" required></div><button class="btn primary" type="submit">${t("Create account")}</button></form>`;authTabs("registerTab");$("#registerForm").onsubmit=async e=>{e.preventDefault();try{const r=await api("/api/auth/register",{method:"POST",body:JSON.stringify({name:$("#name").value,email:$("#email").value,password:$("#password").value})});state.user=r.user;toast(t("Account created."));closeModal()}catch(err){toast(err.message)}}}
-function authTabs(active){["loginTab","registerTab"].forEach(id=>$("#"+id)?.classList.toggle("active",id===active))}
-function reviewForm(productId,orderId){openModal('Leave a review',`<form id="reviewForm"><div class="field"><label>Rating</label><select id="reviewRating"><option value="5">★★★★★</option><option value="4">★★★★☆</option><option value="3">★★★☆☆</option><option value="2">★★☆☆☆</option><option value="1">★☆☆☆☆</option></select></div><div class="field"><label>Review</label><textarea id="reviewBody" maxlength="1000" placeholder="How was it?"></textarea></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelReview">Cancel</button><button class="btn primary">Submit</button></div></form>`);$('#cancelReview').onclick=closeModal;$('#reviewForm').onsubmit=async e=>{e.preventDefault();try{await api('/api/reviews',{method:'POST',body:JSON.stringify({product_id:productId,order_id:orderId,rating:$('#reviewRating').value,body:$('#reviewBody').value})});toast('Review submitted for approval.');closeModal()}catch(err){toast(err.message)}}}
-async function openUserAccount(){let orders=[],notifications=[];try{[orders,notifications]=await Promise.all([api("/api/orders"),api("/api/notifications")])}catch(e){toast(e.message)}
-  openModal(t("Hi, {0}",escapeHTML(state.user.name)),`<div class="notice"><b>${escapeHTML(state.user.email)}</b><br>${state.user.role==="admin"?t("Administrator account"):t("Customer account")}</div>${notifications.length?`<h3 style="margin:18px 0 8px">Notifications</h3>${notifications.slice(0,8).map(n=>`<div class="notice" style="margin-bottom:8px"><b>${escapeHTML(n.title)}</b><br><small>${escapeHTML(n.message)}</small></div>`).join('')}`:''}<h3 style="margin:18px 0 8px">${t("Order history")}</h3>${orders.length?orders.map(orderBlock).join(""):`<div class="empty">${t("No orders yet.")}</div>`}<div class="modal-actions">${state.user.role==="admin"?`<button class="btn ghost" id="adminBtn">${t("Admin dashboard")}</button>`:""}<button class="btn ghost" id="logoutBtn">${t("Log out")}</button></div>`,true);
-  $("#logoutBtn").onclick=async()=>{await api("/api/auth/logout",{method:"POST"});state.user=null;closeModal();toast(t("Logged out."))};$("#adminBtn")?.addEventListener("click",openAdmin);bindCopy();$$('[data-review-product]').forEach(b=>b.onclick=()=>reviewForm(Number(b.dataset.reviewProduct),Number(b.dataset.reviewOrder)))}
-async function openAdmin(){closeModal();state.adminOpen=true;openModal("Admin",`<div class="admin-shell"><aside class="admin-side" id="adminSide">${[["dashboard","Dashboard"],["products","Products"],["merge","Combine products"],["categories","Categories"],["inventory","Digital codes"],["orders","Orders"],["customers","Customers"],["discounts","Discounts"],["reviews","Reviews"],["audit","Audit log"],["settings","Settings"]].map(([k,n])=>`<button data-tab="${k}">${n}</button>`).join("")}</aside><section class="admin-main" id="adminMain"></section></div>`,true);$$("#adminSide button").forEach(b=>b.onclick=()=>{state.admin.tab=b.dataset.tab;renderAdminTab()});await renderAdminTab()}
-async function renderAdminTab(){const main=$("#adminMain");if(!main)return;main.innerHTML=`<div class="empty">Loading...</div>`;const t=state.admin.tab;
-  try{if(t==="dashboard"){const d=await api("/api/admin/summary");main.innerHTML=`<div class="admin-top"><h2>Dashboard</h2><span class="eyebrow">LIVE DATA</span></div><div class="stats"><div class="stat"><small>AWAITING PAYMENT</small><b>${d.awaiting_payment}</b></div><div class="stat"><small>ORDERS</small><b>${d.orders}</b></div><div class="stat"><small>ACTIVE PRODUCTS</small><b>${d.products}</b></div><div class="stat"><small>PAID REVENUE</small><b>${money(d.paid_revenue)}</b></div><div class="stat"><small>7-DAY REVENUE</small><b>${money(d.revenue_7d)}</b></div><div class="stat"><small>30-DAY REVENUE</small><b>${money(d.revenue_30d)}</b></div><div class="stat"><small>AVG ORDER</small><b>${money(d.avg_order)}</b></div><div class="stat"><small>CANCELLED</small><b>${d.cancelled}</b></div></div><div class="admin-panel"><div class="panel-head"><h3>Store health</h3></div><div class="modal-body"><div class="line"><span>Customers</span><b>${d.customers}</b></div><div class="line"><span>Categories</span><b>${d.categories}</b></div><div class="line"><span>Available digital codes</span><b>${d.available_codes}</b></div><div class="line"><span>Payment methods ready</span><b>${PAY.filter(([k])=>state.settings[k+"_ready"]).length}/3</b></div><div class="line"><span>Accepting orders</span><b>${state.settings.orders_open===false?"Paused":"Yes"}</b></div></div></div><div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Operations</h3></div><div class="modal-body"><div class="modal-actions"><button class="btn ghost" id="cleanupReservations">Release expired reservations</button><button class="btn ghost" id="sendLowStock">Send low-stock Discord alert</button></div><small>These are manual tools. Nothing runs against your existing orders/inventory unless you click a button.</small></div></div>${d.low_stock.length?`<div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Low stock</h3></div><div class="modal-body">${d.low_stock.map(x=>`<div class="line"><span>${escapeHTML(x.name)}</span><b>${x.stock} left</b></div>`).join("")}</div></div>`:""}`}
-  if(t==="dashboard"){
-    $("#cleanupReservations")?.addEventListener("click",async()=>{try{const r=await api("/api/admin/maintenance/cleanup",{method:"POST"});toast(`Expired ${r.expired} reservation(s).`);renderAdminTab()}catch(e){toast(e.message)}});
-    $("#sendLowStock")?.addEventListener("click",async()=>{try{const r=await api("/api/admin/low-stock/notify",{method:"POST"});toast(`Low-stock alert sent for ${r.count} product(s).`)}catch(e){toast(e.message)}});
+const state = {
+  products: [],
+  categories: [],
+  settings: {},
+  cart: loadCart(),
+  user: null,
+  category: "all",
+  query: "",
+  sort: "featured",
+  admin: { tab: "dashboard", data: {} },
+};
+const AR = {
+  Cart: "السلة",
+  Store: "المتجر",
+  Deals: "العروض",
+  "How it works": "إزاي بتطلب؟",
+  "Track order": "تتبّع الطلب",
+  Account: "حسابي",
+  Home: "الرئيسية",
+  Search: "بحث",
+  STORE: "المتجر",
+  "Search...": "دوّر...",
+  Featured: "المميّز",
+  Newest: "الأحدث",
+  "Price: low to high": "السعر: من الأقل للأعلى",
+  "Price: high to low": "السعر: من الأعلى للأقل",
+  Name: "الاسم",
+  "Loading the catalog...": "بنحمّل المنتجات...",
+  SUPPORT: "الدعم",
+  ACCOUNT: "حسابك",
+  "Orders & profile": "طلباتي وحسابي",
+  "WhatsApp support": "الدعم على واتساب",
+  All: "الكل",
+  "★ Featured": "★ المميّز",
+  "No products match that search.": "مفيش منتجات بالاسم ده.",
+  "No products yet.": "لسه مفيش منتجات.",
+  "Sold out": "خلصت الكمية",
+  "{0} left": "فاضل {0}",
+  "In stock": "متوفر",
+  Ready: "جاهز",
+  "View {0}": "شوف {0}",
+  SALE: "خصم",
+  Digital: "رقمي",
+  Add: "ضيف",
+  "Loading product...": "بنحمّل المنتج...",
+  "DIGITAL PRODUCT": "منتج رقمي",
+  "{0} in stock": "متوفر منه {0}",
+  "Manual delivery": "تسليم يدوي",
+  "No description has been added for this product yet.":
+    "لسه مفيش وصف للمنتج ده.",
+  "Add to cart": "ضيف للسلة",
+  "Back to store": "ارجع للمتجر",
+  "Product not found": "المنتج مش موجود",
+  "Product not found.": "المنتج مش موجود.",
+  "This product may have been removed or the link is outdated.":
+    "ممكن المنتج ده اتشال أو اللينك قديم.",
+  "Sold out.": "الكمية خلصت.",
+  "Maximum {0} per order.": "الحد الأقصى {0} في الطلب الواحد.",
+  "{0} added to cart.": "{0} اتضاف للسلة.",
+  "Your cart": "السلة بتاعتك",
+  "Your cart is empty. Humanity's oldest shopping problem.":
+    "السلة فاضية… أقدم مشكلة في تاريخ التسوق!",
+  "{0} each": "{0} للقطعة",
+  Remove: "شيل",
+  Subtotal: "المجموع",
+  "Continue shopping": "كمّل تسوق",
+  "Continue to checkout": "كمّل للدفع",
+  "Orders are paused.": "الطلبات واقفة دلوقتي.",
+  Checkout: "إتمام الطلب",
+  "You can check out as a guest. To keep order history, log in or create an account before placing the order.":
+    "تقدر تطلب كضيف من غير حساب. ولو عايز تحتفظ بسجل طلباتك، سجّل دخول أو اعمل حساب قبل ما تأكد الطلب.",
+  "Your name": "اسمك",
+  "Contact (WhatsApp or phone)": "رقم للتواصل (واتساب أو موبايل)",
+  "WhatsApp or phone": "رقم الواتساب أو الموبايل",
+  "Discount code": "كود الخصم",
+  "Optional code": "الكود (اختياري)",
+  Apply: "طبّق",
+  Discount: "الخصم",
+  Total: "الإجمالي",
+  "Payment method": "طريقة الدفع",
+  Back: "رجوع",
+  "Place order": "أكّد الطلب",
+  "Discount applied.": "الخصم اتطبّق.",
+  "Enter a code to apply.": "اكتب كود الخصم الأول.",
+  "Details shown after you order": "التفاصيل هتظهرلك بعد تأكيد الطلب",
+  "No payment methods are available right now. Please contact support.":
+    "مفيش طرق دفع متاحة دلوقتي. كلّم الدعم لو سمحت.",
+  "Choose a payment method.": "اختار طريقة الدفع.",
+  "Name and contact are required.": "الاسم ورقم التواصل مطلوبين.",
+  "Order placed": "الطلب اتسجّل",
+  "Order <b>{0}</b> created. Save this number.":
+    "طلبك رقم <b>{0}</b> اتسجّل. احتفظ بالرقم ده.",
+  "Total to pay": "المطلوب دفعه",
+  Payment: "الدفع",
+  "Send payment to": "حوّل المبلغ على",
+  'You can check this order any time with "Track order" using the order number and the contact you entered.':
+    "تقدر تتابع الطلب في أي وقت من «تتبّع الطلب» برقم الطلب ورقم التواصل اللي كتبته.",
+  "Open WhatsApp Support": "افتح واتساب الدعم",
+  Done: "تمام",
+  From: "ابتداءً من",
+  left: "متبقي",
+  optional: "اختياري",
+  "Log in": "تسجيل الدخول",
+  "Create account": "إنشاء حساب",
+  "Continue as guest": "كمّل كضيف",
+  Email: "الإيميل",
+  Password: "الباسورد",
+  "Welcome back, {0}.": "نورتنا تاني يا {0}.",
+  "Account created.": "الحساب اتعمل بنجاح.",
+  "Hi, {0}": "أهلاً يا {0}",
+  "Administrator account": "حساب أدمن",
+  "Customer account": "حساب عميل",
+  "Order history": "طلباتك السابقة",
+  "No orders yet.": "لسه مفيش طلبات.",
+  "Admin dashboard": "لوحة التحكم",
+  "Log out": "تسجيل الخروج",
+  "Logged out.": "اتسجّل خروجك.",
+  "Payment: {0} · Delivery: {1} · {2}": "الدفع: {0} · التسليم: {1} · {2}",
+  "Your codes": "أكوادك",
+  Copy: "نسخ",
+  "Copied.": "اتنسخ.",
+  "Track your order": "تتبّع طلبك",
+  "Order number": "رقم الطلب",
+  "Contact you used (WhatsApp / phone / account email)":
+    "رقم التواصل اللي استخدمته (واتساب / موبايل / إيميل الحساب)",
+  "Find order": "دوّر على الطلب",
+  "Delivery message": "رسالة التسليم",
+  "Payment proof": "إثبات الدفع",
+  "Upload payment proof": "ارفع إثبات الدفع",
+  "Upload screenshot": "ارفع سكرين شوت",
+  "Choose option": "اختار الخيار",
+  "Choose options": "اختار الخيارات",
+  Variant: "الخيار",
+  Ready: "جاهز",
+  "Manual delivery": "تسليم يدوي",
+  "Mark paid & deliver": "علّم مدفوع وسلّم",
+  "Image upload": "رفع صورة",
+  "Name (Arabic)": "الاسم بالعربي",
+  "Description (Arabic)": "الوصف بالعربي",
+  "Category name (Arabic)": "اسم القسم بالعربي",
+  "Variants / denominations": "الخيارات / الفئات",
+  "Option name": "اسم الخيار",
+  "No variants": "مفيش خيارات",
+  "Proof uploaded.": "إثبات الدفع اترفع.",
+  "Choose a file first.": "اختار ملف الأول.",
+  "Upload image": "ارفع صورة",
+  "Image uploaded.": "الصورة اترفعت.",
+};
+const ERR_AR = {
+  "Cart is empty.": "السلة فاضية.",
+  "Choose an enabled payment method.": "اختار طريقة دفع متاحة.",
+  "Enter a valid name, email, and password of at least 8 characters.":
+    "اكتب اسم وإيميل صح وباسورد 8 حروف على الأقل.",
+  "Email already exists.": "الإيميل ده مسجّل قبل كده.",
+  "Enter your order number and contact.": "اكتب رقم الطلب ورقم التواصل.",
+  "Guest name and contact are required.": "الاسم ورقم التواصل مطلوبين.",
+  "Invalid email or password.": "الإيميل أو الباسورد غلط.",
+  "Login required.": "لازم تسجّل دخول الأول.",
+  "No order matches those details.": "مفيش طلب بالبيانات دي.",
+  "One of the products is no longer available.":
+    "واحد من المنتجات ما بقاش متاح.",
+  "Order not found.": "الطلب مش موجود.",
+  "Product not found.": "المنتج مش موجود.",
+  "This discount code is invalid, expired, or doesn't apply to your cart.":
+    "كود الخصم ده غلط أو منتهي أو مش بينطبق على السلة بتاعتك.",
+  "Too many attempts. Try again later.": "محاولات كتير. جرّب تاني بعد شوية.",
+  "Too many login attempts. Try again in 15 minutes.":
+    "محاولات دخول كتير. جرّب تاني بعد 15 دقيقة.",
+  "Bad origin.": "الطلب ده مش مسموح.",
+  "Too many order attempts. Try again later.":
+    "محاولات طلب كتير. جرّب تاني بعد شوية.",
+  "Admin access required.": "ده للأدمن بس.",
+  "Not found": "مش موجود",
+};
+const STATUS_AR = {
+  awaiting_payment: "مستني الدفع",
+  paid: "اتدفع",
+  failed: "الدفع فشل",
+  refunded: "اتسترجع",
+  pending: "قيد الانتظار",
+  processing: "بيتجهّز",
+  fulfilled: "اتسلّم",
+  cancelled: "اتلغى",
+};
+const PAY_AR = {
+  instapay: "إنستاباي",
+  vodafone_cash: "فودافون كاش",
+  telda: "تيلدا",
+};
+state.lang = (() => {
+  try {
+    return localStorage.getItem("kardivo_lang") === "en" ? "en" : "ar";
+  } catch {
+    return "ar";
   }
-  else if(t==="products")await adminProducts(main);else if(t==="merge")await adminMerge(main);else if(t==="categories")await adminCategories(main);else if(t==="inventory")await adminInventory(main);else if(t==="orders")await adminOrders(main);else if(t==="customers")await adminCustomers(main);else if(t==="discounts")await adminDiscounts(main);else if(t==="reviews")await adminReviews(main);else if(t==="audit")await adminAudit(main);else if(t==="settings")await adminSettings(main);
-  $$("#adminSide button").forEach(b=>b.classList.toggle("active",b.dataset.tab===t))}catch(e){main.innerHTML=`<div class="notice danger-text">${escapeHTML(e.message)}</div>`}}
-function adminHeader(title,buttonText,id){return `<div class="admin-top"><h2>${title}</h2><button class="btn primary" id="${id}">${buttonText}</button></div>`}
-async function adminProducts(main){const rows=await api("/api/admin/products");
-  main.innerHTML=adminHeader("Products","Add product","addProduct")+`<div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Price (editable)</th><th>Category</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows.map(p=>`<tr><td><b>${escapeHTML(p.name)}</b><br><small>${escapeHTML(p.platform||"")} ${escapeHTML(p.region||"")}</small></td><td><input type="number" step="0.01" min="0" value="${p.price}" data-qprice="${p.id}" style="width:96px"></td><td>${escapeHTML(p.category_name||"Uncategorized")}</td><td>${p.delivery_type==="code"?p.stock:"Manual"}</td><td>${p.active?"Active":"Hidden"}${p.featured?" · Featured":""}</td><td><div class="table-actions"><button class="mini" data-edit-product="${p.id}">Edit</button><button class="mini" data-toggle-product="${p.id}" data-active="${p.active?0:1}">${p.active?"Hide":"Show"}</button><button class="mini danger" data-delete-product="${p.id}">Delete</button></div></td></tr>`).join("")||`<tr><td colspan="6" class="empty">No products.</td></tr>`}</tbody></table></div></div>`;
-  $("#addProduct").onclick=()=>productForm();$$("[data-edit-product]").forEach(b=>b.onclick=()=>productForm(rows.find(x=>x.id==b.dataset.editProduct)));
-  $$("[data-qprice]").forEach(i=>i.onchange=async()=>{const p=rows.find(x=>x.id==i.dataset.qprice);try{await api("/api/admin/products/"+p.id,{method:"PUT",body:JSON.stringify({...p,price:i.value})});p.price=Number(i.value);toast("Price updated.");refreshStore()}catch(e){toast(e.message);i.value=p.price}});
-  $$("[data-toggle-product]").forEach(b=>b.onclick=async()=>{try{await api(`/api/admin/products/${b.dataset.toggleProduct}/active`,{method:"POST",body:JSON.stringify({active:b.dataset.active==="1"})});renderAdminTab();refreshStore()}catch(e){toast(e.message)}});
-  $$("[data-delete-product]").forEach(b=>b.onclick=async()=>{if(!confirm("Permanently delete this product and its unsold codes? (Products with past orders can only be hidden.)"))return;try{await api(`/api/admin/products/${b.dataset.deleteProduct}?hard=1`,{method:"DELETE"});toast("Product deleted.");renderAdminTab();refreshStore()}catch(e){toast(e.message)}})}
-function productForm(p=null){const vars=p?.variants||[];openModal(p?'Edit product':'Add product',`<form id="productForm"><div class="form-grid"><div class="field"><label>Name</label><input id="pName" value="${escapeHTML(p?.name||'')}" required></div><div class="field"><label>${t("Name (Arabic)")}</label><input id="pNameAr" dir="rtl" value="${escapeHTML(p?.name_ar||'')}"></div><div class="field"><label>Slug</label><input id="pSlug" value="${escapeHTML(p?.slug||'')}"></div><div class="field"><label>Price (EGP)</label><input id="pPrice" type="number" step="0.01" value="${p?.price??''}" required></div><div class="field"><label>Old price (EGP)</label><input id="pOld" type="number" step="0.01" value="${p?.old_price??''}"></div><div class="field"><label>Category</label><select id="pCategory"><option value="">Uncategorized</option>${state.categories.map(c=>`<option value="${c.id}" ${p?.category_id==c.id?'selected':''}>${escapeHTML(c.name)}</option>`).join('')}</select></div><div class="field"><label>Delivery</label><select id="pDelivery"><option value="manual" ${p?.delivery_type!=='code'?'selected':''}>Manual</option><option value="code" ${p?.delivery_type==='code'?'selected':''}>Digital code</option></select></div><div class="field"><label>Platform</label><input id="pPlatform" value="${escapeHTML(p?.platform||'')}" placeholder="PC, PlayStation..."></div><div class="field"><label>Region</label><input id="pRegion" value="${escapeHTML(p?.region||'')}" placeholder="EG, Global..."></div></div><div class="field"><label>Image URL</label><input id="pImage" value="${escapeHTML(p?.image_url||'')}" placeholder="https://..."></div><div class="field"><label>${t("Image upload")}</label><input id="pImageFile" type="file" accept="image/*"></div><div class="form-grid"><div class="field"><label>Description</label><textarea id="pDescription">${escapeHTML(p?.description||'')}</textarea></div><div class="field"><label>${t("Description (Arabic)")}</label><textarea id="pDescriptionAr" dir="rtl">${escapeHTML(p?.description_ar||'')}</textarea></div></div><details open style="margin-top:12px"><summary><b>${t("Variants / denominations")}</b></summary><div id="variantRows" style="margin-top:10px">${vars.map(v=>`<div class="form-grid variant-row" data-variant-id="${v.id}"><input class="vName" value="${escapeHTML(v.name)}" placeholder="${t("Option name")}"><input class="vPrice" type="number" step="0.01" value="${v.price}" placeholder="Price"><input class="vOld" type="number" step="0.01" value="${v.old_price??''}" placeholder="Old price"><label><input class="vActive" type="checkbox" ${v.active?"checked":""}> Active</label></div>`).join("")}</div><button type="button" class="mini" id="addVariantRow" style="margin-top:8px">${t("Add")}</button><small style="display:block;margin-top:6px">For digital products, add codes to each option from Digital codes.</small></details><div class="form-grid" style="margin-top:12px"><label><input id="pActive" type="checkbox" ${p?.active!==0?'checked':''}> Active</label><label><input id="pFeatured" type="checkbox" ${p?.featured?'checked':''}> Featured</label></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelP">Cancel</button><button class="btn primary">Save product</button></div></form>`);
- $("#cancelP").onclick=()=>openAdmin();const nameInput=$("#pName"),slugInput=$("#pSlug");if(!p&&nameInput&&slugInput){let slugTouched=false;slugInput.addEventListener("input",()=>slugTouched=true);nameInput.addEventListener("input",()=>{if(!slugTouched)slugInput.value=slugifyClient(nameInput.value)});slugInput.value=slugifyClient(nameInput.value)}
- const addVariantRow=()=>{const row=document.createElement("div");row.className="form-grid variant-row";row.innerHTML=`<input class="vName" placeholder="${t("Option name")}"><input class="vPrice" type="number" step="0.01" placeholder="Price"><input class="vOld" type="number" step="0.01" placeholder="Old price"><label><input class="vActive" type="checkbox" checked> Active</label>`;$("#variantRows").appendChild(row)};$("#addVariantRow").onclick=addVariantRow;
- $("#productForm").onsubmit=async e=>{e.preventDefault();const b={name:$("#pName").value,name_ar:$("#pNameAr").value,slug:$("#pSlug").value,price:$("#pPrice").value,old_price:$("#pOld").value,category_id:$("#pCategory").value,delivery_type:$("#pDelivery").value,platform:$("#pPlatform").value,region:$("#pRegion").value,image_url:$("#pImage").value,description:$("#pDescription").value,description_ar:$("#pDescriptionAr").value,active:$("#pActive").checked,featured:$("#pFeatured").checked};try{const r=await api('/api/admin/products'+(p?'/'+p.id:''),{method:p?'PUT':'POST',body:JSON.stringify(b)}),id=p?.id||r.id;for(const row of $$("#variantRows .variant-row")){const payload={name:row.querySelector(".vName").value,price:row.querySelector(".vPrice").value,old_price:row.querySelector(".vOld").value,active:row.querySelector(".vActive").checked};if(!payload.name)continue;const vid=row.dataset.variantId;if(vid)await api(`/api/admin/products/${id}/variants/${vid}`,{method:"PUT",body:JSON.stringify(payload)});else await api(`/api/admin/products/${id}/variants`,{method:"POST",body:JSON.stringify(payload)})}const file=$("#pImageFile")?.files?.[0];if(file)await uploadAdminImage(id,file);toast('Product saved.');openAdmin();refreshStore()}catch(err){toast(err.message)}}}
-async function uploadAdminImage(id,file){const fd=new FormData();fd.append("file",file);const res=await fetch(`/api/admin/products/${id}/image`,{method:"POST",credentials:"same-origin",body:fd});let body={};try{body=await res.json()}catch{}if(!res.ok)throw new Error(body.error||`Request failed (${res.status})`);return body}
-async function adminMerge(main){
-  const [rows,merged]=await Promise.all([api('/api/admin/products'),api('/api/admin/merged-products')]);
-  const code=rows.filter(p=>p.delivery_type==='code'&&p.active);
-  main.innerHTML=`<div class="admin-top"><h2>Combine products into variants</h2></div>
+})();
+function t(k, ...a) {
+  const s = (state.lang === "ar" && !state.adminOpen && AR[k]) || k;
+  return a.length ? s.replace(/\{(\d)\}/g, (_, i) => a[i] ?? "") : s;
+}
+function S(k) {
+  const s = state.settings;
+  if (state.lang === "ar") {
+    const a = s[k + "_ar"];
+    if (a != null && String(a).trim() !== "") return a;
+  }
+  return s[k];
+}
+function tr(m) {
+  if (state.lang !== "ar" || state.adminOpen) return m;
+  if (ERR_AR[m]) return ERR_AR[m];
+  let x;
+  if ((x = /^Not enough stock for (.+)\.$/.exec(m)))
+    return `مفيش كمية كفاية من ${x[1]}.`;
+  if ((x = /^Choose an option for (.+)\.$/.exec(m)))
+    return `اختار الخيار المطلوب لـ ${x[1]}.`;
+  if ((x = /^Request failed \((\d+)\)$/.exec(m)))
+    return `حصلت مشكلة في الطلب (${x[1]}).`;
+  if (/failed to fetch|networkerror|load failed/i.test(m))
+    return "الاتصال بالسيرفر فشل. اتأكد من النت وجرّب تاني.";
+  return m;
+}
+const arrow = () => (state.lang === "ar" ? "↖" : "↗");
+const dlv = (p) =>
+  state.lang === "ar"
+    ? p.delivery_type === "code"
+      ? "كود رقمي"
+      : "تسليم يدوي"
+    : p.delivery_type;
+const statusName = (x) => {
+  const k = String(x || "");
+  return state.lang === "ar" && STATUS_AR[k]
+    ? STATUS_AR[k]
+    : k.replace(/_/g, " ");
+};
+function translateStatic(root = document) {
+  root
+    .querySelectorAll("[data-i18n]")
+    .forEach((el) => (el.textContent = t(el.dataset.i18n)));
+  root
+    .querySelectorAll("[data-i18n-ph]")
+    .forEach((el) => (el.placeholder = t(el.dataset.i18nPh)));
+  root
+    .querySelectorAll("[data-i18n-aria]")
+    .forEach((el) => el.setAttribute("aria-label", t(el.dataset.i18nAria)));
+  root
+    .querySelectorAll("[data-arrow]")
+    .forEach((el) => (el.textContent = arrow()));
+}
+function setDir() {
+  const h = document.documentElement,
+    ar = state.lang === "ar";
+  h.lang = state.lang;
+  h.dir = ar ? "rtl" : "ltr";
+  const b = $("#langBtn");
+  if (b) {
+    b.textContent = ar ? "EN" : "AR";
+    b.title = ar ? "Switch to English" : "التبديل للعربي";
+    b.setAttribute("aria-label", b.title);
+  }
+}
+function applyLang() {
+  setDir();
+  translateStatic();
+  if (!state.ready) return;
+  applySettings();
+  renderFooter();
+  renderCartCount();
+  if (isProductRoute())
+    openProductPage(
+      decodeURIComponent(location.pathname.slice(1)).replace(/\/$/, ""),
+    );
+  else {
+    renderCategories();
+    renderProducts();
+  }
+}
+function setLang(l) {
+  state.lang = l === "en" ? "en" : "ar";
+  try {
+    localStorage.setItem("kardivo_lang", state.lang);
+  } catch {}
+  applyLang();
+}
+const $ = (s) => document.querySelector(s),
+  $$ = (s) => [...document.querySelectorAll(s)];
+const logo =
+  "https://i.ibb.co/rRqtGKkw/0db84367-e795-4617-835e-5e0a2bf2ff45.jpg";
+function loadCart() {
+  try {
+    return JSON.parse(localStorage.getItem("kardivo_cart") || "[]");
+  } catch {
+    return [];
+  }
+}
+function saveCart() {
+  try {
+    localStorage.setItem("kardivo_cart", JSON.stringify(state.cart));
+  } catch {}
+  renderCartCount();
+}
+function checkoutSession() {
+  try {
+    let k = localStorage.getItem("kardivo_checkout_session");
+    if (!k) {
+      k = crypto.randomUUID();
+      localStorage.setItem("kardivo_checkout_session", k);
+    }
+    return k;
+  } catch {
+    return "anon";
+  }
+}
+function toLocalInput(v) {
+  const d = new Date(v);
+  if (!v || isNaN(d)) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function cartRowValid(i, products) {
+  const p = products.find((x) => x.id === i.product_id);
+  if (!p) return false;
+  const vs = (p.variants || []).filter((v) => Number(v.active) !== 0);
+  if (!vs.length) return !i.variant_id;
+  return vs.some((v) => Number(v.id) === Number(i.variant_id));
+}
+function escapeHTML(v) {
+  return String(v ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;",
+      })[c],
+  );
+}
+function money(v) {
+  let c = state.settings.store_currency || "EGP";
+  if (state.lang === "ar" && !state.adminOpen && String(c).toUpperCase() === "EGP")
+    c = "ج.م";
+  return `${Number(v || 0).toFixed(2)} ${c}`;
+}
+function pName(p) {
+  return state.lang === "ar" && String(p?.name_ar || "").trim()
+    ? p.name_ar
+    : p?.name || "";
+}
+function pDesc(p) {
+  return state.lang === "ar" && String(p?.description_ar || "").trim()
+    ? p.description_ar
+    : p?.description || "";
+}
+function cName(c) {
+  return state.lang === "ar" && String(c?.name_ar || "").trim()
+    ? c.name_ar
+    : c?.name || "";
+}
+function variantStock(p, v) {
+  return Number(v?.stock ?? 0);
+}
+function cartKey(i) {
+  return `${i.product_id}:${i.variant_id || 0}`;
+}
+function slugifyClient(s) {
+  return String(s || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+function toast(message) {
+  const el = $("#toast");
+  el.textContent = message;
+  el.classList.add("show");
+  clearTimeout(window.__toast);
+  window.__toast = setTimeout(() => el.classList.remove("show"), 2800);
+}
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    credentials: "same-origin",
+    headers: { "content-type": "application/json", ...(options.headers || {}) },
+    ...options,
+  });
+  let body = {};
+  try {
+    body = await res.json();
+  } catch {}
+  if (!res.ok)
+    throw new Error(tr(body.error || `Request failed (${res.status})`));
+  return body;
+}
+async function boot() {
+  homeHTML = $("main").innerHTML;
+  $("#year").textContent = new Date().getFullYear();
+  try {
+    const [products, categories, settings, me] = await Promise.all([
+      api("/api/products"),
+      api("/api/categories"),
+      api("/api/settings/public"),
+      api("/api/me"),
+    ]);
+    state.products = products;
+    state.categories = categories;
+    state.settings = settings;
+    state.user = me.user;
+    state.cart = state.cart.filter((i) => cartRowValid(i, products));
+    saveCart();
+    applySettings();
+    renderFooter();
+    renderCartCount();
+    await route();
+    state.ready = true;
+    if (location.hash === "#account") openAccount();
+    if (
+      state.user?.role === "admin" &&
+      new URLSearchParams(location.search).has("admin_order")
+    ) {
+      const oid = Number(
+        new URLSearchParams(location.search).get("admin_order"),
+      );
+      await openAdmin();
+      if (oid) orderForm(oid);
+    }
+  } catch (e) {
+    console.error(e);
+    toast(tr(e.message));
+  }
+}
+function renderFooter() {
+  const s = state.settings,
+    w = String(s.whatsapp || "").replace(/\D/g, ""),
+    parts = [];
+  if (w)
+    parts.push(
+      `<a href="https://wa.me/${w}" target="_blank" rel="noreferrer">${t("WhatsApp support")}</a>`,
+    );
+  if (s.support_email)
+    parts.push(
+      `<a href="mailto:${escapeHTML(s.support_email)}">${escapeHTML(s.support_email)}</a>`,
+    );
+  $("#footerSupport").innerHTML = parts.length
+    ? parts.join("<br>")
+    : escapeHTML(S("support_text") || "");
+  const soc = [
+    ["instagram", "Instagram"],
+    ["facebook", "Facebook"],
+    ["tiktok", "TikTok"],
+  ].filter(([k]) => /^https?:\/\//i.test(s[k] || ""));
+  $("#footerSocial").innerHTML = soc
+    .map(
+      ([k, n]) =>
+        `<a href="${escapeHTML(s[k])}" target="_blank" rel="noreferrer">${n}</a>`,
+    )
+    .join(" · ");
+}
+function renderCategories() {
+  const el = $("#categories");
+  if (!el) return;
+  el.innerHTML =
+    `<button class="chip ${state.category === "all" ? "active" : ""}" data-cat="all">${t("All")}</button>` +
+    (state.products.some((p) => Number(p.featured))
+      ? `<button class="chip ${state.category === "featured" ? "active" : ""}" data-cat="featured">${t("★ Featured")}</button>`
+      : "") +
+    state.categories
+      .map(
+        (c) =>
+          `<button class="chip ${String(state.category) === String(c.id) ? "active" : ""}" data-cat="${c.id}">${escapeHTML(cName(c))}</button>`,
+      )
+      .join("");
+  $$(".chip").forEach(
+    (b) =>
+      (b.onclick = () => {
+        state.category = b.dataset.cat;
+        $$(".chip").forEach((x) => x.classList.toggle("active", x === b));
+        renderProducts();
+      }),
+  );
+}
+function filtered() {
+  let arr = [...state.products];
+  if (state.category === "featured")
+    arr = arr.filter((p) => Number(p.featured));
+  else if (state.category !== "all")
+    arr = arr.filter((p) => String(p.category_id) === String(state.category));
+  const q = state.query.toLowerCase();
+  if (q)
+    arr = arr.filter((p) =>
+      `${pName(p)} ${pDesc(p)} ${p.platform} ${p.region} ${cName({ name: p.category_name, name_ar: p.category_name_ar })}`
+        .toLowerCase()
+        .includes(q),
+    );
+  switch (state.sort) {
+    case "newest":
+      arr.sort((a, b) => b.id - a.id);
+      break;
+    case "price-low":
+      arr.sort((a, b) => a.price - b.price);
+      break;
+    case "price-high":
+      arr.sort((a, b) => b.price - a.price);
+      break;
+    case "name":
+      arr.sort((a, b) => a.name.localeCompare(b.name));
+      break;
+    default:
+      arr.sort((a, b) => b.featured - a.featured || b.id - a.id);
+  }
+  return arr;
+}
+function renderProducts() {
+  const el = $("#productGrid");
+  if (!el) return;
+  const arr = filtered();
+  if (!arr.length) {
+    el.innerHTML = `<div class="loading-card">${state.products.length ? t("No products match that search.") : t("No products yet.")}</div>`;
+    return;
+  }
+  const showStock = state.settings.show_stock !== false;
+  el.innerHTML = arr
+    .map((p) => {
+      const variants = (p.variants || []).filter((v) => Number(v.active) !== 0),
+        cheapest = variants.length
+          ? variants.reduce((a, v) => (Number(v.price) < Number(a.price) ? v : a))
+          : null,
+        displayPrice = cheapest ? Number(cheapest.price) : Number(p.price),
+        displayOld = cheapest
+          ? Number(cheapest.old_price || 0)
+          : Number(p.old_price || 0),
+        sale = displayOld > displayPrice,
+        totalStock = variants.length
+          ? variants.reduce((n, v) => n + Number(v.stock || 0), 0)
+          : Number(p.stock),
+        soldOut = p.delivery_type === "code" && totalStock <= 0,
+        badge = soldOut
+          ? t("Sold out")
+          : p.delivery_type === "code"
+            ? showStock
+              ? t("{0} left", totalStock)
+              : t("In stock")
+            : t("Ready"),
+        href = "/" + encodeURIComponent(p.slug),
+        name = pName(p),
+        cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
+      return `<article class="product-card product-card-link"><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-image">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(name)}" loading="lazy">` : `<div class="no-image">K</div>`}${sale ? `<span class="sale">${t("SALE")}</span>` : ""}<span class="stock">${badge}</span></div><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span>` : ""}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
+    })
+    .join("");
+  $$("[data-add]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        const p = state.products.find((x) => x.id === Number(b.dataset.add));
+        if (p?.variants?.length) navigate("/" + encodeURIComponent(p.slug));
+        else addToCart(Number(b.dataset.add));
+      }),
+  );
+}
+async function openProductPage(slug) {
+  document.body.classList.add("product-route");
+  const main = $("main");
+  main.innerHTML = `<section class="product-page container"><div class="product-page-loading loading-card">${t("Loading product...")}</div></section>`;
+  window.scrollTo(0, 0);
+  try {
+    const p = await api(`/api/products/${encodeURIComponent(slug)}`),
+      variants = (p.variants || []).filter((v) => Number(v.active) !== 0),
+      sn = state.settings.store_name || "Kardivo",
+      name = pName(p),
+      desc = pDesc(p),
+      totalStock = variants.length
+        ? variants.reduce((n, v) => n + Number(v.stock || 0), 0)
+        : Number(p.stock),
+      soldOut =
+        p.delivery_type === "code" &&
+        (variants.length ? totalStock <= 0 : Number(p.stock) <= 0);
+    document.title = `${name} | ${sn}`;
+    const first = variants[0],
+      price = variants.length ? Number(first.price) : Number(p.price),
+      old = variants.length
+        ? Number(first.old_price || 0)
+        : Number(p.old_price || 0);
+    main.innerHTML = `<section class="product-page container"><div class="product-breadcrumb"><a href="/" data-home>${t("Store")}</a><span>/</span><span>${escapeHTML(name)}</span></div><div class="product-detail"><div class="product-detail-media">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(name)}">` : `<div class="product-detail-placeholder">K</div>`}</div><div class="product-detail-copy"><span class="eyebrow">${escapeHTML(cName({ name: p.category_name, name_ar: p.category_name_ar }) || t("DIGITAL PRODUCT"))}</span><h1>${escapeHTML(name)}</h1><div class="product-detail-price" id="productPrice">${money(price)} ${old > price ? `<del>${money(old)}</del>` : ""}</div><div class="product-detail-meta">${[
+      p.platform,
+      p.region,
+      p.delivery_type === "code"
+        ? state.settings.show_stock !== false
+          ? t("{0} in stock", totalStock)
+          : soldOut
+            ? t("Sold out")
+            : t("In stock")
+        : t("Manual delivery"),
+    ]
+      .filter(Boolean)
+      .map((x) => `<span>${escapeHTML(x)}</span>`)
+      .join(
+        "",
+      )}</div>${variants.length ? `<div class="field" style="margin:18px 0"><label>${t("Choose option")}</label><select id="productVariant">${variants.map((v, i) => `<option value="${v.id}" ${i === 0 ? "selected" : ""} data-price="${v.price}" data-old="${v.old_price || 0}" data-stock="${v.stock || 0}">${escapeHTML(v.name)}${p.delivery_type === "code" && state.settings.show_stock !== false ? ` — ${v.stock || 0} ${t("left")}` : ""}</option>`).join("")}</select></div>` : ""}<div class="product-description">${desc ? escapeHTML(desc).replace(/\n/g, "<br>") : t("No description has been added for this product yet.")}</div>${(p.reviews || []).length ? `<div class="admin-panel" style="margin-top:20px"><h3>Customer reviews</h3>${p.reviews.map((r) => `<div class="line" style="padding:10px 0"><span><b>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</b><br><small>${escapeHTML(r.user_name || "Verified customer")}</small></span><span style="max-width:55%">${escapeHTML(r.body || "")}</span></div>`).join("")}</div>` : ""}<div class="product-detail-actions"><button class="btn primary" id="productAdd" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Add to cart") : t("Add to cart")}</button><a class="btn ghost" href="/" data-home>${t("Back to store")}</a></div></div></div></section>`;
+    const updateVariant = () => {
+      const sel = $("#productVariant");
+      if (!sel) return;
+      const o = sel.selectedOptions[0],
+        pr = Number(o.dataset.price),
+        ol = Number(o.dataset.old);
+      $("#productPrice").innerHTML =
+        `${money(pr)} ${ol > pr ? `<del>${money(ol)}</del>` : ""}`;
+      const st = p.delivery_type === "code" && Number(o.dataset.stock) <= 0;
+      $("#productAdd").disabled = st;
+      $("#productAdd").textContent = st ? t("Sold out") : t("Add to cart");
+    };
+    $("#productVariant")?.addEventListener("change", updateVariant);
+    updateVariant();
+    $("#productAdd").onclick = () =>
+      addToCart(
+        p.id,
+        $("#productVariant")?.value ? Number($("#productVariant").value) : null,
+      );
+  } catch (e) {
+    document.title = t("Product not found");
+    main.innerHTML = `<section class="product-page container"><div class="empty product-not-found"><span class="eyebrow">404</span><h1>${t("Product not found.")}</h1><p>${t("This product may have been removed or the link is outdated.")}</p><a class="btn primary" href="/" data-home>${t("Back to store")}</a></div></section>`;
+  }
+}
+function addToCart(id, variant_id = null) {
+  const p = state.products.find((x) => x.id === id);
+  if (!p) return;
+  const v = (p.variants || []).find((x) => Number(x.id) === Number(variant_id));
+  const max = Number(state.settings.max_qty) || 10,
+    stock =
+      p.delivery_type === "code"
+        ? v
+          ? Number(v.stock)
+          : Number(p.stock)
+        : max,
+    cap = Math.min(max, stock),
+    row = state.cart.find(
+      (x) =>
+        x.product_id === id &&
+        Number(x.variant_id || 0) === Number(variant_id || 0),
+    ),
+    cur = row ? row.quantity : 0;
+  if (cur >= cap) {
+    toast(cap <= 0 ? t("Sold out.") : t("Maximum {0} per order.", cap));
+    return;
+  }
+  if (row) row.quantity++;
+  else
+    state.cart.push({
+      product_id: id,
+      variant_id: variant_id || null,
+      quantity: 1,
+    });
+  saveCart();
+  toast(t("{0} added to cart.", pName(p)));
+}
+function cartItems() {
+  return state.cart
+    .map((i) => {
+      const p = state.products.find((x) => x.id === i.product_id);
+      return p && cartRowValid(i, state.products) ? { ...i, p } : null;
+    })
+    .filter(Boolean);
+}
+function renderCartCount() {
+  $("#cartCount").textContent = state.cart.reduce((a, b) => a + b.quantity, 0);
+}
+function openModal(title, body, wide = false) {
+  $("#modalRoot").innerHTML =
+    `<div class="modal-backdrop" id="backdrop"><div class="modal ${wide ? "wide" : ""}" ${state.adminOpen ? 'dir="ltr"' : ""}><div class="modal-head"><h2>${title}</h2><button class="close" id="closeModal">×</button></div><div class="modal-body">${body}</div></div></div>`;
+  $("#closeModal").onclick = closeModal;
+  $("#backdrop").onclick = (e) => {
+    if (e.target.id === "backdrop") closeModal();
+  };
+}
+function closeModal() {
+  state.adminOpen = false;
+  $("#modalRoot").innerHTML = "";
+}
+function openCart() {
+  const items = cartItems();
+  if (!items.length) {
+    openModal(
+      t("Your cart"),
+      `<div class="empty">${t("Your cart is empty. Humanity's oldest shopping problem.")}</div>`,
+    );
+    return;
+  }
+  const subtotal = items.reduce(
+    (s, i) =>
+      s +
+      Number(
+        i.p.variants?.find((v) => Number(v.id) === Number(i.variant_id))
+          ?.price ?? i.p.price,
+      ) *
+        i.quantity,
+    0,
+  );
+  openModal(
+    t("Your cart"),
+    `<div>${items
+      .map((i) => {
+        const v = i.p.variants?.find(
+            (x) => Number(x.id) === Number(i.variant_id),
+          ),
+          label = v ? `<br><small>${escapeHTML(v.name)}</small>` : "",
+          price = Number(v?.price ?? i.p.price);
+        return `<div class="line"><span><b>${escapeHTML(pName(i.p))}</b>${label}<br><small>${t("{0} each", money(price))}</small></span><span><button class="mini" data-minus="${escapeHTML(cartKey(i))}">−</button> <b>${i.quantity}</b> <button class="mini" data-plus="${escapeHTML(cartKey(i))}">+</button> <button class="mini danger" data-remove="${escapeHTML(cartKey(i))}">${t("Remove")}</button></span></div>`;
+      })
+      .join(
+        "",
+      )}</div><div class="line total"><span>${t("Subtotal")}</span><span>${money(subtotal)}</span></div><div class="modal-actions"><button class="btn ghost" id="continueShopping">${t("Continue shopping")}</button><button class="btn primary" id="checkoutBtn">${t("Continue to checkout")}</button></div>`,
+  );
+  $$("[data-minus]").forEach(
+    (b) => (b.onclick = () => changeQty(b.dataset.minus, -1)),
+  );
+  $$("[data-plus]").forEach(
+    (b) => (b.onclick = () => changeQty(b.dataset.plus, 1)),
+  );
+  $$("[data-remove]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        state.cart = state.cart.filter((x) => cartKey(x) !== b.dataset.remove);
+        saveCart();
+        openCart();
+      }),
+  );
+  $("#continueShopping").onclick = closeModal;
+  $("#checkoutBtn").onclick = openCheckout;
+}
+function changeQty(key, d) {
+  const row = state.cart.find((x) => cartKey(x) === key);
+  if (!row) return;
+  const p = state.products.find((x) => x.id === row.product_id);
+  if (!p) return;
+  const v = p.variants?.find((x) => Number(x.id) === Number(row.variant_id));
+  const max = Number(state.settings.max_qty) || 10,
+    cap =
+      p.delivery_type === "code"
+        ? Math.min(max, Number(v?.stock ?? p.stock))
+        : max;
+  if (d > 0) {
+    if (row.quantity >= cap) {
+      toast(cap <= 0 ? t("Sold out.") : t("Maximum {0} per order.", cap));
+      return;
+    }
+    row.quantity++;
+  } else {
+    row.quantity--;
+    if (row.quantity <= 0)
+      state.cart = state.cart.filter((x) => cartKey(x) !== key);
+  }
+  saveCart();
+  openCart();
+}
+function openCheckout() {
+  const items = cartItems();
+  if (!items.length) return;
+  fetch("/api/checkout-events", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      event: "checkout_started",
+      session_key:
+        checkoutSession(),
+    }),
+  }).catch(() => {});
+  if (state.settings.orders_open === false) {
+    toast(S("orders_closed_text") || t("Orders are paused."));
+    return;
+  }
+  const subtotal = items.reduce((a, i) => {
+    const v = i.p.variants?.find((x) => Number(x.id) === Number(i.variant_id));
+    return a + Number(v?.price ?? i.p.price) * i.quantity;
+  }, 0);
+  openModal(
+    t("Checkout"),
+    `<div class="notice">${t("You can check out as a guest. To keep order history, log in or create an account before placing the order.")}</div><div class="form-grid" style="margin-top:14px"><div class="field"><label>${t("Name")}</label><input id="guestName" placeholder="${t("Your name")}"></div><div class="field"><label>${t("Contact (WhatsApp or phone)")}</label><input id="guestContact" placeholder="${t("WhatsApp or phone")}"></div></div><div class="field"><label>${t("Discount code")}</label><div style="display:flex;gap:8px"><input id="discountCode" placeholder="${t("Optional code")}" style="flex:1"><button type="button" class="btn ghost" id="applyDiscount">${t("Apply")}</button></div></div><div class="field"><label>${t("Payment proof")} <small>(${t("optional")})</small></label><input id="checkoutProof" type="file" accept="image/*"></div><div class="checkout-summary"><div class="line"><span>${t("Subtotal")}</span><span id="coSubtotal">${money(subtotal)}</span></div><div class="line"><span>${t("Discount")}</span><span id="coDiscount">${money(0)}</span></div><div class="line total"><span>${t("Total")}</span><span id="coTotal">${money(subtotal)}</span></div></div><div style="margin-top:18px"><b>${t("Payment method")}</b><div class="payment-grid" id="payments"></div></div><div class="modal-actions"><button class="btn ghost" id="backCart">${t("Back")}</button><button class="btn primary" id="placeOrder">${t("Place order")}</button></div>`,
+  );
+  $("#backCart").onclick = openCart;
+  renderPaymentOptions();
+  if (state.user) {
+    $("#guestName").value = state.user.name;
+    $("#guestContact").value = state.user.email;
+  }
+  $("#applyDiscount").onclick = async () => {
+    try {
+      const r = await api("/api/discount/check", {
+        method: "POST",
+        body: JSON.stringify({
+          items: state.cart,
+          code: $("#discountCode").value,
+        }),
+      });
+      $("#coSubtotal").textContent = money(r.subtotal);
+      $("#coDiscount").textContent = "− " + money(r.discount);
+      $("#coTotal").textContent = money(r.total);
+      toast(r.discount ? t("Discount applied.") : t("Enter a code to apply."));
+    } catch (e) {
+      toast(e.message);
+    }
+  };
+}
+async function uploadPaymentProof(orderId, file, contact = "") {
+  if (!file) return;
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch(`/api/orders/${orderId}/payment-proof`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: contact ? { "X-Order-Contact": contact } : {},
+    body: fd,
+  });
+  let body = {};
+  try {
+    body = await res.json();
+  } catch {}
+  if (!res.ok)
+    throw new Error(tr(body.error || `Request failed (${res.status})`));
+  return body;
+}
+function renderPaymentOptions() {
+  const methods = PAY.filter(([k]) => state.settings[k + "_ready"]),
+    el = $("#payments");
+  el.innerHTML = methods.length
+    ? methods
+        .map(
+          ([k, n]) =>
+            `<button type="button" class="pay-option" data-pay="${k}"><b>${payName(k)}</b><br><small>${t("Details shown after you order")}</small></button>`,
+        )
+        .join("")
+    : `<div class="notice">${t("No payment methods are available right now. Please contact support.")}</div>`;
+  $$("[data-pay]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        state.selectedPayment = b.dataset.pay;
+        $$("[data-pay]").forEach((x) => x.classList.toggle("active", x === b));
+      }),
+  );
+  if (methods[0]) $("[data-pay]").click();
+  else state.selectedPayment = "";
+}
+async function placeOrder() {
+  const items = state.cart.map((i) => ({
+      product_id: i.product_id,
+      variant_id: i.variant_id || null,
+      quantity: i.quantity,
+    })),
+    guestName = $("#guestName").value.trim(),
+    guestContact = $("#guestContact").value.trim(),
+    proof = $("#checkoutProof")?.files?.[0];
+  if (!state.selectedPayment) {
+    toast(t("Choose a payment method."));
+    return;
+  }
+  if (!state.user && (!guestName || !guestContact)) {
+    toast(t("Name and contact are required."));
+    return;
+  }
+  try {
+    $("#placeOrder").disabled = true;
+    const r = await api("/api/orders", {
+      method: "POST",
+      body: JSON.stringify({
+        items,
+        lang: state.lang,
+        guest_name: guestName,
+        guest_contact: guestContact,
+        discount_code: $("#discountCode").value,
+        payment_method: state.selectedPayment,
+      }),
+    });
+    let proofMsg = "";
+    if (proof)
+      try {
+        await uploadPaymentProof(
+          r.order_id,
+          proof,
+          state.user ? "" : guestContact,
+        );
+        proofMsg = t("Proof uploaded.");
+      } catch (e) {
+        proofMsg = e.message;
+      }
+    fetch("/api/checkout-events", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        event: "checkout_completed",
+        order_id: r.order_id,
+        session_key: checkoutSession(),
+      }),
+    }).catch(() => {});
+    state.cart = [];
+    saveCart();
+    refreshStore().catch(() => {});
+    openModal(
+      t("Order placed"),
+      `<div class="notice success-text">${t("Order <b>{0}</b> created. Save this number.", escapeHTML(r.order_number))}</div><div class="checkout-summary" style="margin-top:14px"><div class="line"><span>${t("Total to pay")}</span><b>${money(r.total)}</b></div><div class="line"><span>${t("Payment")}</span><b>${escapeHTML(payName(r.payment_method))}</b></div><div class="destination"><b>${t("Send payment to")}</b><code>${escapeHTML(r.destination)}</code></div><p style="color:#aaa1b1;font-size:12px">${escapeHTML(r.support_text)}</p>${proofMsg ? `<p style="color:#aaa1b1;font-size:12px">${escapeHTML(proofMsg)}</p>` : ""}<p style="color:#aaa1b1;font-size:12px">${t('You can check this order any time with "Track order" using the order number and the contact you entered.')}</p></div><div class="modal-actions">${r.whatsapp ? `<a class="btn primary" href="${escapeHTML(r.whatsapp)}" target="_blank" rel="noreferrer">${t("Open WhatsApp Support")} ${arrow()}</a>` : ""}<button class="btn ghost" id="doneOrder">${t("Done")}</button></div>`,
+    );
+    $("#doneOrder").onclick = closeModal;
+  } catch (e) {
+    toast(e.message);
+    $("#placeOrder").disabled = false;
+  }
+}
+function openAccount() {
+  if (state.user) openUserAccount();
+  else openAuth();
+}
+function openAuth() {
+  openModal(
+    t("Account"),
+    `<div class="auth-tabs"><button class="active" id="loginTab">${t("Log in")}</button><button id="registerTab">${t("Create account")}</button><button id="guestTab">${t("Continue as guest")}</button></div><div id="authForm"></div>`,
+  );
+  showLogin();
+  $("#loginTab").onclick = showLogin;
+  $("#registerTab").onclick = showRegister;
+  $("#guestTab").onclick = () => {
+    closeModal();
+    openCart();
+  };
+}
+function showLogin() {
+  $("#authForm").innerHTML =
+    `<form id="loginForm"><div class="field"><label>${t("Email")}</label><input id="email" type="email" required></div><div class="field"><label>${t("Password")}</label><input id="password" type="password" required></div><button class="btn primary" type="submit">${t("Log in")}</button></form>`;
+  authTabs("loginTab");
+  $("#loginForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const r = await api("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          email: $("#email").value,
+          password: $("#password").value,
+        }),
+      });
+      state.user = r.user;
+      toast(t("Welcome back, {0}.", r.user.name));
+      closeModal();
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+function showRegister() {
+  $("#authForm").innerHTML =
+    `<form id="registerForm"><div class="field"><label>${t("Name")}</label><input id="name" required></div><div class="field"><label>${t("Email")}</label><input id="email" type="email" required></div><div class="field"><label>${t("Password")}</label><input id="password" type="password" minlength="8" required></div><button class="btn primary" type="submit">${t("Create account")}</button></form>`;
+  authTabs("registerTab");
+  $("#registerForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const r = await api("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify({
+          name: $("#name").value,
+          email: $("#email").value,
+          password: $("#password").value,
+        }),
+      });
+      state.user = r.user;
+      toast(t("Account created."));
+      closeModal();
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+function authTabs(active) {
+  ["loginTab", "registerTab"].forEach((id) =>
+    $("#" + id)?.classList.toggle("active", id === active),
+  );
+}
+function reviewForm(productId, orderId) {
+  openModal(
+    "Leave a review",
+    `<form id="reviewForm"><div class="field"><label>Rating</label><select id="reviewRating"><option value="5">★★★★★</option><option value="4">★★★★☆</option><option value="3">★★★☆☆</option><option value="2">★★☆☆☆</option><option value="1">★☆☆☆☆</option></select></div><div class="field"><label>Review</label><textarea id="reviewBody" maxlength="1000" placeholder="How was it?"></textarea></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelReview">Cancel</button><button class="btn primary">Submit</button></div></form>`,
+  );
+  $("#cancelReview").onclick = closeModal;
+  $("#reviewForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api("/api/reviews", {
+        method: "POST",
+        body: JSON.stringify({
+          product_id: productId,
+          order_id: orderId,
+          rating: $("#reviewRating").value,
+          body: $("#reviewBody").value,
+        }),
+      });
+      toast("Review submitted for approval.");
+      closeModal();
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+async function openUserAccount() {
+  let orders = [],
+    notifications = [];
+  try {
+    [orders, notifications] = await Promise.all([
+      api("/api/orders"),
+      api("/api/notifications"),
+    ]);
+  } catch (e) {
+    toast(e.message);
+  }
+  openModal(
+    t("Hi, {0}", escapeHTML(state.user.name)),
+    `<div class="notice"><b>${escapeHTML(state.user.email)}</b><br>${state.user.role === "admin" ? t("Administrator account") : t("Customer account")}</div>${
+      notifications.length
+        ? `<h3 style="margin:18px 0 8px">Notifications</h3>${notifications
+            .slice(0, 8)
+            .map(
+              (n) =>
+                `<div class="notice" style="margin-bottom:8px"><b>${escapeHTML(n.title)}</b><br><small>${escapeHTML(n.message)}</small></div>`,
+            )
+            .join("")}`
+        : ""
+    }<h3 style="margin:18px 0 8px">${t("Order history")}</h3>${orders.length ? orders.map(orderBlock).join("") : `<div class="empty">${t("No orders yet.")}</div>`}<div class="modal-actions">${state.user.role === "admin" ? `<button class="btn ghost" id="adminBtn">${t("Admin dashboard")}</button>` : ""}<button class="btn ghost" id="logoutBtn">${t("Log out")}</button></div>`,
+    true,
+  );
+  $("#logoutBtn").onclick = async () => {
+    await api("/api/auth/logout", { method: "POST" });
+    state.user = null;
+    closeModal();
+    toast(t("Logged out."));
+  };
+  $("#adminBtn")?.addEventListener("click", openAdmin);
+  bindCopy();
+  $$("[data-review-product]").forEach(
+    (b) =>
+      (b.onclick = () =>
+        reviewForm(
+          Number(b.dataset.reviewProduct),
+          Number(b.dataset.reviewOrder),
+        )),
+  );
+}
+async function openAdmin() {
+  closeModal();
+  state.adminOpen = true;
+  openModal(
+    "Admin",
+    `<div class="admin-shell"><aside class="admin-side" id="adminSide">${[
+      ["dashboard", "Dashboard"],
+      ["products", "Products"],
+      ["merge", "Combine products"],
+      ["categories", "Categories"],
+      ["inventory", "Digital codes"],
+      ["orders", "Orders"],
+      ["customers", "Customers"],
+      ["discounts", "Discounts"],
+      ["reviews", "Reviews"],
+      ["audit", "Audit log"],
+      ["settings", "Settings"],
+    ]
+      .map(([k, n]) => `<button data-tab="${k}">${n}</button>`)
+      .join(
+        "",
+      )}</aside><section class="admin-main" id="adminMain"></section></div>`,
+    true,
+  );
+  $$("#adminSide button").forEach(
+    (b) =>
+      (b.onclick = () => {
+        state.admin.tab = b.dataset.tab;
+        renderAdminTab();
+      }),
+  );
+  await renderAdminTab();
+}
+async function renderAdminTab() {
+  const main = $("#adminMain");
+  if (!main) return;
+  main.innerHTML = `<div class="empty">Loading...</div>`;
+  const tab = state.admin.tab;
+  try {
+    if (tab === "dashboard") {
+      const d = await api("/api/admin/summary");
+      main.innerHTML = `<div class="admin-top"><h2>Dashboard</h2><span class="eyebrow">LIVE DATA</span></div><div class="stats"><div class="stat"><small>AWAITING PAYMENT</small><b>${d.awaiting_payment}</b></div><div class="stat"><small>ORDERS</small><b>${d.orders}</b></div><div class="stat"><small>ACTIVE PRODUCTS</small><b>${d.products}</b></div><div class="stat"><small>PAID REVENUE</small><b>${money(d.paid_revenue)}</b></div><div class="stat"><small>7-DAY REVENUE</small><b>${money(d.revenue_7d)}</b></div><div class="stat"><small>30-DAY REVENUE</small><b>${money(d.revenue_30d)}</b></div><div class="stat"><small>AVG ORDER</small><b>${money(d.avg_order)}</b></div><div class="stat"><small>CANCELLED</small><b>${d.cancelled}</b></div></div><div class="admin-panel"><div class="panel-head"><h3>Store health</h3></div><div class="modal-body"><div class="line"><span>Customers</span><b>${d.customers}</b></div><div class="line"><span>Categories</span><b>${d.categories}</b></div><div class="line"><span>Available digital codes</span><b>${d.available_codes}</b></div><div class="line"><span>Payment methods ready</span><b>${PAY.filter(([k]) => state.settings[k + "_ready"]).length}/3</b></div><div class="line"><span>Accepting orders</span><b>${state.settings.orders_open === false ? "Paused" : "Yes"}</b></div></div></div><div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Operations</h3></div><div class="modal-body"><div class="modal-actions"><button class="btn ghost" id="cleanupReservations">Release expired reservations</button><button class="btn ghost" id="sendLowStock">Send low-stock Discord alert</button></div><small>These are manual tools. Nothing runs against your existing orders/inventory unless you click a button.</small></div></div>${d.low_stock.length ? `<div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Low stock</h3></div><div class="modal-body">${d.low_stock.map((x) => `<div class="line"><span>${escapeHTML(x.name)}</span><b>${x.stock} left</b></div>`).join("")}</div></div>` : ""}`;
+    }
+    if (tab === "dashboard") {
+      $("#cleanupReservations")?.addEventListener("click", async () => {
+        try {
+          const r = await api("/api/admin/maintenance/cleanup", {
+            method: "POST",
+          });
+          toast(`Expired ${r.expired} reservation(s).`);
+          renderAdminTab();
+        } catch (e) {
+          toast(e.message);
+        }
+      });
+      $("#sendLowStock")?.addEventListener("click", async () => {
+        try {
+          const r = await api("/api/admin/low-stock/notify", {
+            method: "POST",
+          });
+          toast(`Low-stock alert sent for ${r.count} product(s).`);
+        } catch (e) {
+          toast(e.message);
+        }
+      });
+    } else if (tab === "products") await adminProducts(main);
+    else if (tab === "merge") await adminMerge(main);
+    else if (tab === "categories") await adminCategories(main);
+    else if (tab === "inventory") await adminInventory(main);
+    else if (tab === "orders") await adminOrders(main);
+    else if (tab === "customers") await adminCustomers(main);
+    else if (tab === "discounts") await adminDiscounts(main);
+    else if (tab === "reviews") await adminReviews(main);
+    else if (tab === "audit") await adminAudit(main);
+    else if (tab === "settings") await adminSettings(main);
+    $$("#adminSide button").forEach((b) =>
+      b.classList.toggle("active", b.dataset.tab === t),
+    );
+  } catch (e) {
+    main.innerHTML = `<div class="notice danger-text">${escapeHTML(e.message)}</div>`;
+  }
+}
+function adminHeader(title, buttonText, id) {
+  return `<div class="admin-top"><h2>${title}</h2><button class="btn primary" id="${id}">${buttonText}</button></div>`;
+}
+async function adminProducts(main) {
+  const rows = await api("/api/admin/products");
+  main.innerHTML =
+    adminHeader("Products", "Add product", "addProduct") +
+    `<div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Price (editable)</th><th>Category</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows.map((p) => `<tr><td><b>${escapeHTML(p.name)}</b><br><small>${escapeHTML(p.platform || "")} ${escapeHTML(p.region || "")}</small></td><td><input type="number" step="0.01" min="0" value="${p.price}" data-qprice="${p.id}" style="width:96px"></td><td>${escapeHTML(p.category_name || "Uncategorized")}</td><td>${p.delivery_type === "code" ? p.stock : "Manual"}</td><td>${p.active ? "Active" : "Hidden"}${p.featured ? " · Featured" : ""}</td><td><div class="table-actions"><button class="mini" data-edit-product="${p.id}">Edit</button><button class="mini" data-toggle-product="${p.id}" data-active="${p.active ? 0 : 1}">${p.active ? "Hide" : "Show"}</button><button class="mini danger" data-delete-product="${p.id}">Delete</button></div></td></tr>`).join("") || `<tr><td colspan="6" class="empty">No products.</td></tr>`}</tbody></table></div></div>`;
+  $("#addProduct").onclick = () => productForm();
+  $$("[data-edit-product]").forEach(
+    (b) =>
+      (b.onclick = () =>
+        productForm(rows.find((x) => x.id == b.dataset.editProduct))),
+  );
+  $$("[data-qprice]").forEach(
+    (i) =>
+      (i.onchange = async () => {
+        const p = rows.find((x) => x.id == i.dataset.qprice);
+        try {
+          await api("/api/admin/products/" + p.id, {
+            method: "PUT",
+            body: JSON.stringify({ ...p, price: i.value }),
+          });
+          p.price = Number(i.value);
+          toast("Price updated.");
+          refreshStore();
+        } catch (e) {
+          toast(e.message);
+          i.value = p.price;
+        }
+      }),
+  );
+  $$("[data-toggle-product]").forEach(
+    (b) =>
+      (b.onclick = async () => {
+        try {
+          await api(`/api/admin/products/${b.dataset.toggleProduct}/active`, {
+            method: "POST",
+            body: JSON.stringify({ active: b.dataset.active === "1" }),
+          });
+          renderAdminTab();
+          refreshStore();
+        } catch (e) {
+          toast(e.message);
+        }
+      }),
+  );
+  $$("[data-delete-product]").forEach(
+    (b) =>
+      (b.onclick = async () => {
+        if (
+          !confirm(
+            "Permanently delete this product and its unsold codes? (Products with past orders can only be hidden.)",
+          )
+        )
+          return;
+        try {
+          await api(`/api/admin/products/${b.dataset.deleteProduct}?hard=1`, {
+            method: "DELETE",
+          });
+          toast("Product deleted.");
+          renderAdminTab();
+          refreshStore();
+        } catch (e) {
+          toast(e.message);
+        }
+      }),
+  );
+}
+function productForm(p = null) {
+  const vars = p?.variants || [];
+  openModal(
+    p ? "Edit product" : "Add product",
+    `<form id="productForm"><div class="form-grid"><div class="field"><label>Name</label><input id="pName" value="${escapeHTML(p?.name || "")}" required></div><div class="field"><label>${t("Name (Arabic)")}</label><input id="pNameAr" dir="rtl" value="${escapeHTML(p?.name_ar || "")}"></div><div class="field"><label>Slug</label><input id="pSlug" value="${escapeHTML(p?.slug || "")}"></div><div class="field"><label>Price (EGP)</label><input id="pPrice" type="number" step="0.01" value="${p?.price ?? ""}" required></div><div class="field"><label>Old price (EGP)</label><input id="pOld" type="number" step="0.01" value="${p?.old_price ?? ""}"></div><div class="field"><label>Category</label><select id="pCategory"><option value="">Uncategorized</option>${state.categories.map((c) => `<option value="${c.id}" ${p?.category_id == c.id ? "selected" : ""}>${escapeHTML(c.name)}</option>`).join("")}</select></div><div class="field"><label>Delivery</label><select id="pDelivery"><option value="manual" ${p?.delivery_type !== "code" ? "selected" : ""}>Manual</option><option value="code" ${p?.delivery_type === "code" ? "selected" : ""}>Digital code</option></select></div><div class="field"><label>Platform</label><input id="pPlatform" value="${escapeHTML(p?.platform || "")}" placeholder="PC, PlayStation..."></div><div class="field"><label>Region</label><input id="pRegion" value="${escapeHTML(p?.region || "")}" placeholder="EG, Global..."></div></div><div class="field"><label>Image URL</label><input id="pImage" value="${escapeHTML(p?.image_url || "")}" placeholder="https://..."></div><div class="field"><label>${t("Image upload")}</label><input id="pImageFile" type="file" accept="image/*"></div><div class="form-grid"><div class="field"><label>Description</label><textarea id="pDescription">${escapeHTML(p?.description || "")}</textarea></div><div class="field"><label>${t("Description (Arabic)")}</label><textarea id="pDescriptionAr" dir="rtl">${escapeHTML(p?.description_ar || "")}</textarea></div></div><details open style="margin-top:12px"><summary><b>${t("Variants / denominations")}</b></summary><div id="variantRows" style="margin-top:10px">${vars.map((v) => `<div class="form-grid variant-row" data-variant-id="${v.id}"><input class="vName" value="${escapeHTML(v.name)}" placeholder="${t("Option name")}"><input class="vPrice" type="number" step="0.01" value="${v.price}" placeholder="Price"><input class="vOld" type="number" step="0.01" value="${v.old_price ?? ""}" placeholder="Old price"><label><input class="vActive" type="checkbox" ${v.active ? "checked" : ""}> Active</label><button type="button" class="mini danger vRemove">Remove</button></div>`).join("")}</div><button type="button" class="mini" id="addVariantRow" style="margin-top:8px">${t("Add")}</button><small style="display:block;margin-top:6px">For digital products, add codes to each option from Digital codes.</small></details><div class="form-grid" style="margin-top:12px"><label><input id="pActive" type="checkbox" ${p?.active !== 0 ? "checked" : ""}> Active</label><label><input id="pFeatured" type="checkbox" ${p?.featured ? "checked" : ""}> Featured</label></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelP">Cancel</button><button class="btn primary">Save product</button></div></form>`,
+  );
+  $("#cancelP").onclick = () => openAdmin();
+  const nameInput = $("#pName"),
+    slugInput = $("#pSlug");
+  if (!p && nameInput && slugInput) {
+    let slugTouched = false;
+    slugInput.addEventListener("input", () => (slugTouched = true));
+    nameInput.addEventListener("input", () => {
+      if (!slugTouched) slugInput.value = slugifyClient(nameInput.value);
+    });
+    slugInput.value = slugifyClient(nameInput.value);
+  }
+  const addVariantRow = () => {
+    const row = document.createElement("div");
+    row.className = "form-grid variant-row";
+    row.innerHTML = `<input class="vName" placeholder="${t("Option name")}"><input class="vPrice" type="number" step="0.01" placeholder="Price"><input class="vOld" type="number" step="0.01" placeholder="Old price"><label><input class="vActive" type="checkbox" checked> Active</label><button type="button" class="mini danger vRemove">Remove</button>`;
+    $("#variantRows").appendChild(row);
+  };
+  $("#addVariantRow").onclick = addVariantRow;
+  $("#variantRows").addEventListener("click", async (e) => {
+    if (!e.target.classList.contains("vRemove")) return;
+    const row = e.target.closest(".variant-row"),
+      vid = row.dataset.variantId;
+    if (vid) {
+      if (!confirm("Remove this option? Its unsold codes go back to the base product stock."))
+        return;
+      try {
+        await api(`/api/admin/products/${p.id}/variants/${vid}`, {
+          method: "DELETE",
+        });
+        refreshStore();
+      } catch (err) {
+        toast(err.message);
+        return;
+      }
+    }
+    row.remove();
+  });
+  $("#productForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const b = {
+      name: $("#pName").value,
+      name_ar: $("#pNameAr").value,
+      slug: $("#pSlug").value,
+      price: $("#pPrice").value,
+      old_price: $("#pOld").value,
+      category_id: $("#pCategory").value,
+      delivery_type: $("#pDelivery").value,
+      platform: $("#pPlatform").value,
+      region: $("#pRegion").value,
+      image_url: $("#pImage").value,
+      description: $("#pDescription").value,
+      description_ar: $("#pDescriptionAr").value,
+      active: $("#pActive").checked,
+      featured: $("#pFeatured").checked,
+    };
+    try {
+      const r = await api("/api/admin/products" + (p ? "/" + p.id : ""), {
+          method: p ? "PUT" : "POST",
+          body: JSON.stringify(b),
+        }),
+        id = p?.id || r.id;
+      for (const row of $$("#variantRows .variant-row")) {
+        const payload = {
+          name: row.querySelector(".vName").value,
+          price: row.querySelector(".vPrice").value,
+          old_price: row.querySelector(".vOld").value,
+          active: row.querySelector(".vActive").checked,
+        };
+        if (!payload.name) continue;
+        const vid = row.dataset.variantId;
+        if (vid)
+          await api(`/api/admin/products/${id}/variants/${vid}`, {
+            method: "PUT",
+            body: JSON.stringify(payload),
+          });
+        else
+          await api(`/api/admin/products/${id}/variants`, {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+      }
+      const file = $("#pImageFile")?.files?.[0];
+      if (file) await uploadAdminImage(id, file);
+      toast("Product saved.");
+      openAdmin();
+      refreshStore();
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+async function uploadAdminImage(id, file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch(`/api/admin/products/${id}/image`, {
+    method: "POST",
+    credentials: "same-origin",
+    body: fd,
+  });
+  let body = {};
+  try {
+    body = await res.json();
+  } catch {}
+  if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
+  return body;
+}
+async function adminMerge(main) {
+  const [rows, merged] = await Promise.all([
+    api("/api/admin/products"),
+    api("/api/admin/merged-products"),
+  ]);
+  const code = rows.filter((p) => p.delivery_type === "code" && p.active);
+  main.innerHTML = `<div class="admin-top"><h2>Combine products into variants</h2></div>
   <div class="notice"><b>Safe by design.</b> Preview makes no changes. Execute keeps every existing inventory row and historical order intact, creates variants on the target product, links the old products as stock sources, and hides the old products. Nothing is permanently deleted.</div>
   <div class="admin-panel" style="margin-top:12px"><div class="form-grid">
-    <div class="field"><label>Target product (keep this product)</label><select id="mergeTarget"><option value="">Choose target</option>${code.map(p=>`<option value="${p.id}">${escapeHTML(p.name)} — ${money(p.price)}</option>`).join('')}</select></div>
-    <div class="field"><label>Products to combine</label><select id="mergeSources" multiple size="8">${code.map(p=>`<option value="${p.id}">${escapeHTML(p.name)} — ${p.stock} available</option>`).join('')}</select><small>Ctrl/Cmd-click multiple products. The target is excluded automatically.</small></div>
+    <div class="field"><label>Target product (keep this product)</label><select id="mergeTarget"><option value="">Choose target</option>${code.map((p) => `<option value="${p.id}">${escapeHTML(p.name)} — ${money(p.price)}</option>`).join("")}</select></div>
+    <div class="field"><label>Products to combine</label><select id="mergeSources" multiple size="8">${code.map((p) => `<option value="${p.id}">${escapeHTML(p.name)} — ${p.stock} available</option>`).join("")}</select><small>Ctrl/Cmd-click multiple products. The target is excluded automatically.</small></div>
   </div><div id="mergePreview" class="modal-body"></div><div class="modal-actions"><button class="btn ghost" id="mergePreviewBtn">Preview</button><button class="btn primary" id="mergeExecuteBtn" disabled>Execute merge</button></div></div>
-  ${merged.length?`<div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Previous merges</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Target</th><th>Variant</th><th>Source products</th><th></th></tr></thead><tbody>${merged.map(v=>`<tr><td>${escapeHTML(v.target_name)}</td><td>${escapeHTML(v.name)}</td><td>${escapeHTML(v.sources||'')}</td><td><button class="mini danger" data-undo-merge="${v.id}">Undo</button></td></tr>`).join('')}</tbody></table></div><small>Undo is available only when the merged variant has not been used by a new order.</small></div>`:''}`;
-  let preview=null;const selected=()=>[...$('#mergeSources').selectedOptions].map(o=>Number(o.value)).filter(x=>x!==Number($('#mergeTarget').value));
-  $('#mergePreviewBtn').onclick=async()=>{try{preview=await api('/api/admin/product-merger/preview',{method:'POST',body:JSON.stringify({target_id:$('#mergeTarget').value,source_ids:selected()})});$('#mergePreview').innerHTML=`<div class="line"><span>Target</span><b>${escapeHTML(preview.target.name)}</b></div>${preview.sources.map(x=>`<div class="line"><span>${escapeHTML(x.name)}</span><span>${x.stock} stock · ${x.orders} historical orders</span></div>`).join('')}<div class="notice" style="margin-top:10px"><b>Total stock represented:</b> ${preview.total_stock}<br><b>Historical orders represented:</b> ${preview.historical_orders}<br><small>No changes have been made.</small></div>`;$('#mergeExecuteBtn').disabled=false}catch(e){preview=null;$('#mergeExecuteBtn').disabled=true;toast(e.message)}};
-  $('#mergeExecuteBtn').onclick=async()=>{if(!preview||!confirm('Execute this merge? Existing inventory rows and historical orders will remain untouched. Selected source products will be hidden and their stock will be represented by new variants on the target.'))return;try{await api('/api/admin/product-merger/execute',{method:'POST',body:JSON.stringify({target_id:$('#mergeTarget').value,source_ids:selected()})});toast('Products combined successfully.');state.admin.tab='merge';await refreshStore();openAdmin()}catch(e){toast(e.message)}};
-  $$('[data-undo-merge]').forEach(b=>b.onclick=async()=>{if(!confirm('Undo this merge? The source products will become visible again and the generated variant will be removed.'))return;try{await api('/api/admin/product-merger/undo',{method:'POST',body:JSON.stringify({variant_id:b.dataset.undoMerge})});toast('Merge undone.');state.admin.tab='merge';await refreshStore();openAdmin()}catch(e){toast(e.message)}})
+  ${merged.length ? `<div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Previous merges</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Target</th><th>Variant</th><th>Source products</th><th></th></tr></thead><tbody>${merged.map((v) => `<tr><td>${escapeHTML(v.target_name)}</td><td>${escapeHTML(v.name)}</td><td>${escapeHTML(v.sources || "")}</td><td><button class="mini danger" data-undo-merge="${v.id}">Undo</button></td></tr>`).join("")}</tbody></table></div><small>Undo is available only when the merged variant has not been used by a new order.</small></div>` : ""}`;
+  let preview = null;
+  const selected = () =>
+    [...$("#mergeSources").selectedOptions]
+      .map((o) => Number(o.value))
+      .filter((x) => x !== Number($("#mergeTarget").value));
+  $("#mergePreviewBtn").onclick = async () => {
+    try {
+      preview = await api("/api/admin/product-merger/preview", {
+        method: "POST",
+        body: JSON.stringify({
+          target_id: $("#mergeTarget").value,
+          source_ids: selected(),
+        }),
+      });
+      $("#mergePreview").innerHTML =
+        `<div class="line"><span>Target</span><b>${escapeHTML(preview.target.name)}</b></div>${preview.sources.map((x) => `<div class="line"><span>${escapeHTML(x.name)}</span><span>${x.stock} stock · ${x.orders} historical orders</span></div>`).join("")}<div class="notice" style="margin-top:10px"><b>Total stock represented:</b> ${preview.total_stock}<br>${preview.target_option ? "The target's own codes become their own option so they stay sellable.<br>" : ""}<b>Historical orders represented:</b> ${preview.historical_orders}<br><small>No changes have been made.</small></div>`;
+      $("#mergeExecuteBtn").disabled = false;
+    } catch (e) {
+      preview = null;
+      $("#mergeExecuteBtn").disabled = true;
+      toast(e.message);
+    }
+  };
+  $("#mergeExecuteBtn").onclick = async () => {
+    if (
+      !preview ||
+      !confirm(
+        "Execute this merge? Existing inventory rows and historical orders will remain untouched. Selected source products will be hidden and their stock will be represented by new variants on the target.",
+      )
+    )
+      return;
+    try {
+      await api("/api/admin/product-merger/execute", {
+        method: "POST",
+        body: JSON.stringify({
+          target_id: $("#mergeTarget").value,
+          source_ids: selected(),
+        }),
+      });
+      toast("Products combined successfully.");
+      state.admin.tab = "merge";
+      await refreshStore();
+      openAdmin();
+    } catch (e) {
+      toast(e.message);
+    }
+  };
+  $$("[data-undo-merge]").forEach(
+    (b) =>
+      (b.onclick = async () => {
+        if (
+          !confirm(
+            "Undo this merge? The source products will become visible again and the generated variant will be removed.",
+          )
+        )
+          return;
+        try {
+          await api("/api/admin/product-merger/undo", {
+            method: "POST",
+            body: JSON.stringify({ variant_id: b.dataset.undoMerge }),
+          });
+          toast("Merge undone.");
+          state.admin.tab = "merge";
+          await refreshStore();
+          openAdmin();
+        } catch (e) {
+          toast(e.message);
+        }
+      }),
+  );
 }
-async function adminReviews(main){const rows=await api('/api/admin/reviews');main.innerHTML=`<div class="admin-top"><h2>Reviews</h2><span class="eyebrow">${rows.length}</span></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Customer</th><th>Rating</th><th>Review</th><th>Status</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHTML(r.product_name)}</td><td>${escapeHTML(r.user_name||'Customer')}</td><td>${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</td><td>${escapeHTML(r.body||'')}</td><td>${r.approved?'Approved':'Pending'}</td><td><button class="mini" data-review="${r.id}" data-approved="${r.approved?0:1}">${r.approved?'Hide':'Approve'}</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">No reviews yet.</td></tr>'}</tbody></table></div></div>`;$$('[data-review]').forEach(b=>b.onclick=async()=>{try{await api('/api/admin/reviews/'+b.dataset.review,{method:'PUT',body:JSON.stringify({approved:b.dataset.approved==='1'})});renderAdminTab()}catch(e){toast(e.message)}})}
-async function adminAudit(main){const rows=await api('/api/admin/audit');main.innerHTML=`<div class="admin-top"><h2>Audit log</h2><span class="eyebrow">LAST 250 ACTIONS</span></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Details</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHTML(r.created_at)}</td><td>${escapeHTML(r.admin_name||r.admin_email||'System')}</td><td>${escapeHTML(r.action)}</td><td>${escapeHTML(`${r.target_type||''} ${r.target_id||''}`)}</td><td>${escapeHTML(r.details||'')}</td></tr>`).join('')||'<tr><td colspan="5" class="empty">No admin actions logged yet.</td></tr>'}</tbody></table></div></div>`}
-async function adminCategories(main){const rows=await api('/api/admin/categories');main.innerHTML=adminHeader('Categories','Add category','addCategory')+`<div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Name</th><th>Slug</th><th>Actions</th></tr></thead><tbody>${rows.map(c=>`<tr><td>${escapeHTML(c.name)}</td><td>${escapeHTML(c.slug)}</td><td><button class="mini" data-edit-cat="${c.id}">Edit</button> <button class="mini danger" data-del-cat="${c.id}">Delete</button></td></tr>`).join('')}</tbody></table></div></div>`;$("#addCategory").onclick=()=>categoryForm();$$('[data-edit-cat]').forEach(b=>b.onclick=()=>categoryForm(rows.find(x=>x.id==b.dataset.editCat)));$$('[data-del-cat]').forEach(b=>b.onclick=async()=>{if(!confirm('Delete category? Products will become uncategorized.'))return;try{await api('/api/admin/categories/'+b.dataset.delCat,{method:'DELETE'});toast('Category deleted.');renderAdminTab();refreshStore()}catch(e){toast(e.message)}})}
-function categoryForm(c=null){openModal(c?'Edit category':'Add category',`<form id="catForm"><div class="field"><label>Name</label><input id="catName" value="${escapeHTML(c?.name||'')}" required></div><div class="field"><label>${t("Category name (Arabic)")}</label><input id="catNameAr" dir="rtl" value="${escapeHTML(c?.name_ar||'')}"></div><div class="field"><label>Slug</label><input id="catSlug" value="${escapeHTML(c?.slug||'')}"></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelCat">Cancel</button><button class="btn primary">Save</button></div></form>`);$("#cancelCat").onclick=()=>openAdmin();$("#catForm").onsubmit=async e=>{e.preventDefault();try{await api('/api/admin/categories'+(c?'/'+c.id:''),{method:c?'PUT':'POST',body:JSON.stringify({name:$("#catName").value,name_ar:$("#catNameAr").value,slug:$("#catSlug").value})});toast('Category saved.');openAdmin();refreshStore()}catch(err){toast(err.message)}}}
-async function adminInventory(main){const [rows,products]=await Promise.all([api('/api/admin/inventory'),api('/api/admin/products')]);main.innerHTML=adminHeader('Digital codes','Add codes','addCodes')+`<div class="notice">Paste one code per line. Codes are kept server-side in D1 and can be removed while still available.</div><div class="admin-panel" style="margin-top:12px"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Code</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHTML(r.product_name)}</td><td><code>${escapeHTML(r.code)}</code></td><td>${escapeHTML(r.status)}</td><td>${r.status==='available'?`<button class="mini danger" data-del-code="${r.id}">Remove</button>`:'Locked'}</td></tr>`).join('')||`<tr><td colspan="4" class="empty">No digital codes.</td></tr>`}</tbody></table></div></div>`;$("#addCodes").onclick=()=>inventoryForm(products);$$('[data-del-code]').forEach(b=>b.onclick=async()=>{if(!confirm('Remove this available code?'))return;try{await api('/api/admin/inventory/'+b.dataset.delCode,{method:'DELETE'});toast('Code removed.');renderAdminTab()}catch(e){toast(e.message)}})}
-function inventoryForm(products){openModal('Add digital codes',`<form id="invForm"><div class="field"><label>Product</label><select id="invProduct" required><option value="">Choose product</option>${products.map(p=>`<option value="${p.id}">${escapeHTML(p.name)}</option>`).join('')}</select></div><div class="field"><label>Variant / denomination</label><select id="invVariant"><option value="">Base product stock</option></select></div><div class="field"><label>Codes, one per line</label><textarea id="invCodes" placeholder="CODE-ONE\nCODE-TWO\nCODE-THREE" required></textarea></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelInv">Cancel</button><button class="btn primary">Add codes</button></div></form>`);$("#cancelInv").onclick=()=>openAdmin();$("#invProduct").onchange=()=>{const p=products.find(x=>x.id===$("#invProduct").value);$("#invVariant").innerHTML=`<option value="">Base product stock</option>`+(p?.variants||[]).map(v=>`<option value="${v.id}">${escapeHTML(v.name)} — ${money(v.price)}</option>`).join("")};$("#invForm").onsubmit=async e=>{e.preventDefault();try{const r=await api('/api/admin/inventory',{method:'POST',body:JSON.stringify({product_id:$("#invProduct").value,variant_id:$("#invVariant").value,codes:$("#invCodes").value})});toast(`${r.count} codes added.`);openAdmin();refreshStore()}catch(err){toast(err.message)}}}
-async function adminOrders(main){const rows=await api("/api/admin/orders");
-  main.innerHTML=`<div class="admin-top"><h2>Orders</h2><span class="eyebrow">${rows.length} TOTAL</span></div><div class="form-grid" style="margin-bottom:12px"><div class="field"><input id="oSearch" placeholder="Search order, name, contact, item..."></div><div class="field"><select id="oFilter"><option value="">All statuses</option><option value="awaiting_payment">Awaiting payment</option><option value="paid">Paid</option><option value="pending">Pending delivery</option><option value="fulfilled">Fulfilled</option><option value="cancelled">Cancelled</option></select></div></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Order</th><th>Customer</th><th>Total</th><th>Payment</th><th>Fulfillment</th><th>Created</th><th></th></tr></thead><tbody id="oBody"></tbody></table></div></div>`;
-  const draw=()=>{const q=$("#oSearch").value.toLowerCase(),f=$("#oFilter").value,list=rows.filter(o=>(!f||o.payment_status===f||o.fulfillment_status===f)&&(!q||`${o.order_number} ${o.user_name||""} ${o.guest_name||""} ${o.user_email||""} ${o.guest_contact||""} ${o.item_summary||""}`.toLowerCase().includes(q)));
-    $("#oBody").innerHTML=list.map(o=>`<tr><td><b>${escapeHTML(o.order_number)}</b><br><small>${escapeHTML(o.item_summary||"")}</small></td><td>${escapeHTML(o.user_name||o.guest_name||"Guest")}<br><small>${escapeHTML(o.user_email||o.guest_contact||"")}</small></td><td>${money(o.total)}${o.discount_code?`<br><small>code ${escapeHTML(o.discount_code)}</small>`:""}</td><td>${escapeHTML(payNameEN(o.payment_method))}<br><small>${escapeHTML(o.payment_status)}</small></td><td>${escapeHTML(o.fulfillment_status)}</td><td>${escapeHTML(o.created_at)}</td><td><button class="mini" data-order="${o.id}">Manage</button></td></tr>`).join("")||`<tr><td colspan="7" class="empty">No orders.</td></tr>`;$$("[data-order]").forEach(b=>b.onclick=()=>orderForm(Number(b.dataset.order)))};
-  $("#oSearch").oninput=draw;$("#oFilter").onchange=draw;draw()}
-async function orderForm(id){const {order,items,codes}=await api('/api/admin/orders/'+id);openModal(`Order ${escapeHTML(order.order_number)}`,`<div class="checkout-summary"><div class="line"><span>Customer</span><b>${escapeHTML(order.user_name||order.guest_name||'Guest')}</b></div><div class="line"><span>Contact</span><span>${escapeHTML(order.user_email||order.guest_contact||'')}</span></div><div class="line"><span>Total</span><b>${money(order.total)}</b></div></div>${order.payment_proof?`<div class="notice" style="margin-top:12px"><b>Payment proof</b><br><a class="btn ghost" href="/api/admin/orders/${id}/payment-proof" target="_blank">View proof</a></div>`:""}<h3 style="margin:20px 0 8px">Items</h3>${items.map(i=>`<div class="line"><span>${escapeHTML(i.product_name)}${i.variant_name?` — ${escapeHTML(i.variant_name)}`:""} × ${i.quantity}</span><span>${money(i.unit_price*i.quantity)}</span></div>`).join('')}<form id="orderForm"><div class="form-grid"><div class="field"><label>Payment status</label><select id="oPayment">${['awaiting_payment','paid','failed','refunded'].map(x=>`<option ${x===order.payment_status?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Fulfillment</label><select id="oFulfill">${['pending','processing','fulfilled','cancelled'].map(x=>`<option ${x===order.fulfillment_status?'selected':''}>${x}</option>`).join('')}</select></div></div><div class="field"><label>${t("Delivery message")}</label><textarea id="oDelivery">${escapeHTML(order.delivery_message||'')}</textarea></div><div class="field"><label>Notes</label><textarea id="oNotes">${escapeHTML(order.notes||'')}</textarea></div>${codes.length?`<div class="notice">Assigned codes: ${codes.map(c=>`<code>${escapeHTML(c.code)}</code>`).join(', ')}</div>`:''}<div class="modal-actions"><button type="button" class="btn ghost" id="cancelOrder">Close</button><button type="button" class="btn primary" id="markPaidDeliver">${t("Mark paid & deliver")}</button><button class="btn primary">Save order</button></div></form>`);$("#cancelOrder").onclick=()=>openAdmin();const save=async(payment,fulfill)=>{await api('/api/admin/orders/'+id,{method:'PUT',body:JSON.stringify({payment_status:payment,fulfillment_status:fulfill,notes:$("#oNotes").value,delivery_message:$("#oDelivery").value})});toast('Order updated.');openAdmin()};$("#markPaidDeliver").onclick=()=>save("paid","fulfilled");$("#orderForm").onsubmit=async e=>{e.preventDefault();try{await save($("#oPayment").value,$("#oFulfill").value)}catch(err){toast(err.message)}}}
-async function adminDiscounts(main){const rows=await api("/api/admin/discounts");main.innerHTML=adminHeader("Discounts","Add discount","addDiscount")+`<div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Code</th><th>Type</th><th>Amount</th><th>Minimum</th><th>Used</th><th>Active</th><th>Expiry</th><th>Actions</th></tr></thead><tbody>${rows.map(d=>`<tr><td><b>${escapeHTML(d.code)}</b></td><td>${escapeHTML(d.type)}</td><td>${d.amount}${d.type==="percentage"?"%":""}</td><td>${money(d.min_order)}</td><td>${d.used_count||0}${d.max_uses!=null?` / ${d.max_uses}`:""}</td><td>${d.active?"Yes":"No"}</td><td>${escapeHTML(d.expires_at||"Never")}</td><td><button class="mini" data-edit-disc="${d.id}">Edit</button> <button class="mini danger" data-del-disc="${d.id}">Delete</button></td></tr>`).join("")||`<tr><td colspan="8" class="empty">No discounts.</td></tr>`}</tbody></table></div></div>`;$("#addDiscount").onclick=()=>discountForm();$$("[data-edit-disc]").forEach(b=>b.onclick=()=>discountForm(rows.find(x=>x.id==b.dataset.editDisc)));$$("[data-del-disc]").forEach(b=>b.onclick=async()=>{if(!confirm("Delete discount?"))return;try{await api("/api/admin/discounts/"+b.dataset.delDisc,{method:"DELETE"});toast("Discount deleted.");renderAdminTab()}catch(e){toast(e.message)}})}
-function discountForm(d=null){openModal(d?"Edit discount":"Add discount",`<form id="discForm"><div class="form-grid"><div class="field"><label>Code</label><input id="dCode" value="${escapeHTML(d?.code||"")}" required></div><div class="field"><label>Type</label><select id="dType"><option value="percentage" ${d?.type!=="fixed"?"selected":""}>Percentage</option><option value="fixed" ${d?.type==="fixed"?"selected":""}>Fixed amount</option></select></div><div class="field"><label>Amount</label><input id="dAmount" type="number" step="0.01" value="${d?.amount??""}" required></div><div class="field"><label>Minimum order</label><input id="dMin" type="number" step="0.01" value="${d?.min_order??0}"></div><div class="field"><label>Max uses (empty = unlimited)</label><input id="dMax" type="number" min="0" value="${d?.max_uses??""}"></div><div class="field"><label>Expires at</label><input id="dExpiry" type="datetime-local" value="${d?.expires_at?String(d.expires_at).slice(0,16):""}"></div></div><label><input id="dActive" type="checkbox" ${d?.active!==0?"checked":""}> Active</label><div class="modal-actions"><button type="button" class="btn ghost" id="cancelD">Cancel</button><button class="btn primary">Save discount</button></div></form>`);$("#cancelD").onclick=()=>{closeModal();openAdmin()};$("#discForm").onsubmit=async e=>{e.preventDefault();try{await api("/api/admin/discounts"+(d?"/"+d.id:""),{method:d?"PUT":"POST",body:JSON.stringify({code:$("#dCode").value,type:$("#dType").value,amount:$("#dAmount").value,min_order:$("#dMin").value,max_uses:$("#dMax").value,expires_at:$("#dExpiry").value,active:$("#dActive").checked})});toast("Discount saved.");state.admin.tab="discounts";openAdmin()}catch(err){toast(err.message)}}}
-async function adminSettings(main){const s=await api("/api/admin/settings");
-  const field=([k,label,type])=>type==="toggle"?`<label class="switch-row" style="margin:8px 0"><span>${label}</span><input class="switch" id="s_${k}" type="checkbox" ${s[k]!=="0"?"checked":""}></label>`:`<div class="field"><label>${label}</label>${type==="textarea"?`<textarea id="s_${k}">${escapeHTML(s[k]||"")}</textarea>`:`<input id="s_${k}" type="${type==="color"?"color":type==="number"?"number":"text"}" value="${escapeHTML(s[k]||"")}">`}</div>`;
-  const pay=`<details open><summary><b>Payment methods</b></summary>${PAY.map(([k,n])=>`<div class="switch-row"><div><b>${n}</b><div class="field" style="margin:7px 0 0"><input id="s_${k}" value="${escapeHTML(s[k]||"")}" placeholder="Destination / number"></div></div><input class="switch" id="s_${k}_enabled" type="checkbox" ${s[k+"_enabled"]!=="0"?"checked":""}></div>`).join("")}</details>`;
-  main.innerHTML=`<div class="admin-top"><h2>Settings</h2><span class="eyebrow">EVERYTHING EDITABLE</span></div><form id="settingsForm" class="admin-panel"><div class="modal-body">${pay}${SETTINGS_SCHEMA.map(([t,f])=>`<details style="margin-top:14px"><summary><b>${t}</b></summary>${f.map(field).join("")}</details>`).join("")}<div class="modal-actions"><button class="btn primary">Save settings</button></div></div></form>
+async function adminReviews(main) {
+  const rows = await api("/api/admin/reviews");
+  main.innerHTML = `<div class="admin-top"><h2>Reviews</h2><span class="eyebrow">${rows.length}</span></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Customer</th><th>Rating</th><th>Review</th><th>Status</th><th></th></tr></thead><tbody>${rows.map((r) => `<tr><td>${escapeHTML(r.product_name)}</td><td>${escapeHTML(r.user_name || "Customer")}</td><td>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</td><td>${escapeHTML(r.body || "")}</td><td>${r.approved ? "Approved" : "Pending"}</td><td><button class="mini" data-review="${r.id}" data-approved="${r.approved ? 0 : 1}">${r.approved ? "Hide" : "Approve"}</button></td></tr>`).join("") || '<tr><td colspan="6" class="empty">No reviews yet.</td></tr>'}</tbody></table></div></div>`;
+  $$("[data-review]").forEach(
+    (b) =>
+      (b.onclick = async () => {
+        try {
+          await api("/api/admin/reviews/" + b.dataset.review, {
+            method: "PUT",
+            body: JSON.stringify({ approved: b.dataset.approved === "1" }),
+          });
+          renderAdminTab();
+        } catch (e) {
+          toast(e.message);
+        }
+      }),
+  );
+}
+async function adminAudit(main) {
+  const rows = await api("/api/admin/audit");
+  main.innerHTML = `<div class="admin-top"><h2>Audit log</h2><span class="eyebrow">LAST 250 ACTIONS</span></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Details</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${escapeHTML(r.created_at)}</td><td>${escapeHTML(r.admin_name || r.admin_email || "System")}</td><td>${escapeHTML(r.action)}</td><td>${escapeHTML(`${r.target_type || ""} ${r.target_id || ""}`)}</td><td>${escapeHTML(r.details || "")}</td></tr>`).join("") || '<tr><td colspan="5" class="empty">No admin actions logged yet.</td></tr>'}</tbody></table></div></div>`;
+}
+async function adminCategories(main) {
+  const rows = await api("/api/admin/categories");
+  main.innerHTML =
+    adminHeader("Categories", "Add category", "addCategory") +
+    `<div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Name</th><th>Slug</th><th>Actions</th></tr></thead><tbody>${rows.map((c) => `<tr><td>${escapeHTML(c.name)}</td><td>${escapeHTML(c.slug)}</td><td><button class="mini" data-edit-cat="${c.id}">Edit</button> <button class="mini danger" data-del-cat="${c.id}">Delete</button></td></tr>`).join("")}</tbody></table></div></div>`;
+  $("#addCategory").onclick = () => categoryForm();
+  $$("[data-edit-cat]").forEach(
+    (b) =>
+      (b.onclick = () =>
+        categoryForm(rows.find((x) => x.id == b.dataset.editCat))),
+  );
+  $$("[data-del-cat]").forEach(
+    (b) =>
+      (b.onclick = async () => {
+        if (!confirm("Delete category? Products will become uncategorized."))
+          return;
+        try {
+          await api("/api/admin/categories/" + b.dataset.delCat, {
+            method: "DELETE",
+          });
+          toast("Category deleted.");
+          renderAdminTab();
+          refreshStore();
+        } catch (e) {
+          toast(e.message);
+        }
+      }),
+  );
+}
+function categoryForm(c = null) {
+  openModal(
+    c ? "Edit category" : "Add category",
+    `<form id="catForm"><div class="field"><label>Name</label><input id="catName" value="${escapeHTML(c?.name || "")}" required></div><div class="field"><label>${t("Category name (Arabic)")}</label><input id="catNameAr" dir="rtl" value="${escapeHTML(c?.name_ar || "")}"></div><div class="field"><label>Slug</label><input id="catSlug" value="${escapeHTML(c?.slug || "")}"></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelCat">Cancel</button><button class="btn primary">Save</button></div></form>`,
+  );
+  $("#cancelCat").onclick = () => openAdmin();
+  $("#catForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api("/api/admin/categories" + (c ? "/" + c.id : ""), {
+        method: c ? "PUT" : "POST",
+        body: JSON.stringify({
+          name: $("#catName").value,
+          name_ar: $("#catNameAr").value,
+          slug: $("#catSlug").value,
+        }),
+      });
+      toast("Category saved.");
+      openAdmin();
+      refreshStore();
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+async function adminInventory(main) {
+  const [rows, products] = await Promise.all([
+    api("/api/admin/inventory"),
+    api("/api/admin/products"),
+  ]);
+  main.innerHTML =
+    adminHeader("Digital codes", "Add codes", "addCodes") +
+    `<div class="notice">Paste one code per line. Codes are kept server-side in D1 and can be removed while still available.</div><div class="admin-panel" style="margin-top:12px"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Code</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${escapeHTML(r.product_name)}${r.variant_name ? ` — ${escapeHTML(r.variant_name)}` : ""}</td><td><code>${escapeHTML(r.code)}</code></td><td>${escapeHTML(r.status)}</td><td>${r.status === "available" ? `<button class="mini danger" data-del-code="${r.id}">Remove</button>` : "Locked"}</td></tr>`).join("") || `<tr><td colspan="4" class="empty">No digital codes.</td></tr>`}</tbody></table></div></div>`;
+  $("#addCodes").onclick = () => inventoryForm(products);
+  $$("[data-del-code]").forEach(
+    (b) =>
+      (b.onclick = async () => {
+        if (!confirm("Remove this available code?")) return;
+        try {
+          await api("/api/admin/inventory/" + b.dataset.delCode, {
+            method: "DELETE",
+          });
+          toast("Code removed.");
+          renderAdminTab();
+        } catch (e) {
+          toast(e.message);
+        }
+      }),
+  );
+}
+function inventoryForm(products) {
+  openModal(
+    "Add digital codes",
+    `<form id="invForm"><div class="field"><label>Product</label><select id="invProduct" required><option value="">Choose product</option>${products.map((p) => `<option value="${p.id}">${escapeHTML(p.name)}</option>`).join("")}</select></div><div class="field"><label>Variant / denomination</label><select id="invVariant"><option value="">Base product stock</option></select></div><div class="field"><label>Codes, one per line</label><textarea id="invCodes" placeholder="CODE-ONE\nCODE-TWO\nCODE-THREE" required></textarea></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelInv">Cancel</button><button class="btn primary">Add codes</button></div></form>`,
+  );
+  $("#cancelInv").onclick = () => openAdmin();
+  $("#invProduct").onchange = () => {
+    const p = products.find((x) => String(x.id) === $("#invProduct").value);
+    $("#invVariant").innerHTML =
+      `<option value="">Base product stock</option>` +
+      (p?.variants || [])
+        .map(
+          (v) =>
+            `<option value="${v.id}">${escapeHTML(v.name)} — ${money(v.price)}</option>`,
+        )
+        .join("");
+  };
+  $("#invForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const r = await api("/api/admin/inventory", {
+        method: "POST",
+        body: JSON.stringify({
+          product_id: $("#invProduct").value,
+          variant_id: $("#invVariant").value,
+          codes: $("#invCodes").value,
+        }),
+      });
+      toast(`${r.count} codes added.`);
+      openAdmin();
+      refreshStore();
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+async function adminOrders(main) {
+  const rows = await api("/api/admin/orders");
+  main.innerHTML = `<div class="admin-top"><h2>Orders</h2><span class="eyebrow">${rows.length} TOTAL</span></div><div class="form-grid" style="margin-bottom:12px"><div class="field"><input id="oSearch" placeholder="Search order, name, contact, item..."></div><div class="field"><select id="oFilter"><option value="">All statuses</option><option value="awaiting_payment">Awaiting payment</option><option value="paid">Paid</option><option value="pending">Pending delivery</option><option value="fulfilled">Fulfilled</option><option value="cancelled">Cancelled</option></select></div></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Order</th><th>Customer</th><th>Total</th><th>Payment</th><th>Fulfillment</th><th>Created</th><th></th></tr></thead><tbody id="oBody"></tbody></table></div></div>`;
+  const draw = () => {
+    const q = $("#oSearch").value.toLowerCase(),
+      f = $("#oFilter").value,
+      list = rows.filter(
+        (o) =>
+          (!f || o.payment_status === f || o.fulfillment_status === f) &&
+          (!q ||
+            `${o.order_number} ${o.user_name || ""} ${o.guest_name || ""} ${o.user_email || ""} ${o.guest_contact || ""} ${o.item_summary || ""}`
+              .toLowerCase()
+              .includes(q)),
+      );
+    $("#oBody").innerHTML =
+      list
+        .map(
+          (o) =>
+            `<tr><td><b>${escapeHTML(o.order_number)}</b><br><small>${escapeHTML(o.item_summary || "")}</small></td><td>${escapeHTML(o.user_name || o.guest_name || "Guest")}<br><small>${escapeHTML(o.user_email || o.guest_contact || "")}</small></td><td>${money(o.total)}${o.discount_code ? `<br><small>code ${escapeHTML(o.discount_code)}</small>` : ""}</td><td>${escapeHTML(payNameEN(o.payment_method))}<br><small>${escapeHTML(o.payment_status)}</small></td><td>${escapeHTML(o.fulfillment_status)}</td><td>${escapeHTML(o.created_at)}</td><td><button class="mini" data-order="${o.id}">Manage</button></td></tr>`,
+        )
+        .join("") || `<tr><td colspan="7" class="empty">No orders.</td></tr>`;
+    $$("[data-order]").forEach(
+      (b) => (b.onclick = () => orderForm(Number(b.dataset.order))),
+    );
+  };
+  $("#oSearch").oninput = draw;
+  $("#oFilter").onchange = draw;
+  draw();
+}
+async function orderForm(id) {
+  const { order, items, codes } = await api("/api/admin/orders/" + id);
+  openModal(
+    `Order ${escapeHTML(order.order_number)}`,
+    `<div class="checkout-summary"><div class="line"><span>Customer</span><b>${escapeHTML(order.user_name || order.guest_name || "Guest")}</b></div><div class="line"><span>Contact</span><span>${escapeHTML(order.user_email || order.guest_contact || "")}</span></div><div class="line"><span>Total</span><b>${money(order.total)}</b></div></div>${order.payment_proof ? `<div class="notice" style="margin-top:12px"><b>Payment proof</b><br><a class="btn ghost" href="/api/admin/orders/${id}/payment-proof" target="_blank">View proof</a></div>` : ""}<h3 style="margin:20px 0 8px">Items</h3>${items.map((i) => `<div class="line"><span>${escapeHTML(i.product_name)}${i.variant_name ? ` — ${escapeHTML(i.variant_name)}` : ""} × ${i.quantity}</span><span>${money(i.unit_price * i.quantity)}</span></div>`).join("")}<form id="orderForm"><div class="form-grid"><div class="field"><label>Payment status</label><select id="oPayment">${["awaiting_payment", "paid", "failed", "refunded"].map((x) => `<option ${x === order.payment_status ? "selected" : ""}>${x}</option>`).join("")}</select></div><div class="field"><label>Fulfillment</label><select id="oFulfill">${["pending", "processing", "fulfilled", "cancelled"].map((x) => `<option ${x === order.fulfillment_status ? "selected" : ""}>${x}</option>`).join("")}</select></div></div><div class="field"><label>${t("Delivery message")}</label><textarea id="oDelivery">${escapeHTML(order.delivery_message || "")}</textarea></div><div class="field"><label>Notes</label><textarea id="oNotes">${escapeHTML(order.notes || "")}</textarea></div>${codes.length ? `<div class="notice">Assigned codes: ${codes.map((c) => `<code>${escapeHTML(c.code)}</code>`).join(", ")}</div>` : ""}<div class="modal-actions"><button type="button" class="btn ghost" id="cancelOrder">Close</button><button type="button" class="btn primary" id="markPaidDeliver">${t("Mark paid & deliver")}</button><button class="btn primary">Save order</button></div></form>`,
+  );
+  $("#cancelOrder").onclick = () => openAdmin();
+  const save = async (payment, fulfill) => {
+    await api("/api/admin/orders/" + id, {
+      method: "PUT",
+      body: JSON.stringify({
+        payment_status: payment,
+        fulfillment_status: fulfill,
+        notes: $("#oNotes").value,
+        delivery_message: $("#oDelivery").value,
+      }),
+    });
+    toast("Order updated.");
+    openAdmin();
+  };
+  $("#markPaidDeliver").onclick = () => save("paid", "fulfilled");
+  $("#orderForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await save($("#oPayment").value, $("#oFulfill").value);
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+async function adminDiscounts(main) {
+  const rows = await api("/api/admin/discounts");
+  main.innerHTML =
+    adminHeader("Discounts", "Add discount", "addDiscount") +
+    `<div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Code</th><th>Type</th><th>Amount</th><th>Minimum</th><th>Used</th><th>Active</th><th>Expiry</th><th>Actions</th></tr></thead><tbody>${rows.map((d) => `<tr><td><b>${escapeHTML(d.code)}</b></td><td>${escapeHTML(d.type)}</td><td>${d.amount}${d.type === "percentage" ? "%" : ""}</td><td>${money(d.min_order)}</td><td>${d.used_count || 0}${d.max_uses != null ? ` / ${d.max_uses}` : ""}</td><td>${d.active ? "Yes" : "No"}</td><td>${escapeHTML(d.expires_at ? new Date(d.expires_at).toLocaleString() : "Never")}</td><td><button class="mini" data-edit-disc="${d.id}">Edit</button> <button class="mini danger" data-del-disc="${d.id}">Delete</button></td></tr>`).join("") || `<tr><td colspan="8" class="empty">No discounts.</td></tr>`}</tbody></table></div></div>`;
+  $("#addDiscount").onclick = () => discountForm();
+  $$("[data-edit-disc]").forEach(
+    (b) =>
+      (b.onclick = () =>
+        discountForm(rows.find((x) => x.id == b.dataset.editDisc))),
+  );
+  $$("[data-del-disc]").forEach(
+    (b) =>
+      (b.onclick = async () => {
+        if (!confirm("Delete discount?")) return;
+        try {
+          await api("/api/admin/discounts/" + b.dataset.delDisc, {
+            method: "DELETE",
+          });
+          toast("Discount deleted.");
+          renderAdminTab();
+        } catch (e) {
+          toast(e.message);
+        }
+      }),
+  );
+}
+function discountForm(d = null) {
+  openModal(
+    d ? "Edit discount" : "Add discount",
+    `<form id="discForm"><div class="form-grid"><div class="field"><label>Code</label><input id="dCode" value="${escapeHTML(d?.code || "")}" required></div><div class="field"><label>Type</label><select id="dType"><option value="percentage" ${d?.type !== "fixed" ? "selected" : ""}>Percentage</option><option value="fixed" ${d?.type === "fixed" ? "selected" : ""}>Fixed amount</option></select></div><div class="field"><label>Amount</label><input id="dAmount" type="number" step="0.01" value="${d?.amount ?? ""}" required></div><div class="field"><label>Minimum order</label><input id="dMin" type="number" step="0.01" value="${d?.min_order ?? 0}"></div><div class="field"><label>Max uses (empty = unlimited)</label><input id="dMax" type="number" min="0" value="${d?.max_uses ?? ""}"></div><div class="field"><label>Expires at</label><input id="dExpiry" type="datetime-local" value="${toLocalInput(d?.expires_at)}"></div></div><label><input id="dActive" type="checkbox" ${d?.active !== 0 ? "checked" : ""}> Active</label><div class="modal-actions"><button type="button" class="btn ghost" id="cancelD">Cancel</button><button class="btn primary">Save discount</button></div></form>`,
+  );
+  $("#cancelD").onclick = () => {
+    closeModal();
+    openAdmin();
+  };
+  $("#discForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api("/api/admin/discounts" + (d ? "/" + d.id : ""), {
+        method: d ? "PUT" : "POST",
+        body: JSON.stringify({
+          code: $("#dCode").value,
+          type: $("#dType").value,
+          amount: $("#dAmount").value,
+          min_order: $("#dMin").value,
+          max_uses: $("#dMax").value,
+          expires_at: $("#dExpiry").value
+            ? new Date($("#dExpiry").value).toISOString()
+            : "",
+          active: $("#dActive").checked,
+        }),
+      });
+      toast("Discount saved.");
+      state.admin.tab = "discounts";
+      openAdmin();
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+async function adminSettings(main) {
+  const s = await api("/api/admin/settings");
+  const field = ([k, label, type]) =>
+    type === "toggle"
+      ? `<label class="switch-row" style="margin:8px 0"><span>${label}</span><input class="switch" id="s_${k}" type="checkbox" ${s[k] !== "0" ? "checked" : ""}></label>`
+      : `<div class="field"><label>${label}</label>${type === "textarea" ? `<textarea id="s_${k}">${escapeHTML(s[k] || "")}</textarea>` : `<input id="s_${k}" type="${type === "color" ? "color" : type === "number" ? "number" : "text"}" value="${escapeHTML(s[k] || "")}">`}</div>`;
+  const pay = `<details open><summary><b>Payment methods</b></summary>${PAY.map(([k, n]) => `<div class="switch-row"><div><b>${n}</b><div class="field" style="margin:7px 0 0"><input id="s_${k}" value="${escapeHTML(s[k] || "")}" placeholder="Destination / number"></div></div><input class="switch" id="s_${k}_enabled" type="checkbox" ${s[k + "_enabled"] !== "0" ? "checked" : ""}></div>`).join("")}</details>`;
+  main.innerHTML = `<div class="admin-top"><h2>Settings</h2><span class="eyebrow">EVERYTHING EDITABLE</span></div><form id="settingsForm" class="admin-panel"><div class="modal-body">${pay}${SETTINGS_SCHEMA.map(([t, f]) => `<details style="margin-top:14px"><summary><b>${t}</b></summary>${f.map(field).join("")}</details>`).join("")}<div class="modal-actions"><button class="btn primary">Save settings</button></div></div></form>
   <form id="pwForm" class="admin-panel" style="margin-top:14px"><div class="modal-body"><b>Change admin password</b><div class="form-grid"><div class="field"><label>Current password</label><input id="pwCur" type="password" required></div><div class="field"><label>New password (8+ characters)</label><input id="pwNew" type="password" minlength="8" required></div></div><div class="modal-actions"><button class="btn ghost">Change password</button></div></div></form>`;
-  $$('[id^="s_"][id$="_ar"]').forEach(e=>e.dir="rtl");
-  $("#settingsForm").onsubmit=async e=>{e.preventDefault();const body={};for(const k of PAY.map(x=>x[0])){body[k]=$("#s_"+k).value;body[k+"_enabled"]=$("#s_"+k+"_enabled").checked?"1":"0"}for(const [,f] of SETTINGS_SCHEMA)for(const [k,,type] of f){const el=$("#s_"+k);body[k]=type==="toggle"?(el.checked?"1":"0"):el.value}
-    try{await api("/api/admin/settings",{method:"PUT",body:JSON.stringify(body)});state.settings=await api("/api/settings/public");applySettings();renderFooter();renderProducts();toast("Settings saved.")}catch(err){toast(err.message)}};
-  $("#pwForm").onsubmit=async e=>{e.preventDefault();try{await api("/api/admin/password",{method:"POST",body:JSON.stringify({current_password:$("#pwCur").value,new_password:$("#pwNew").value})});toast("Password changed.");$("#pwCur").value="";$("#pwNew").value=""}catch(err){toast(err.message)}}}
-async function refreshStore(){const [p,c,s]=await Promise.all([api("/api/products"),api("/api/categories"),api("/api/settings/public")]);state.products=p;state.categories=c;state.settings=s;applySettings();renderCategories();renderProducts();renderFooter()}
-const PAY=[["instapay","InstaPay"],["vodafone_cash","Vodafone Cash"],["telda","Telda"]];
-const payNameEN=k=>(PAY.find(x=>x[0]===k)||[k,k])[1];
-const payName=k=>state.lang==="ar"&&PAY_AR[k]?PAY_AR[k]:payNameEN(k);
-let homeHTML="";
-const SETTINGS_SCHEMA=[
-["Store identity",[["store_name","Store name"],["logo_url","Logo image URL"],["store_currency","Currency label (e.g. EGP)"],["accent_color","Accent color","color"],["announcement","Announcement bar text (empty = hidden)"],["meta_title","Browser tab title"],["meta_description","Search / sharing description","textarea"]]],
-["Homepage text",[["hero_eyebrow","Hero small label"],["hero_title","Hero headline (new line = line break)","textarea"],["hero_text","Hero paragraph","textarea"],["hero_cta","Main button text"],["hero_cta2","Second button text"],["trust_1","Trust point 1"],["trust_2","Trust point 2"],["trust_3","Trust point 3"],["catalog_eyebrow","Catalog small label"],["catalog_title","Catalog heading"],["search_placeholder","Search box placeholder"],["deals_eyebrow","Deals small label"],["deals_title","Deals heading"],["deals_text","Deals paragraph","textarea"],["deal_1","Deal point 1"],["deal_2","Deal point 2"],["deal_3","Deal point 3"],["how_eyebrow","How-it-works small label"],["how_title","How-it-works heading"],["step1_title","Step 1 title"],["step1_text","Step 1 text","textarea"],["step2_title","Step 2 title"],["step2_text","Step 2 text","textarea"],["step3_title","Step 3 title"],["step3_text","Step 3 text","textarea"]]],
-["Orders & stock",[["orders_open","Accept new orders","toggle"],["orders_closed_text","Message shown when orders are paused"],["order_prefix","Order number prefix"],["max_qty","Max quantity per product per order","number"],["reserve_hours","Hold stock for unpaid code orders (hours)","number"],["low_stock_threshold","Low-stock warning at (codes left)","number"],["show_stock","Show stock counts to customers","toggle"]]],
-["Support & footer",[["whatsapp","WhatsApp number (international format)"],["support_text","Support text","textarea"],["support_email","Support email"],["instagram","Instagram URL"],["facebook","Facebook URL"],["tiktok","TikTok URL"],["footer_tagline","Footer tagline"],["footer_credit","Footer credit line"]]]];
-SETTINGS_SCHEMA.push(["Arabic text (النص العربي) - shown on the Arabic site. Empty field = English text is shown instead.",["announcement","meta_title","meta_description","orders_closed_text","hero_eyebrow","hero_title","hero_text","hero_cta","hero_cta2","trust_1","trust_2","trust_3","catalog_eyebrow","catalog_title","search_placeholder","deals_eyebrow","deals_title","deals_text","deal_1","deal_2","deal_3","how_eyebrow","how_title","step1_title","step1_text","step2_title","step2_text","step3_title","step3_text","support_text","footer_tagline","footer_credit"].map(k=>{const f=SETTINGS_SCHEMA.flatMap(g=>g[1]).find(x=>x[0]===k);return [k+"_ar","AR - "+f[1],f[2]==="textarea"?"textarea":undefined]})]);
-function mix(a,b,t){const p=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)),x=p(a),y=p(b);return "#"+x.map((v,i)=>Math.round(v+(y[i]-v)*t).toString(16).padStart(2,"0")).join("")}
-const isProductRoute=()=>location.pathname!=="/"&&location.pathname!==""&&location.pathname!=="/index.html";
-function applySettings(){const s=state.settings;
-  $$("[data-s]").forEach(el=>{const v=S(el.dataset.s);if(v==null||v==="")return;if(el.hasAttribute("data-br"))el.innerHTML=escapeHTML(v).replace(/\n/g,"<br>");else el.textContent=v});
-  $$("[data-store-name]").forEach(el=>el.textContent=s.store_name||"Kardivo");
-  const lu=s.logo_url||logo;$$("[data-logo]").forEach(i=>{i.src=lu;i.alt=s.store_name||"Kardivo"});const fav=$("#favicon");if(fav)fav.href=lu;
-  const ph=$("#search");if(ph&&S("search_placeholder"))ph.placeholder=S("search_placeholder");
-  const a=$("#announce");if(a){a.textContent=S("announcement")||"";a.hidden=!S("announcement")}
-  if(/^#[0-9a-f]{6}$/i.test(s.accent_color||"")){const r=document.documentElement.style;r.setProperty("--purple",s.accent_color);r.setProperty("--purple-bright",mix(s.accent_color,"#ffffff",.25));r.setProperty("--purple-deep",mix(s.accent_color,"#000000",.25))}
-  const md=$("#metaDesc");if(md&&S("meta_description"))md.content=S("meta_description");
-  if(!isProductRoute())document.title=`${s.store_name||"Kardivo"} | ${S("meta_title")||"Digital gaming marketplace"}`}
-function showHome(){document.body.classList.remove("product-route");$("main").innerHTML=homeHTML;translateStatic();applySettings();renderCategories();renderProducts();$("#sort").value=state.sort;$("#search").value=state.query}
-async function route(){if(isProductRoute())await openProductPage(decodeURIComponent(location.pathname.slice(1)).replace(/\/$/,""));else showHome()}
-function navigate(path,scrollTo){history.pushState({},"",path);route().then(()=>{if(scrollTo)setTimeout(()=>$(scrollTo)?.scrollIntoView(),30);else window.scrollTo(0,0)})}
-function bindCopy(){$$("[data-copy]").forEach(b=>b.onclick=()=>{navigator.clipboard?.writeText(b.dataset.copy);toast(t("Copied."))})}
-function orderBlock(o){const st=x=>escapeHTML(statusName(x));const proof=!o.payment_proof?`<div class="field" style="margin-top:10px"><label>${t("Payment proof")}</label><input id="proof-${o.id}" type="file" accept="image/*"><button type="button" class="mini" data-upload-proof="${o.id}" style="margin-top:6px">${t("Upload screenshot")}</button></div>`:"";return `<div class="notice" style="margin-bottom:10px"><div class="line"><b>${escapeHTML(o.order_number)}</b><span>${money(o.total)}</span></div><small>${escapeHTML(o.item_summary||"")}</small><br><small>${t("Payment: {0} · Delivery: {1} · {2}",st(o.payment_status),st(o.fulfillment_status),escapeHTML(o.created_at))}</small>${o.delivery_message?`<div class="notice success-text" style="margin-top:10px"><b>${t("Delivery message")}</b><br>${escapeHTML(o.delivery_message).replace(/\n/g,"<br>")}</div>`:""}${(o.codes||[]).length?`<div style="margin-top:10px"><b>${t("Your codes")}</b>${o.codes.map(c=>`<div class="line"><span>${escapeHTML(c.product_name)}${c.variant_name?` — ${escapeHTML(c.variant_name)}`:""}<br><code>${escapeHTML(c.code)}</code></span><span><button class="mini" data-copy="${escapeHTML(c.code)}">${t("Copy")}</button>${state.user?` <button class="mini" data-review-product="${c.product_id}" data-review-order="${o.id}">Review</button>`:""}</span></div>`).join("")}</div>`:""}${proof}</div>`}
-function openTrack(){openModal(t("Track your order"),`<form id="trackForm"><div class="field"><label>${t("Order number")}</label><input id="tNum" required placeholder="KDV-2026-XXXXXXXX"></div><div class="field"><label>${t("Contact you used (WhatsApp / phone / account email)")}</label><input id="tContact" required></div><button class="btn primary">${t("Find order")}</button></form><div id="trackResult" style="margin-top:16px"></div>`);
- $("#trackForm").onsubmit=async e=>{e.preventDefault();try{const o=await api("/api/orders/lookup",{method:"POST",body:JSON.stringify({order_number:$("#tNum").value,contact:$("#tContact").value})});$("#trackResult").innerHTML=orderBlock(o);bindCopy();$$("[data-upload-proof]").forEach(b=>b.onclick=async()=>{const f=$(`#proof-${b.dataset.uploadProof}`)?.files?.[0];if(!f){toast(t("Choose a file first."));return}try{await uploadPaymentProof(Number(b.dataset.uploadProof),f,$("#tContact").value);toast(t("Proof uploaded."));$("#trackForm").requestSubmit()}catch(err){toast(err.message)}})}catch(err){$("#trackResult").innerHTML=`<div class="notice danger-text">${escapeHTML(err.message)}</div>`}}}
-async function adminCustomers(main){const rows=await api("/api/admin/customers");main.innerHTML=`<div class="admin-top"><h2>Customers</h2><span class="eyebrow">${rows.length} ACCOUNTS</span></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Orders</th><th>Paid total</th><th>Joined</th></tr></thead><tbody>${rows.map(u=>`<tr><td>${escapeHTML(u.name)}</td><td>${escapeHTML(u.email)}</td><td>${escapeHTML(u.role)}</td><td>${u.orders}</td><td>${money(u.spent)}</td><td>${escapeHTML(u.created_at)}</td></tr>`).join("")}</tbody></table></div></div>`}
-$("#langBtn").onclick=()=>setLang(state.lang==="ar"?"en":"ar");$("#footerTrack").onclick=e=>{e.preventDefault();openTrack()};$("#cartBtn").onclick=openCart;$("#accountBtn").onclick=openAccount;$("#trackBtn").onclick=openTrack;$("#footerAccount").onclick=e=>{e.preventDefault();openAccount()};
-$("#searchFocus").onclick=()=>{if(isProductRoute()){navigate("/#store","#store");setTimeout(()=>$("#search")?.focus(),200)}else{$("#store")?.scrollIntoView();$("#search")?.focus()}};
-document.addEventListener("input",e=>{if(e.target.id==="search"){state.query=e.target.value;renderProducts()}});
-document.addEventListener("change",e=>{if(e.target.id==="sort"){state.sort=e.target.value;renderProducts()}});
-document.addEventListener("keydown",e=>{if(e.key==="Escape")closeModal()});
-document.addEventListener("click",e=>{if(e.target.id==="placeOrder"){placeOrder();return}const a=e.target.closest("a[href]");if(!a||e.defaultPrevented||e.metaKey||e.ctrlKey||e.shiftKey||a.target==="_blank")return;let u;try{u=new URL(a.href,location.href)}catch{return}if(u.origin!==location.origin)return;
-  if(a.hasAttribute("data-home")||(u.pathname==="/"&&!u.hash)){e.preventDefault();closeModal();navigate("/");return}
-  if(u.pathname==="/"&&u.hash){e.preventDefault();if(isProductRoute())navigate("/"+u.hash,u.hash);else{history.replaceState({},"","/"+u.hash);$(u.hash)?.scrollIntoView()}return}
-  if(u.pathname.length>1&&!/\.[a-z0-9]+$/i.test(u.pathname)){e.preventDefault();closeModal();navigate(u.pathname)}});
-window.addEventListener("popstate",()=>route());
-setDir();translateStatic();
+  $$('[id^="s_"][id$="_ar"]').forEach((e) => (e.dir = "rtl"));
+  $("#settingsForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const body = {};
+    for (const k of PAY.map((x) => x[0])) {
+      body[k] = $("#s_" + k).value;
+      body[k + "_enabled"] = $("#s_" + k + "_enabled").checked ? "1" : "0";
+    }
+    for (const [, f] of SETTINGS_SCHEMA)
+      for (const [k, , type] of f) {
+        const el = $("#s_" + k);
+        body[k] = type === "toggle" ? (el.checked ? "1" : "0") : el.value;
+      }
+    try {
+      await api("/api/admin/settings", {
+        method: "PUT",
+        body: JSON.stringify(body),
+      });
+      state.settings = await api("/api/settings/public");
+      applySettings();
+      renderFooter();
+      renderProducts();
+      toast("Settings saved.");
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+  $("#pwForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api("/api/admin/password", {
+        method: "POST",
+        body: JSON.stringify({
+          current_password: $("#pwCur").value,
+          new_password: $("#pwNew").value,
+        }),
+      });
+      toast("Password changed.");
+      $("#pwCur").value = "";
+      $("#pwNew").value = "";
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+async function refreshStore() {
+  const [p, c, s] = await Promise.all([
+    api("/api/products"),
+    api("/api/categories"),
+    api("/api/settings/public"),
+  ]);
+  state.products = p;
+  state.categories = c;
+  state.settings = s;
+  applySettings();
+  renderCategories();
+  renderProducts();
+  renderFooter();
+}
+const PAY = [
+  ["instapay", "InstaPay"],
+  ["vodafone_cash", "Vodafone Cash"],
+  ["telda", "Telda"],
+];
+const payNameEN = (k) => (PAY.find((x) => x[0] === k) || [k, k])[1];
+const payName = (k) =>
+  state.lang === "ar" && PAY_AR[k] ? PAY_AR[k] : payNameEN(k);
+let homeHTML = "";
+const SETTINGS_SCHEMA = [
+  [
+    "Store identity",
+    [
+      ["store_name", "Store name"],
+      ["logo_url", "Logo image URL"],
+      ["store_currency", "Currency label (e.g. EGP)"],
+      ["accent_color", "Accent color", "color"],
+      ["announcement", "Announcement bar text (empty = hidden)"],
+      ["meta_title", "Browser tab title"],
+      ["meta_description", "Search / sharing description", "textarea"],
+    ],
+  ],
+  [
+    "Homepage text",
+    [
+      ["hero_eyebrow", "Hero small label"],
+      ["hero_title", "Hero headline (new line = line break)", "textarea"],
+      ["hero_text", "Hero paragraph", "textarea"],
+      ["hero_cta", "Main button text"],
+      ["hero_cta2", "Second button text"],
+      ["trust_1", "Trust point 1"],
+      ["trust_2", "Trust point 2"],
+      ["trust_3", "Trust point 3"],
+      ["catalog_eyebrow", "Catalog small label"],
+      ["catalog_title", "Catalog heading"],
+      ["search_placeholder", "Search box placeholder"],
+      ["deals_eyebrow", "Deals small label"],
+      ["deals_title", "Deals heading"],
+      ["deals_text", "Deals paragraph", "textarea"],
+      ["deal_1", "Deal point 1"],
+      ["deal_2", "Deal point 2"],
+      ["deal_3", "Deal point 3"],
+      ["how_eyebrow", "How-it-works small label"],
+      ["how_title", "How-it-works heading"],
+      ["step1_title", "Step 1 title"],
+      ["step1_text", "Step 1 text", "textarea"],
+      ["step2_title", "Step 2 title"],
+      ["step2_text", "Step 2 text", "textarea"],
+      ["step3_title", "Step 3 title"],
+      ["step3_text", "Step 3 text", "textarea"],
+    ],
+  ],
+  [
+    "Orders & stock",
+    [
+      ["orders_open", "Accept new orders", "toggle"],
+      ["orders_closed_text", "Message shown when orders are paused"],
+      ["order_prefix", "Order number prefix"],
+      ["max_qty", "Max quantity per product per order", "number"],
+      ["reserve_hours", "Hold stock for unpaid code orders (hours)", "number"],
+      ["low_stock_threshold", "Low-stock warning at (codes left)", "number"],
+      ["show_stock", "Show stock counts to customers", "toggle"],
+    ],
+  ],
+  [
+    "Support & footer",
+    [
+      ["whatsapp", "WhatsApp number (international format)"],
+      ["support_text", "Support text", "textarea"],
+      ["support_email", "Support email"],
+      ["instagram", "Instagram URL"],
+      ["facebook", "Facebook URL"],
+      ["tiktok", "TikTok URL"],
+      ["footer_tagline", "Footer tagline"],
+      ["footer_credit", "Footer credit line"],
+    ],
+  ],
+];
+SETTINGS_SCHEMA.push([
+  "Arabic text (النص العربي) - shown on the Arabic site. Empty field = English text is shown instead.",
+  [
+    "announcement",
+    "meta_title",
+    "meta_description",
+    "orders_closed_text",
+    "hero_eyebrow",
+    "hero_title",
+    "hero_text",
+    "hero_cta",
+    "hero_cta2",
+    "trust_1",
+    "trust_2",
+    "trust_3",
+    "catalog_eyebrow",
+    "catalog_title",
+    "search_placeholder",
+    "deals_eyebrow",
+    "deals_title",
+    "deals_text",
+    "deal_1",
+    "deal_2",
+    "deal_3",
+    "how_eyebrow",
+    "how_title",
+    "step1_title",
+    "step1_text",
+    "step2_title",
+    "step2_text",
+    "step3_title",
+    "step3_text",
+    "support_text",
+    "footer_tagline",
+    "footer_credit",
+  ].map((k) => {
+    const f = SETTINGS_SCHEMA.flatMap((g) => g[1]).find((x) => x[0] === k);
+    return [
+      k + "_ar",
+      "AR - " + f[1],
+      f[2] === "textarea" ? "textarea" : undefined,
+    ];
+  }),
+]);
+function mix(a, b, t) {
+  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)),
+    x = p(a),
+    y = p(b);
+  return (
+    "#" +
+    x
+      .map((v, i) =>
+        Math.round(v + (y[i] - v) * t)
+          .toString(16)
+          .padStart(2, "0"),
+      )
+      .join("")
+  );
+}
+const isProductRoute = () =>
+  location.pathname !== "/" &&
+  location.pathname !== "" &&
+  location.pathname !== "/index.html";
+function applySettings() {
+  const s = state.settings;
+  $$("[data-s]").forEach((el) => {
+    const v = S(el.dataset.s);
+    if (v == null || v === "") return;
+    if (el.hasAttribute("data-br"))
+      el.innerHTML = escapeHTML(v).replace(/\n/g, "<br>");
+    else el.textContent = v;
+  });
+  $$("[data-store-name]").forEach(
+    (el) => (el.textContent = s.store_name || "Kardivo"),
+  );
+  const lu = s.logo_url || logo;
+  $$("[data-logo]").forEach((i) => {
+    i.src = lu;
+    i.alt = s.store_name || "Kardivo";
+  });
+  const fav = $("#favicon");
+  if (fav) fav.href = lu;
+  const ph = $("#search");
+  if (ph && S("search_placeholder")) ph.placeholder = S("search_placeholder");
+  const a = $("#announce");
+  if (a) {
+    a.textContent = S("announcement") || "";
+    a.hidden = !S("announcement");
+  }
+  if (/^#[0-9a-f]{6}$/i.test(s.accent_color || "")) {
+    const r = document.documentElement.style;
+    r.setProperty("--purple", s.accent_color);
+    r.setProperty("--purple-bright", mix(s.accent_color, "#ffffff", 0.25));
+    r.setProperty("--purple-deep", mix(s.accent_color, "#000000", 0.25));
+  }
+  const md = $("#metaDesc");
+  if (md && S("meta_description")) md.content = S("meta_description");
+  if (!isProductRoute())
+    document.title = `${s.store_name || "Kardivo"} | ${S("meta_title") || "Digital gaming marketplace"}`;
+}
+function showHome() {
+  document.body.classList.remove("product-route");
+  $("main").innerHTML = homeHTML;
+  translateStatic();
+  applySettings();
+  renderCategories();
+  renderProducts();
+  $("#sort").value = state.sort;
+  $("#search").value = state.query;
+}
+async function route() {
+  if (isProductRoute())
+    await openProductPage(
+      decodeURIComponent(location.pathname.slice(1)).replace(/\/$/, ""),
+    );
+  else showHome();
+}
+function navigate(path, scrollTo) {
+  history.pushState({}, "", path);
+  route().then(() => {
+    if (scrollTo) setTimeout(() => $(scrollTo)?.scrollIntoView(), 30);
+    else window.scrollTo(0, 0);
+  });
+}
+function bindCopy() {
+  $$("[data-copy]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        navigator.clipboard?.writeText(b.dataset.copy);
+        toast(t("Copied."));
+      }),
+  );
+}
+function orderBlock(o) {
+  const st = (x) => escapeHTML(statusName(x));
+  const proof =
+    !o.payment_proof &&
+    o.payment_status === "awaiting_payment" &&
+    o.fulfillment_status !== "cancelled"
+    ? `<div class="field" style="margin-top:10px"><label>${t("Payment proof")}</label><input id="proof-${o.id}" type="file" accept="image/*"><button type="button" class="mini" data-upload-proof="${o.id}" style="margin-top:6px">${t("Upload screenshot")}</button></div>`
+    : "";
+  return `<div class="notice" style="margin-bottom:10px"><div class="line"><b>${escapeHTML(o.order_number)}</b><span>${money(o.total)}</span></div><small>${escapeHTML(o.item_summary || "")}</small><br><small>${t("Payment: {0} · Delivery: {1} · {2}", st(o.payment_status), st(o.fulfillment_status), escapeHTML(o.created_at))}</small>${o.delivery_message ? `<div class="notice success-text" style="margin-top:10px"><b>${t("Delivery message")}</b><br>${escapeHTML(o.delivery_message).replace(/\n/g, "<br>")}</div>` : ""}${(o.codes || []).length ? `<div style="margin-top:10px"><b>${t("Your codes")}</b>${o.codes.map((c) => `<div class="line"><span>${escapeHTML(c.product_name)}${c.variant_name ? ` — ${escapeHTML(c.variant_name)}` : ""}<br><code>${escapeHTML(c.code)}</code></span><span><button class="mini" data-copy="${escapeHTML(c.code)}">${t("Copy")}</button>${state.user ? ` <button class="mini" data-review-product="${c.product_id}" data-review-order="${o.id}">Review</button>` : ""}</span></div>`).join("")}</div>` : ""}${proof}</div>`;
+}
+function openTrack() {
+  openModal(
+    t("Track your order"),
+    `<form id="trackForm"><div class="field"><label>${t("Order number")}</label><input id="tNum" required placeholder="KDV-2026-XXXXXXXX"></div><div class="field"><label>${t("Contact you used (WhatsApp / phone / account email)")}</label><input id="tContact" required></div><button class="btn primary">${t("Find order")}</button></form><div id="trackResult" style="margin-top:16px"></div>`,
+  );
+  $("#trackForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const o = await api("/api/orders/lookup", {
+        method: "POST",
+        body: JSON.stringify({
+          order_number: $("#tNum").value,
+          contact: $("#tContact").value,
+        }),
+      });
+      $("#trackResult").innerHTML = orderBlock(o);
+      bindCopy();
+      $$("[data-upload-proof]").forEach(
+        (b) =>
+          (b.onclick = async () => {
+            const f = $(`#proof-${b.dataset.uploadProof}`)?.files?.[0];
+            if (!f) {
+              toast(t("Choose a file first."));
+              return;
+            }
+            try {
+              await uploadPaymentProof(
+                Number(b.dataset.uploadProof),
+                f,
+                $("#tContact").value,
+              );
+              toast(t("Proof uploaded."));
+              $("#trackForm").requestSubmit();
+            } catch (err) {
+              toast(err.message);
+            }
+          }),
+      );
+    } catch (err) {
+      $("#trackResult").innerHTML =
+        `<div class="notice danger-text">${escapeHTML(err.message)}</div>`;
+    }
+  };
+}
+async function adminCustomers(main) {
+  const rows = await api("/api/admin/customers");
+  main.innerHTML = `<div class="admin-top"><h2>Customers</h2><span class="eyebrow">${rows.length} ACCOUNTS</span></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Orders</th><th>Paid total</th><th>Joined</th></tr></thead><tbody>${rows.map((u) => `<tr><td>${escapeHTML(u.name)}</td><td>${escapeHTML(u.email)}</td><td>${escapeHTML(u.role)}</td><td>${u.orders}</td><td>${money(u.spent)}</td><td>${escapeHTML(u.created_at)}</td></tr>`).join("")}</tbody></table></div></div>`;
+}
+$("#langBtn").onclick = () => setLang(state.lang === "ar" ? "en" : "ar");
+$("#footerTrack").onclick = (e) => {
+  e.preventDefault();
+  openTrack();
+};
+$("#cartBtn").onclick = openCart;
+$("#accountBtn").onclick = openAccount;
+$("#trackBtn").onclick = openTrack;
+$("#footerAccount").onclick = (e) => {
+  e.preventDefault();
+  openAccount();
+};
+$("#searchFocus").onclick = () => {
+  if (isProductRoute()) {
+    navigate("/#store", "#store");
+    setTimeout(() => $("#search")?.focus(), 200);
+  } else {
+    $("#store")?.scrollIntoView();
+    $("#search")?.focus();
+  }
+};
+document.addEventListener("input", (e) => {
+  if (e.target.id === "search") {
+    state.query = e.target.value;
+    renderProducts();
+  }
+});
+document.addEventListener("change", (e) => {
+  if (e.target.id === "sort") {
+    state.sort = e.target.value;
+    renderProducts();
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeModal();
+});
+document.addEventListener("click", (e) => {
+  if (e.target.id === "placeOrder") {
+    placeOrder();
+    return;
+  }
+  const a = e.target.closest("a[href]");
+  if (
+    !a ||
+    e.defaultPrevented ||
+    e.metaKey ||
+    e.ctrlKey ||
+    e.shiftKey ||
+    a.target === "_blank"
+  )
+    return;
+  let u;
+  try {
+    u = new URL(a.href, location.href);
+  } catch {
+    return;
+  }
+  if (u.origin !== location.origin) return;
+  if (a.hasAttribute("data-home") || (u.pathname === "/" && !u.hash)) {
+    e.preventDefault();
+    closeModal();
+    navigate("/");
+    return;
+  }
+  if (u.pathname === "/" && u.hash) {
+    e.preventDefault();
+    if (isProductRoute()) navigate("/" + u.hash, u.hash);
+    else {
+      history.replaceState({}, "", "/" + u.hash);
+      $(u.hash)?.scrollIntoView();
+    }
+    return;
+  }
+  if (u.pathname.length > 1 && !/\.[a-z0-9]+$/i.test(u.pathname)) {
+    e.preventDefault();
+    closeModal();
+    navigate(u.pathname);
+  }
+});
+window.addEventListener("popstate", () => route());
+setDir();
+translateStatic();
 boot();
