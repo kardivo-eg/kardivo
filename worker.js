@@ -99,7 +99,7 @@ async function currentUser(req, env) {
     match = raw.match(/(?:^|; )kardivo_session=([^;]+)/);
   if (!match) return null;
   return env.DB.prepare(
-    "SELECT u.id,u.name,u.email,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND s.expires_at>? ",
+    "SELECT u.id,u.name,u.email,u.role,u.referral_code FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND s.expires_at>? ",
   )
     .bind(match[1], Date.now())
     .first();
@@ -326,6 +326,30 @@ async function ensureSchema(env) {
   await env.DB.prepare(
     "CREATE INDEX IF NOT EXISTS idx_notifications_user ON customer_notifications(user_id,created_at)",
   ).run();
+  await env.DB.batch([
+    "CREATE TABLE IF NOT EXISTS password_resets(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,token_hash TEXT NOT NULL UNIQUE,expires_at INTEGER NOT NULL,used_at TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
+    "CREATE TABLE IF NOT EXISTS order_events(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER NOT NULL,event TEXT NOT NULL,details TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE)",
+    "CREATE INDEX IF NOT EXISTS idx_order_events_order ON order_events(order_id,created_at)",
+    "CREATE TABLE IF NOT EXISTS support_messages(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER NOT NULL,user_id INTEGER,guest_contact TEXT,author_role TEXT NOT NULL,message TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE,FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL)",
+    "CREATE INDEX IF NOT EXISTS idx_support_order ON support_messages(order_id,created_at)",
+    "CREATE TABLE IF NOT EXISTS refund_logs(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER NOT NULL,admin_user_id INTEGER,reason_code TEXT NOT NULL,notes TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE)",
+    "CREATE TABLE IF NOT EXISTS stock_watchers(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,email TEXT NOT NULL,notified_at TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(product_id,email),FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE)",
+    "CREATE TABLE IF NOT EXISTS suppliers(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,contact TEXT DEFAULT '',notes TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE TABLE IF NOT EXISTS supplier_batches(id INTEGER PRIMARY KEY AUTOINCREMENT,supplier_id INTEGER,product_id INTEGER NOT NULL,quantity INTEGER NOT NULL DEFAULT 0,unit_cost REAL NOT NULL DEFAULT 0,reference TEXT DEFAULT '',notes TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL,FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE)",
+    "CREATE TABLE IF NOT EXISTS referral_credits(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,order_id INTEGER,amount REAL NOT NULL,kind TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE SET NULL)",
+  ].map(sql => env.DB.prepare(sql)));
+  await add("products", "low_stock_threshold", "INTEGER");
+  await add("products", "supplier_cost", "REAL");
+  await add("orders", "proof_sha256", "TEXT");
+  await add("orders", "payment_reference", "TEXT");
+  await add("orders", "referral_code", "TEXT");
+  await add("discounts", "first_order_only", "INTEGER NOT NULL DEFAULT 0");
+  await add("discounts", "product_id", "INTEGER");
+  await add("discounts", "category_id", "INTEGER");
+  await add("discounts", "bundle_quantity", "INTEGER");
+  await add("discounts", "bundle_percent", "REAL");
+  await add("users", "referral_code", "TEXT");
+  await env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code) WHERE referral_code IS NOT NULL").run();
   await env.DB.prepare(
     "CREATE TABLE IF NOT EXISTS login_attempts(key TEXT PRIMARY KEY,count INTEGER NOT NULL,reset_at INTEGER NOT NULL)",
   ).run();
@@ -477,6 +501,7 @@ async function priceCart(env, items, s) {
         .first()
     )
       return { error: `Choose an option for ${p.name}.` };
+    it.price = price;
     if (p.delivery_type === "code") {
       const stock = await availableCount(env, p.id, it.variant_id);
       if (stock < it.quantity)
@@ -524,7 +549,7 @@ async function reserveCodes(env, orderId, productId, qty, variantId = null) {
 }
 const BAD_DISCOUNT =
   "This discount code is invalid, expired, or doesn't apply to your cart.";
-async function calcDiscount(env, rawCode, subtotal) {
+async function calcDiscount(env, rawCode, subtotal, cart = null, user = null) {
   const code = clean(rawCode).toUpperCase();
   if (!code) return { code: null, discount: 0 };
   const d = await env.DB.prepare(
@@ -540,11 +565,27 @@ async function calcDiscount(env, rawCode, subtotal) {
   if (d.max_uses != null && Number(d.used_count || 0) >= Number(d.max_uses))
     return { error: BAD_DISCOUNT };
   if (subtotal < Number(d.min_order || 0)) return { error: BAD_DISCOUNT };
-  let discount =
-    d.type === "fixed"
-      ? Number(d.amount)
-      : (subtotal * Math.min(100, Number(d.amount))) / 100;
-  discount = money(Math.max(0, Math.min(subtotal, discount)));
+  if (Number(d.first_order_only) && !user) return { error: BAD_DISCOUNT };
+  if (Number(d.first_order_only) && user) {
+    const prior = await env.DB.prepare("SELECT 1 x FROM orders WHERE user_id=? AND payment_status IN ('paid','refunded') LIMIT 1").bind(user.id).first();
+    if (prior) return { error: BAD_DISCOUNT };
+  }
+  let eligibleSubtotal = subtotal, eligibleQty = 0;
+  if (cart?.normalized && (d.product_id || d.category_id || d.bundle_quantity)) {
+    eligibleSubtotal = 0;
+    for (const it of cart.normalized) {
+      const product = cart.map.get(it.product_id);
+      const eligible = (!d.product_id || Number(d.product_id) === Number(product?.id)) && (!d.category_id || Number(d.category_id) === Number(product?.category_id));
+      if (eligible) { eligibleSubtotal += Number(it.price) * Number(it.quantity); eligibleQty += Number(it.quantity); }
+    }
+    if ((d.product_id || d.category_id) && eligibleSubtotal <= 0) return { error: BAD_DISCOUNT };
+  }
+  let discount = 0;
+  if (Number(d.bundle_quantity) > 0) {
+    if (eligibleQty < Number(d.bundle_quantity)) return { error: BAD_DISCOUNT };
+    discount = eligibleSubtotal * Math.min(100, Number(d.bundle_percent || d.amount)) / 100;
+  } else discount = d.type === "fixed" ? Number(d.amount) : (eligibleSubtotal * Math.min(100, Number(d.amount))) / 100;
+  discount = money(Math.max(0, Math.min(eligibleSubtotal, discount)));
   return { code: d.code, discount };
 }
 async function releaseDiscount(env, orderId) {
@@ -854,7 +895,7 @@ async function api(req, env, url, ctx) {
       return json({ error: "Bad origin." }, 403);
   }
   if (path === "/api/health")
-    return json({ ok: true, version: "9.1.0", logo: LOGO_URL });
+    return json({ ok: true, version: "9.3.0", logo: LOGO_URL });
   if (path === "/api/me" && method === "GET") return json({ user: me });
   if (path === "/api/categories" && method === "GET")
     return json(
@@ -932,6 +973,8 @@ async function api(req, env, url, ctx) {
     )
       .bind(name, email, await hashPassword(password))
       .run();
+    const referralCode = `KDV${String(r.meta.last_row_id).padStart(6,"0")}${crypto.randomUUID().slice(0,4).toUpperCase()}`;
+    await env.DB.prepare("UPDATE users SET referral_code=? WHERE id=?").bind(referralCode,r.meta.last_row_id).run();
     const sid = crypto.randomUUID();
     await env.DB.prepare(
       "INSERT INTO sessions(id,user_id,expires_at) VALUES(?,?,?)",
@@ -939,7 +982,7 @@ async function api(req, env, url, ctx) {
       .bind(sid, r.meta.last_row_id, Date.now() + 2592000000)
       .run();
     return json(
-      { user: { id: r.meta.last_row_id, name, email, role: "customer" } },
+      { user: { id: r.meta.last_row_id, name, email, role: "customer", referral_code: referralCode } },
       201,
       { "Set-Cookie": cookie(sid, 2592000) },
     );
@@ -994,6 +1037,13 @@ async function api(req, env, url, ctx) {
         .run();
     return new Response("ok", { headers: { "Set-Cookie": cookie("", 0) } });
   }
+  if (path === "/api/referrals" && method === "GET") {
+    if(!me) return json({error:"Login required."},401);
+    let code=me.referral_code;
+    if(!code){code=`KDV${String(me.id).padStart(6,"0")}${crypto.randomUUID().slice(0,4).toUpperCase()}`; await env.DB.prepare("UPDATE users SET referral_code=? WHERE id=?").bind(code,me.id).run();}
+    const credits=await env.DB.prepare("SELECT COALESCE(SUM(amount),0) balance FROM referral_credits WHERE user_id=?").bind(me.id).first();
+    return json({code,balance:money(credits?.balance||0)});
+  }
   if (path === "/api/orders" && method === "GET") {
     if (!me) return json({ error: "Login required." }, 401);
     return json(await ordersWithCodes(env, "o.user_id=?", me.id));
@@ -1015,7 +1065,16 @@ async function api(req, env, url, ctx) {
     );
     if (!list.length)
       return json({ error: "No order matches those details." }, 404);
-    return json(list[0]);
+    const order = list[0];
+    order.timeline = (await env.DB.prepare("SELECT event,details,created_at FROM order_events WHERE order_id=? ORDER BY id").bind(order.id).all()).results;
+    if (!order.timeline.length) {
+      order.timeline.push({event:"placed",details:"Order placed",created_at:order.created_at});
+      if (order.payment_proof_key) order.timeline.push({event:"proof_received",details:"Payment proof on file",created_at:order.updated_at || order.created_at});
+      if (order.payment_status === "paid") order.timeline.push({event:"paid",details:"Payment marked paid",created_at:order.updated_at || order.created_at});
+      if (order.fulfillment_status === "fulfilled") order.timeline.push({event:"delivered",details:"Order marked delivered",created_at:order.updated_at || order.created_at});
+    }
+    order.support_messages = (await env.DB.prepare("SELECT author_role,message,created_at FROM support_messages WHERE order_id=? ORDER BY id").bind(order.id).all()).results;
+    return json(order);
   }
   if (path === "/api/discount/check" && method === "POST") {
     const b = await readJson(req),
@@ -1024,7 +1083,7 @@ async function api(req, env, url, ctx) {
       return json({ error: "Too many attempts. Try again later." }, 429);
     const cart = await priceCart(env, b.items, s);
     if (cart.error) return json({ error: cart.error }, 400);
-    const dc = await calcDiscount(env, b.code, cart.subtotal);
+    const dc = await calcDiscount(env, b.code, cart.subtotal, cart, me);
     if (dc.error) return json({ error: dc.error }, 400);
     return json({
       subtotal: cart.subtotal,
@@ -1051,10 +1110,17 @@ async function api(req, env, url, ctx) {
     await expireReservations(env, s);
     const cart = await priceCart(env, b.items, s);
     if (cart.error) return json({ error: cart.error }, 400);
-    const dc = await calcDiscount(env, b.discount_code, cart.subtotal);
+    const dc = await calcDiscount(env, b.discount_code, cart.subtotal, cart, me);
     if (dc.error) return json({ error: dc.error }, 400);
+    let referralCredit = 0, referralOwner = null;
+    const refCode=clean(b.referral_code).toUpperCase();
+    if(refCode && me){
+      referralOwner=await env.DB.prepare("SELECT id FROM users WHERE referral_code=? AND id<>?").bind(refCode,me.id).first();
+      const prior=await env.DB.prepare("SELECT 1 x FROM orders WHERE user_id=? LIMIT 1").bind(me.id).first();
+      if(referralOwner && !prior) referralCredit=Math.min(cart.subtotal*0.05,cart.subtotal);
+    }
     const subtotal = cart.subtotal,
-      discount = dc.discount,
+      discount = money(Math.min(subtotal, dc.discount + referralCredit)),
       total = money(subtotal - discount);
     const pm = PAYMENT_METHODS.includes(b.payment_method)
       ? b.payment_method
@@ -1069,7 +1135,7 @@ async function api(req, env, url, ctx) {
     // The order and its items are written in one atomic batch.
     const stmts = [
       env.DB.prepare(
-        "INSERT INTO orders(order_number,user_id,guest_name,guest_contact,subtotal,discount,total,payment_method,discount_code) VALUES(?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO orders(order_number,user_id,guest_name,guest_contact,subtotal,discount,total,payment_method,discount_code,referral_code) VALUES(?,?,?,?,?,?,?,?,?,?)",
       ).bind(
         orderNumber,
         me?.id ?? null,
@@ -1080,6 +1146,7 @@ async function api(req, env, url, ctx) {
         total,
         pm,
         dc.code || null,
+        referralCredit ? refCode : null,
       ),
     ];
     for (const item of cart.normalized) {
@@ -1100,6 +1167,7 @@ async function api(req, env, url, ctx) {
       );
     }
     const orderId = (await env.DB.batch(stmts))[0].meta.last_row_id;
+    await env.DB.prepare("INSERT INTO order_events(order_id,event,details) VALUES(?,?,?)").bind(orderId,"placed","Order created").run();
     let claimed = false;
     const abort = async (message, status) => {
       await env.DB.prepare(
@@ -1198,6 +1266,7 @@ async function api(req, env, url, ctx) {
         .first();
     if (!o) return json({ error: "Order not found." }, 404);
     const contact = clean(req.headers.get("X-Order-Contact"));
+    const paymentReference = clean(req.headers.get("X-Payment-Reference")).slice(0,120);
     if (
       !me &&
       (!contact ||
@@ -1225,8 +1294,11 @@ async function api(req, env, url, ctx) {
       return json({ error: "Upload a JPG, PNG, WEBP, or GIF image." }, 400);
     if (Number(file.size) > 8 * 1024 * 1024)
       return json({ error: "Payment proof must be 8 MB or smaller." }, 413);
+    const fileBytes = await file.arrayBuffer();
+    const proofHash = hex(await crypto.subtle.digest("SHA-256", fileBytes));
+    const duplicate = await env.DB.prepare("SELECT order_number FROM orders WHERE id<>? AND payment_status IN ('awaiting_payment','paid') AND ((?<>'' AND proof_sha256=?) OR (?<>'' AND lower(payment_reference)=lower(?))) LIMIT 1").bind(id,proofHash,proofHash,paymentReference,paymentReference).first();
     const key = `payment-proofs/${id}/${crypto.randomUUID()}.${extFromType(file.type)}`;
-    await bucket.put(key, await file.arrayBuffer(), {
+    await bucket.put(key, fileBytes, {
       httpMetadata: {
         contentType: file.type,
         cacheControl: "private, max-age=0",
@@ -1237,11 +1309,47 @@ async function api(req, env, url, ctx) {
         await bucket.delete(o.payment_proof_key);
       } catch {}
     await env.DB.prepare(
-      "UPDATE orders SET payment_proof_key=?,payment_proof_name=?,payment_proof_type=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+      "UPDATE orders SET payment_proof_key=?,payment_proof_name=?,payment_proof_type=?,proof_sha256=?,payment_reference=CASE WHEN ?<>'' THEN ? ELSE payment_reference END,updated_at=CURRENT_TIMESTAMP WHERE id=?",
     )
-      .bind(key, safeFileName(file.name), file.type, id)
+      .bind(key, safeFileName(file.name), file.type, proofHash, paymentReference, paymentReference, id)
       .run();
-    return json({ ok: true });
+    await env.DB.prepare("INSERT INTO order_events(order_id,event,details) VALUES(?,?,?)").bind(id,"proof_received",duplicate ? `Possible duplicate proof also used by ${duplicate.order_number}` : "Payment proof uploaded").run();
+    return json({ ok: true, possible_duplicate: !!duplicate, duplicate_order: duplicate?.order_number || null });
+  }
+  if (path === "/api/auth/password-reset/request" && method === "POST") {
+    if (!(await throttle(env, `pwreset:${ipOf(req)}`, 5, 3600000)) || !env.RESEND_API_KEY) return json({ok:true,message:"If the account exists and email is configured, a reset link will be sent."});
+    const b=await readJson(req), email=clean(b.email).toLowerCase();
+    if (!email || email.length>254) return json({ok:true,message:"If the account exists and email is configured, a reset link will be sent."});
+    const user=await env.DB.prepare("SELECT id,email,name FROM users WHERE lower(email)=? AND role='customer'").bind(email).first();
+    if(user){ const token=hex(crypto.getRandomValues(new Uint8Array(32))), tokenHash=await sha(token), expires=Date.now()+3600000;
+      await env.DB.prepare("INSERT INTO password_resets(user_id,token_hash,expires_at) VALUES(?,?,?)").bind(user.id,tokenHash,expires).run();
+      const origin=env.PUBLIC_URL || url.origin, link=`${origin}/?reset_token=${encodeURIComponent(token)}`;
+      const mail=await fetch("https://api.resend.com/emails",{method:"POST",headers:{"Authorization":`Bearer ${env.RESEND_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({from:env.EMAIL_FROM || "Kardivo <onboarding@resend.dev>",to:[user.email],subject:"Reset your Kardivo password",html:`<p>Hello ${htmlEsc(user.name)},</p><p>Use this link within one hour to reset your password:</p><p><a href="${htmlEsc(link)}">Reset password</a></p><p>If you didn't request this, ignore this email.</p>`})});
+      if(!mail.ok) console.error("password reset email failed",mail.status);
+    }
+    return json({ok:true,message:"If the account exists and email is configured, a reset link will be sent."});
+  }
+  if (path === "/api/auth/password-reset/complete" && method === "POST") {
+    const b=await readJson(req), token=clean(b.token), password=String(b.password||"");
+    if(password.length<8) return json({error:"Password must be at least 8 characters."},400);
+    const hash=await sha(token), row=await env.DB.prepare("SELECT * FROM password_resets WHERE token_hash=? AND used_at IS NULL AND expires_at>?").bind(hash,Date.now()).first();
+    if(!row) return json({error:"This reset link is invalid or expired."},400);
+    await env.DB.batch([env.DB.prepare("UPDATE users SET password_hash=? WHERE id=?").bind(await hashPassword(password),row.user_id),env.DB.prepare("UPDATE password_resets SET used_at=CURRENT_TIMESTAMP WHERE id=?").bind(row.id),env.DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(row.user_id)]);
+    return json({ok:true});
+  }
+  if (path === "/api/stock-watch" && method === "POST") {
+    if (!(await throttle(env, `stock-watch:${ipOf(req)}`, 10, 3600000))) return json({error:"Too many requests. Try again later."},429);
+    const b=await readJson(req), productId=Number(b.product_id), email=clean(b.email || me?.email).toLowerCase();
+    if(!productId || !/^\S+@\S+\.\S+$/.test(email)) return json({error:"Enter a valid email."},400);
+    const p=await env.DB.prepare("SELECT id,active FROM products WHERE id=?").bind(productId).first(); if(!p || !p.active) return json({error:"Product not found."},404);
+    await env.DB.prepare("INSERT OR IGNORE INTO stock_watchers(product_id,email) VALUES(?,?)").bind(productId,email).run(); return json({ok:true});
+  }
+  if (path === "/api/orders/support" && method === "POST") {
+    const b=await readJson(req), id=Number(b.order_id), message=clean(b.message).slice(0,2000), contact=clean(b.contact);
+    if(!id || message.length<2) return json({error:"Write a message for this order."},400);
+    const o=await env.DB.prepare("SELECT * FROM orders WHERE id=?").bind(id).first(); if(!o) return json({error:"Order not found."},404);
+    if(!(me && o.user_id===me.id) && (!contact || contact.toLowerCase()!==String(o.guest_contact||"").toLowerCase())) return json({error:"Order verification failed."},403);
+    await env.DB.prepare("INSERT INTO support_messages(order_id,user_id,guest_contact,author_role,message) VALUES(?,?,?,?,?)").bind(id,me?.id||null,contact||null,"customer",message).run(); return json({ok:true});
   }
   if (path === "/api/checkout-events" && method === "POST") {
     const b = await readJson(req),
@@ -1303,6 +1411,38 @@ async function api(req, env, url, ctx) {
   if (path.startsWith("/api/admin/")) {
     const admin = await requireAdmin(req, env);
     if (!admin) return json({ error: "Admin access required." }, 403);
+  }
+  if (path === "/api/admin/merged-products" || path.startsWith("/api/admin/product-merger/"))
+    return json({ error: "Product combining is disabled in this build to protect existing product and order mappings." }, 410);
+  if (path === "/api/admin/backup" && method === "POST") {
+    try { return json({ ok: true, ...(await createD1Backup(env)) }); }
+    catch (e) { return json({ error: `Backup failed: ${e?.message || "R2 unavailable"}` }, 503); }
+  }
+  if (path === "/api/admin/support" && method === "GET") return json((await env.DB.prepare("SELECT sm.*,o.order_number,o.payment_status,o.fulfillment_status FROM support_messages sm JOIN orders o ON o.id=sm.order_id ORDER BY sm.id DESC LIMIT 300").all()).results);
+  const supportReplyMatch=path.match(/^\/api\/admin\/support\/(\d+)$/);
+  if(supportReplyMatch && method==="POST") { const b=await readJson(req),id=Number(supportReplyMatch[1]),message=clean(b.message).slice(0,2000); if(message.length<2)return json({error:"Reply is required."},400); const o=await env.DB.prepare("SELECT id,user_id FROM orders WHERE id=?").bind(id).first(); if(!o)return json({error:"Order not found."},404); await env.DB.prepare("INSERT INTO support_messages(order_id,user_id,author_role,message) VALUES(?,?,?,?)").bind(id,me.id,"admin",message).run(); return json({ok:true}); }
+  if (path === "/api/admin/refunds" && method === "GET") return json((await env.DB.prepare("SELECT r.*,o.order_number,u.name admin_name FROM refund_logs r JOIN orders o ON o.id=r.order_id LEFT JOIN users u ON u.id=r.admin_user_id ORDER BY r.id DESC LIMIT 300").all()).results);
+  if (path === "/api/admin/suppliers" && method === "GET") return json((await env.DB.prepare("SELECT s.*,COUNT(b.id) batches,COALESCE(SUM(b.quantity*b.unit_cost),0) spend FROM suppliers s LEFT JOIN supplier_batches b ON b.supplier_id=s.id GROUP BY s.id ORDER BY s.id DESC").all()).results);
+  if (path === "/api/admin/suppliers" && method === "POST") { const b=await readJson(req),name=clean(b.name); if(!name)return json({error:"Supplier name required."},400); const r=await env.DB.prepare("INSERT INTO suppliers(name,contact,notes) VALUES(?,?,?)").bind(name,clean(b.contact),clean(b.notes)).run(); return json({ok:true,id:r.meta.last_row_id},201); }
+  if (path === "/api/admin/supplier-batches" && method === "GET") return json((await env.DB.prepare("SELECT b.*,s.name supplier_name,p.name product_name FROM supplier_batches b LEFT JOIN suppliers s ON s.id=b.supplier_id JOIN products p ON p.id=b.product_id ORDER BY b.id DESC LIMIT 500").all()).results);
+  if (path === "/api/admin/supplier-batches" && method === "POST") { const b=await readJson(req),pid=Number(b.product_id),qty=Math.floor(Number(b.quantity)),cost=Number(b.unit_cost); if(!pid||qty<1||!Number.isFinite(cost)||cost<0)return json({error:"Choose a product and valid quantity/cost."},400); const p=await env.DB.prepare("SELECT id FROM products WHERE id=?").bind(pid).first(); if(!p)return json({error:"Product not found."},404); await env.DB.prepare("INSERT INTO supplier_batches(supplier_id,product_id,quantity,unit_cost,reference,notes) VALUES(?,?,?,?,?,?)").bind(Number(b.supplier_id)||null,pid,qty,cost,clean(b.reference),clean(b.notes)).run(); await env.DB.prepare("UPDATE products SET supplier_cost=? WHERE id=?").bind(cost,pid).run(); return json({ok:true},201); }
+  if (path === "/api/admin/stock-threshold" && method === "PUT") { const b=await readJson(req),pid=Number(b.product_id),th=b.threshold===null?null:Math.floor(Number(b.threshold)); if(!pid||(th!==null&&(!Number.isFinite(th)||th<0||th>100000)))return json({error:"Invalid product or threshold."},400); await env.DB.prepare("UPDATE products SET low_stock_threshold=? WHERE id=?").bind(th,pid).run(); return json({ok:true}); }
+  if (path === "/api/admin/reports/profit" && method === "GET") return json((await env.DB.prepare("SELECT p.id,p.name,COALESCE(SUM(CASE WHEN o.payment_status='paid' THEN oi.quantity*oi.unit_price ELSE 0 END),0) revenue,COALESCE(SUM(CASE WHEN o.payment_status='paid' THEN oi.quantity*COALESCE(p.supplier_cost,0) ELSE 0 END),0) cost,COALESCE(SUM(CASE WHEN o.payment_status='paid' THEN oi.quantity*(oi.unit_price-COALESCE(p.supplier_cost,0)) ELSE 0 END),0) gross_profit FROM products p LEFT JOIN order_items oi ON oi.product_id=p.id LEFT JOIN orders o ON o.id=oi.order_id GROUP BY p.id ORDER BY gross_profit DESC").all()).results);
+  if (path === "/api/admin/reports" && method === "GET") {
+    const funnel = await env.DB.prepare(
+      "SELECT event,COUNT(*) count FROM checkout_events WHERE created_at>=datetime('now','-30 days') GROUP BY event",
+    ).all();
+    const products = await env.DB.prepare(
+      "SELECT oi.product_id,oi.product_name,SUM(oi.quantity) units,SUM(oi.quantity*oi.unit_price) gross,COUNT(DISTINCT oi.order_id) orders FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE o.payment_status='paid' AND o.created_at>=datetime('now','-30 days') GROUP BY oi.product_id,oi.product_name ORDER BY gross DESC LIMIT 10",
+    ).all();
+    const counts = Object.fromEntries((funnel.results || []).map(x => [x.event, Number(x.count || 0)]));
+    return json({ period_days: 30, checkout_started: counts.checkout_started || 0, checkout_completed: counts.checkout_completed || 0, products: (products.results || []).map(x => ({...x, units:Number(x.units||0),gross:money(x.gross),orders:Number(x.orders||0)})) });
+  }
+  if (path === "/api/admin/orders.csv" && method === "GET") {
+    const rows = (await env.DB.prepare("SELECT o.order_number,o.created_at,COALESCE(u.name,o.guest_name,'Guest') customer,COALESCE(u.email,o.guest_contact,'') contact,o.payment_method,o.payment_status,o.fulfillment_status,o.subtotal,o.discount,o.total,o.discount_code,o.delivery_message,o.notes,(SELECT GROUP_CONCAT(oi.product_name||' x '||oi.quantity, '; ') FROM order_items oi WHERE oi.order_id=o.id) items FROM orders o LEFT JOIN users u ON u.id=o.user_id ORDER BY o.id DESC").all()).results;
+    const csvCell = v => { let value = String(v ?? ''); if (/^[=+@\-\t\r]/.test(value)) value = "'" + value; return '"' + value.replace(/"/g,'""') + '"'; };
+    const body = ['order_number,created_at,customer,contact,payment_method,payment_status,fulfillment_status,subtotal,discount,total,discount_code,items,delivery_message,admin_notes', ...rows.map(r => [r.order_number,r.created_at,r.customer,r.contact,r.payment_method,r.payment_status,r.fulfillment_status,r.subtotal,r.discount,r.total,r.discount_code,r.items,r.delivery_message,r.notes].map(csvCell).join(','))].join('\r\n');
+    return new Response(body, { headers: { 'content-type':'text/csv; charset=utf-8', 'content-disposition':'attachment; filename="kardivo-orders.csv"', 'cache-control':'no-store' } });
   }
   const proofAdminMatch = path.match(
     /^\/api\/admin\/orders\/(\d+)\/payment-proof$/,
@@ -1380,7 +1520,7 @@ async function api(req, env, url, ctx) {
         "SELECT COUNT(*) n FROM orders WHERE payment_status='awaiting_payment' AND fulfillment_status<>'cancelled'",
       ),
       env.DB.prepare(
-        "SELECT p.name,(SELECT COALESCE(SUM(vs.stock),0) FROM (SELECT v.id,(SELECT COUNT(*) FROM inventory i WHERE i.product_id=p.id AND i.variant_id=v.id AND i.status='available')+(SELECT COUNT(*) FROM inventory i JOIN variant_sources x ON x.source_product_id=i.product_id WHERE x.variant_id=v.id AND i.variant_id IS NULL AND i.status='available') stock FROM product_variants v WHERE v.product_id=p.id) vs) + (SELECT COUNT(*) FROM inventory i WHERE i.product_id=p.id AND i.variant_id IS NULL AND i.status='available') stock FROM products p WHERE p.active=1 AND p.delivery_type='code' ORDER BY stock",
+        "SELECT p.name,p.low_stock_threshold,(SELECT COALESCE(SUM(vs.stock),0) FROM (SELECT v.id,(SELECT COUNT(*) FROM inventory i WHERE i.product_id=p.id AND i.variant_id=v.id AND i.status='available')+(SELECT COUNT(*) FROM inventory i JOIN variant_sources x ON x.source_product_id=i.product_id WHERE x.variant_id=v.id AND i.variant_id IS NULL AND i.status='available') stock FROM product_variants v WHERE v.product_id=p.id) vs) + (SELECT COUNT(*) FROM inventory i WHERE i.product_id=p.id AND i.variant_id IS NULL AND i.status='available') stock FROM products p WHERE p.active=1 AND p.delivery_type='code' ORDER BY stock",
       )
         .bind()
         .all(),
@@ -1692,14 +1832,31 @@ async function api(req, env, url, ctx) {
     const b = await readJson(req),
       productId = Number(b.product_id),
       variantId = b.variant_id ? Number(b.variant_id) : null,
-      codes = [
-        ...new Set(
-          String(b.codes || "")
-            .split(/\r?\n/)
-            .map(clean)
-            .filter(Boolean),
-        ),
-      ];
+      rawCodes = String(b.codes || ""),
+      parseCodeRows = (raw) => {
+        const lines = raw.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+        if (!lines.length) return [];
+        const first = lines[0].split(/[;,]/).map(x => x.trim().replace(/^"|"$/g, "").toLowerCase());
+        const headerIndex = first.findIndex(x => ["code", "codes", "inventory_code", "serial", "key"].includes(x));
+        const delim = lines.some(x => x.includes(",")) ? "," : (lines.some(x => x.includes(";")) ? ";" : null);
+        const values = [];
+        for (let li = headerIndex === 0 ? 1 : 0; li < lines.length; li++) {
+          const line = lines[li];
+          if (!delim) { values.push(line); continue; }
+          const cells = []; let cell = "", quoted = false;
+          for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            if (ch === '"' && line[i+1] === '"' && quoted) { cell += '"'; i++; }
+            else if (ch === '"') quoted = !quoted;
+            else if (ch === delim && !quoted) { cells.push(cell.trim()); cell = ""; }
+            else cell += ch;
+          }
+          cells.push(cell.trim());
+          values.push(headerIndex >= 0 ? (cells[headerIndex] || "") : cells[0]);
+        }
+        return [...new Set(values.map(x => clean(x).replace(/^"|"$/g, "")).filter(Boolean))];
+      },
+      codes = parseCodeRows(rawCodes);
     if (!productId || !codes.length)
       return json(
         { error: "Select a product and enter at least one code." },
@@ -1778,7 +1935,7 @@ async function api(req, env, url, ctx) {
     if (derr) return json({ error: derr }, 400);
     try {
       await env.DB.prepare(
-        "INSERT INTO discounts(code,type,amount,min_order,active,expires_at,max_uses) VALUES(?,?,?,?,?,?,?)",
+        "INSERT INTO discounts(code,type,amount,min_order,active,expires_at,max_uses,first_order_only,product_id,category_id,bundle_quantity,bundle_percent) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
       )
         .bind(
           code,
@@ -1788,6 +1945,11 @@ async function api(req, env, url, ctx) {
           b.active === false ? 0 : 1,
           expiryOf(b.expires_at),
           maxUses(b),
+          b.first_order_only ? 1 : 0,
+          Number(b.product_id) || null,
+          Number(b.category_id) || null,
+          Number(b.bundle_quantity) > 0 ? Math.floor(Number(b.bundle_quantity)) : null,
+          Number(b.bundle_percent) > 0 ? Math.min(100, Number(b.bundle_percent)) : null,
         )
         .run();
     } catch {
@@ -1803,7 +1965,7 @@ async function api(req, env, url, ctx) {
     if (derr) return json({ error: derr }, 400);
     try {
       await env.DB.prepare(
-        "UPDATE discounts SET code=?,type=?,amount=?,min_order=?,active=?,expires_at=?,max_uses=? WHERE id=?",
+        "UPDATE discounts SET code=?,type=?,amount=?,min_order=?,active=?,expires_at=?,max_uses=?,first_order_only=?,product_id=?,category_id=?,bundle_quantity=?,bundle_percent=? WHERE id=?",
       )
         .bind(
           code,
@@ -1813,6 +1975,11 @@ async function api(req, env, url, ctx) {
           b.active ? 1 : 0,
           expiryOf(b.expires_at),
           maxUses(b),
+          b.first_order_only ? 1 : 0,
+          Number(b.product_id) || null,
+          Number(b.category_id) || null,
+          Number(b.bundle_quantity) > 0 ? Math.floor(Number(b.bundle_quantity)) : null,
+          Number(b.bundle_percent) > 0 ? Math.min(100, Number(b.bundle_percent)) : null,
           Number(discMatch[1]),
         )
         .run();
@@ -1956,6 +2123,21 @@ async function api(req, env, url, ctx) {
     )
       .bind(payment, fulfill, notes, dm, id)
       .run();
+    if (payment !== existing.payment_status) {
+      await env.DB.prepare("INSERT INTO order_events(order_id,event,details) VALUES(?,?,?)").bind(id,payment === "paid" ? "paid" : payment,`Payment status changed to ${payment}`).run();
+      if (payment === "refunded") {
+        const reason = clean(b.refund_reason_code) || "other";
+        await env.DB.prepare("INSERT INTO refund_logs(order_id,admin_user_id,reason_code,notes) VALUES(?,?,?,?)").bind(id,me?.id || null,reason,clean(b.refund_notes || notes)).run();
+      }
+    }
+    if (fulfill !== existing.fulfillment_status) await env.DB.prepare("INSERT INTO order_events(order_id,event,details) VALUES(?,?,?)").bind(id,fulfill === "fulfilled" ? "delivered" : fulfill,`Delivery status changed to ${fulfill}`).run();
+    if(payment === "paid" && existing.payment_status !== "paid" && existing.referral_code && existing.user_id){
+      const owner=await env.DB.prepare("SELECT id FROM users WHERE referral_code=? AND id<>?").bind(existing.referral_code,existing.user_id).first();
+      if(owner){
+        const priorCredit=await env.DB.prepare("SELECT id FROM referral_credits WHERE order_id=? AND kind='referral_reward'").bind(id).first();
+        if(!priorCredit) await env.DB.prepare("INSERT INTO referral_credits(user_id,order_id,amount,kind) VALUES(?,?,?,?)").bind(owner.id,id,money(existing.subtotal*0.02),"referral_reward").run();
+      }
+    }
     if (
       fulfill === "cancelled" &&
       existing.fulfillment_status !== "cancelled" &&
@@ -1988,6 +2170,16 @@ async function api(req, env, url, ctx) {
         `Order ${fulfill}`,
         `Order ${existing.order_number}: delivery status is now ${fulfill}.${dm ? ` ${dm}` : ""}`,
       );
+    if (fulfill === "fulfilled" && existing.fulfillment_status !== "fulfilled" && env.RESEND_API_KEY) {
+      const customer = await env.DB.prepare("SELECT u.email,u.name,o.guest_contact,o.guest_name FROM orders o LEFT JOIN users u ON u.id=o.user_id WHERE o.id=?").bind(id).first();
+      const email=clean(customer?.email || customer?.guest_contact);
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        const items=(await env.DB.prepare("SELECT product_name,variant_name,quantity FROM order_items WHERE order_id=?").bind(id).all()).results;
+        const codes=(await env.DB.prepare("SELECT code FROM inventory WHERE order_id=? AND status='sold'").bind(id).all()).results;
+        const bodyHtml=`<h2>Your Kardivo order is delivered</h2><p>Hello ${htmlEsc(customer?.name || customer?.guest_name || "customer")},</p><p>Order <b>${htmlEsc(existing.order_number)}</b> has been marked delivered.</p><ul>${items.map(x=>`<li>${htmlEsc(x.product_name)} ${x.variant_name?`— ${htmlEsc(x.variant_name)}`:""} × ${x.quantity}</li>`).join("")}</ul>${dm?`<h3>Delivery details</h3><p>${htmlEsc(dm).replace(/\n/g,"<br>")}</p>`:""}${codes.length?`<h3>Your codes</h3><p>${codes.map(c=>`<code>${htmlEsc(c.code)}</code>`).join("<br>")}</p>`:""}<p>Thank you for shopping with Kardivo.</p>`;
+        try { const mail=await fetch("https://api.resend.com/emails",{method:"POST",headers:{Authorization:`Bearer ${env.RESEND_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({from:env.EMAIL_FROM || "Kardivo <onboarding@resend.dev>",to:[email],subject:`Kardivo order ${existing.order_number} delivered`,html:bodyHtml})}); if(!mail.ok) console.error("delivery email failed",mail.status); } catch(e){console.error("delivery email failed",e);}
+      }
+    }
     return json({ ok: true });
   }
   if (path === "/api/admin/merged-products" && method === "GET") {
@@ -2165,7 +2357,7 @@ async function api(req, env, url, ctx) {
       const stock = p.variants?.length
         ? p.variants.reduce((n, v) => n + Number(v.stock || 0), 0)
         : Number(p.stock || 0);
-      if (stock <= th) rows.push({ id: p.id, name: p.name, stock });
+      if (stock <= (p.low_stock_threshold == null ? th : Number(p.low_stock_threshold))) rows.push({ id: p.id, name: p.name, stock });
     }
     if (rows.length)
       notifyDiscord(
@@ -2282,14 +2474,16 @@ async function htmlForProduct(env, request, url) {
   if (!res.ok) return res;
   const slug = decodeURIComponent(url.pathname.slice(1)).replace(/\/$/, "");
   const p = await env.DB.prepare(
-    "SELECT p.name,p.description,p.image_url,c.name category_name FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.slug=? AND p.active=1 LIMIT 1",
+    "SELECT p.name,p.name_ar,p.description,p.description_ar,p.image_url,c.name category_name FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.slug=? AND p.active=1 LIMIT 1",
   )
     .bind(slug)
     .first();
   if (!p) return res;
   let html = await res.text();
-  const title = `${p.name} | Kardivo`,
-    desc = clean(p.description) || `${p.name} — digital product at Kardivo.`;
+  const lang = (url.searchParams.get("lang") || request.headers.get("accept-language") || "").toLowerCase();
+  const useArabic = lang.startsWith("ar") && clean(p.name_ar);
+  const title = `${useArabic ? p.name_ar : p.name} | Kardivo`,
+    desc = (useArabic && clean(p.description_ar)) || clean(p.description) || `${p.name} — digital product at Kardivo.`;
   html = html
     .replace(/<title>[^<]*<\/title>/i, `<title>${htmlEsc(title)}</title>`)
     .replace(
@@ -2297,7 +2491,8 @@ async function htmlForProduct(env, request, url) {
       `$1${htmlEsc(desc)}$2`,
     );
   const og = `<meta property="og:title" content="${htmlEsc(title)}"><meta property="og:description" content="${htmlEsc(desc)}">${p.image_url ? `<meta property="og:image" content="${htmlEsc(new URL(p.image_url, url).href)}">` : ""}<meta property="og:type" content="product"><meta property="og:url" content="${htmlEsc(url.href)}"><meta name="twitter:card" content="${p.image_url ? "summary_large_image" : "summary"}">`;
-  html = html.replace(/<\/head>/i, og + "</head>");
+  const hreflang = `<link rel="alternate" hreflang="ar" href="${htmlEsc(new URL(url.pathname, url.origin).href)}"><link rel="alternate" hreflang="en" href="${htmlEsc(new URL(url.pathname, url.origin).href)}"><link rel="alternate" hreflang="x-default" href="${htmlEsc(new URL(url.pathname, url.origin).href)}">`;
+  html = html.replace(/<\/head>/i, og + hreflang + "</head>");
   return new Response(html, {
     status: 200,
     headers: {
@@ -2306,7 +2501,63 @@ async function htmlForProduct(env, request, url) {
     },
   });
 }
+async function createD1Backup(env) {
+  // Backups must use a dedicated, private R2 bucket. Never reuse the public-media bucket.
+  const bucket = env.BACKUPS;
+  if (!env.DB || !bucket) throw new Error("D1 and a dedicated private BACKUPS R2 binding are required.");
+  const tables = (await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all()).results.map(x => x.name);
+  const snapshot = { format: "kardivo-d1-json-v1", created_at: new Date().toISOString(), tables: {} };
+  for (const table of tables) {
+    // Table names originate from sqlite_master, not from request input.
+    const safe = table.replace(/"/g, '""');
+    const rows = await env.DB.prepare(`SELECT * FROM "${safe}"`).all();
+    snapshot.tables[table] = rows.results || [];
+  }
+  const key = `backups/d1-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+  await bucket.put(key, JSON.stringify(snapshot), { httpMetadata: { contentType: "application/json; charset=utf-8", cacheControl: "private, no-store" }, customMetadata: { kind: "kardivo-d1-backup", format: "kardivo-d1-json-v1" } });
+  // Retain up to 30 days of daily backups. Listing/deletion only touches our own prefix.
+  const cutoff = Date.now() - 30 * 86400000;
+  let cursor;
+  do {
+    const page = await bucket.list({ prefix: "backups/d1-", cursor, limit: 1000 });
+    for (const object of page.objects || []) {
+      const match = object.key.match(/^backups\/d1-(\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d)/);
+      if (match && Date.parse(match[1].replace(/T(\d\d)-(\d\d)-(\d\d)/, "T$1:$2:$3") + "Z") < cutoff) await bucket.delete(object.key);
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  return { key, tables: tables.length, created_at: snapshot.created_at };
+}
+
 export default {
+  async scheduled(controller, env, ctx) {
+    if (!env.DB) return;
+    try {
+      await ensureSchema(env);
+      if (env.BACKUPS) {
+        try { const backup = await createD1Backup(env); console.log(`D1 backup saved: ${backup.key} (${backup.tables} tables)`); }
+        catch (backupError) { console.error("D1 backup failed", backupError); }
+      } else console.warn("D1 backup skipped: configure a dedicated private R2 bucket binding named BACKUPS.");
+      const s = await allSettings(env);
+      const expired = await expireReservations(env, s);
+      const th = Number(s.low_stock_threshold) || 3;
+      const products = await productList(env, false);
+      const low = [];
+      for (const p of products.filter(x => x.delivery_type === "code")) {
+        const stock = p.variants?.length ? p.variants.reduce((n,v) => n + Number(v.stock || 0), 0) : Number(p.stock || 0);
+        if (stock <= (p.low_stock_threshold == null ? th : Number(p.low_stock_threshold))) low.push({ name:p.name, stock });
+      }
+      if (low.length) notifyDiscord(env, ctx, "Kardivo scheduled low-stock alert", low.slice(0,10).map(x => [x.name, `${x.stock} left`, true]), "Daily low stock");
+      if (env.RESEND_API_KEY) {
+        const watchers=(await env.DB.prepare("SELECT w.id,w.email,p.id product_id,p.name,p.slug FROM stock_watchers w JOIN products p ON p.id=w.product_id WHERE w.notified_at IS NULL AND p.active=1").all()).results;
+        const stockByProduct = new Map(products.map(p => [Number(p.id), p.variants?.length ? p.variants.reduce((n,v)=>n+Number(v.stock||0),0) : Number(p.stock||0)]));
+        for (const w of watchers) if (Number(stockByProduct.get(Number(w.product_id)) || 0)>0) {
+          try { const link=`${env.PUBLIC_URL || "https://kardivo.com"}/${encodeURIComponent(w.slug)}`; const r=await fetch("https://api.resend.com/emails",{method:"POST",headers:{Authorization:`Bearer ${env.RESEND_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({from:env.EMAIL_FROM || "Kardivo <onboarding@resend.dev>",to:[w.email],subject:`${w.name} is back in stock`,html:`<p>Good news — ${htmlEsc(w.name)} is back in stock.</p><p><a href="${htmlEsc(link)}">View product</a></p>`})}); if(r.ok) await env.DB.prepare("DELETE FROM stock_watchers WHERE id=?").bind(w.id).run(); } catch(e){console.error("stock notification failed",e);}
+        }
+      }
+      console.log(`Scheduled maintenance completed: ${expired} expired reservations, ${low.length} low-stock products`);
+    } catch (e) { console.error("scheduled maintenance failed", e); }
+  },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/")) {

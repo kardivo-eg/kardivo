@@ -1,3 +1,45 @@
+# Kardivo V9.3 — operations and customer-care build
+
+This build continues from the uploaded V9.1/V9.2 project and keeps the existing storefront, product IDs, order IDs, customers, discounts, inventory codes and D1 data. Runtime schema changes are additive only; no database reset or destructive data migration is included. The risky Combine products tab and its API operations are disabled in this build; existing variant/source mappings are left untouched.
+
+## Added in this build
+
+- **Needs review + order CSV:** filter orders with uploaded payment proofs and export orders.
+- **Checkout report:** checkout starts/completions and top products by paid revenue over 30 days.
+- **Scheduled maintenance:** daily Cloudflare Cron releases eligible expired reservations and sends low-stock Discord alerts. Per-product thresholds override the global threshold.
+- **Payment-proof duplicate flagging:** identical proof images are SHA-256 fingerprinted, optional transfer references are compared case-insensitively, and the customer upload response warns when the same proof/reference appears on another active/paid order. Admin order lists flag matching proof hashes or transfer references.
+- **Password recovery and delivery email:** customer password-reset links and delivery emails use Resend. Email sends are disabled unless `RESEND_API_KEY` is configured.
+- **Scheduled D1 backups:** a daily JSON snapshot of all D1 tables is written to a dedicated `BACKUPS` R2 binding, with old snapshots pruned after 30 days. An admin-only manual backup button is also available. The backup bucket must be private and must not be the public product-media bucket.
+- **Order timeline and support thread:** order events are timestamped; customers can message support from Track order, and admins can reply from the Order support tab.
+- **Refund/dispute log:** changing an order to refunded records an admin-only reason and notes.
+- **Supplier and estimated profit tools:** suppliers and purchased batches can be recorded; the dashboard estimates gross profit using the product's currently recorded unit cost. Historical batch costs are recorded but the estimate is not a full weighted-average accounting system.
+- **Stock watchers:** sold-out product pages can collect an email; the daily Cron emails a restock alert when stock is available, using Resend.
+- **Coupon rules:** percentage/fixed coupons, first-order-only restriction for logged-in customers, optional product/category restriction by ID, and bundle quantity/percentage rules.
+- **Referral codes:** registered customers receive a personal referral code; eligible first-time logged-in buyers can receive a 5% referral discount, and the referrer earns a 2% credit after the referred order is marked paid. The account shows the code and earned balance. Credit redemption against a later order is not yet enabled.
+- **Store discovery:** product pages include related products and a recently-viewed row is shown on the homepage.
+- **Installable PWA basics:** manifest, local app icon and service worker cache static assets. Browser push notifications are not configured.
+- **SEO routing:** Worker-first routing includes dynamic metadata, sitemap, robots and media routes. Product metadata uses Arabic text when the request prefers Arabic and Arabic product fields exist.
+
+## Cloudflare setup
+
+1. Keep your real `[[d1_databases]]` binding named `DB` and existing R2 bindings. Do not replace the production database ID with the placeholder in the example config. For backups, create a separate private R2 bucket and add a binding named `BACKUPS`; never bind this to the bucket that serves `/media/product/*`.
+2. Keep existing admin secrets and `DISCORD_WEBHOOK_URL`. The daily Cron is configured in `wrangler.toml` at `17 3 * * *` UTC.
+3. For password reset, delivery emails and restock alerts, set `RESEND_API_KEY` as a Worker secret. Set `EMAIL_FROM` to a sender verified in Resend, and set `PUBLIC_URL` to the public store origin so reset/restock links use your actual domain. Without these, those email flows do not send.
+4. Deploy to a staging Worker first and verify the product catalogue, guest checkout, login, proof upload, and admin order fulfilment before updating production.
+
+## Still requiring dedicated setup/implementation
+
+- **Browser push notifications:** PWA install works, but Web Push subscriptions/VAPID delivery are not included.
+- **Photo reviews:** existing text reviews/moderation remain; photo attachment and moderation are not included.
+- **Referral-credit redemption:** credits are recorded/displayed, but not yet applied to checkout totals.
+- **Backup restore drill:** snapshots are written as JSON; validate a restore procedure on a staging database before relying on them for disaster recovery.
+
+## Safety notes
+
+- Do not reset D1, delete product rows, or replace your production database binding.
+- This code cannot verify your production D1 contents or live Cloudflare secrets. The ZIP must be tested in staging before deployment.
+- The stock alert and revenue/profit reports are operational aids; verify the numbers against D1 before using them for accounting decisions.
+
 # Kardivo V9.1
 
 ## V9.1 fixes (on top of V9 safe tools)

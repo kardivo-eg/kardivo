@@ -1,0 +1,20 @@
+{
+  "name": "Kardivo Digital Store",
+  "short_name": "Kardivo",
+  "description": "Kardivo digital gaming marketplace",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#08070d",
+  "theme_color": "#08070d",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

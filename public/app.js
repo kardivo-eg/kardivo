@@ -574,6 +574,7 @@ async function openProductPage(slug) {
         p.delivery_type === "code" &&
         (variants.length ? totalStock <= 0 : Number(p.stock) <= 0);
     document.title = `${name} | ${sn}`;
+    try { const viewed=JSON.parse(localStorage.getItem("kardivo_recently_viewed")||"[]").filter(x=>x.slug!==p.slug); viewed.unshift({id:p.id,slug:p.slug,name:p.name,name_ar:p.name_ar||"",image_url:p.image_url||"",price:p.price}); localStorage.setItem("kardivo_recently_viewed",JSON.stringify(viewed.slice(0,6))); } catch {}
     const first = variants[0],
       price = variants.length ? Number(first.price) : Number(p.price),
       old = variants.length
@@ -594,7 +595,7 @@ async function openProductPage(slug) {
       .map((x) => `<span>${escapeHTML(x)}</span>`)
       .join(
         "",
-      )}</div>${variants.length ? `<div class="field" style="margin:18px 0"><label>${t("Choose option")}</label><select id="productVariant">${variants.map((v, i) => `<option value="${v.id}" ${i === 0 ? "selected" : ""} data-price="${v.price}" data-old="${v.old_price || 0}" data-stock="${v.stock || 0}">${escapeHTML(v.name)}${p.delivery_type === "code" && state.settings.show_stock !== false ? ` — ${v.stock || 0} ${t("left")}` : ""}</option>`).join("")}</select></div>` : ""}<div class="product-description">${desc ? escapeHTML(desc).replace(/\n/g, "<br>") : t("No description has been added for this product yet.")}</div>${(p.reviews || []).length ? `<div class="admin-panel" style="margin-top:20px"><h3>Customer reviews</h3>${p.reviews.map((r) => `<div class="line" style="padding:10px 0"><span><b>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</b><br><small>${escapeHTML(r.user_name || "Verified customer")}</small></span><span style="max-width:55%">${escapeHTML(r.body || "")}</span></div>`).join("")}</div>` : ""}<div class="product-detail-actions"><button class="btn primary" id="productAdd" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Add to cart") : t("Add to cart")}</button><a class="btn ghost" href="/" data-home>${t("Back to store")}</a></div></div></div></section>`;
+      )}</div>${variants.length ? `<div class="field" style="margin:18px 0"><label>${t("Choose option")}</label><select id="productVariant">${variants.map((v, i) => `<option value="${v.id}" ${i === 0 ? "selected" : ""} data-price="${v.price}" data-old="${v.old_price || 0}" data-stock="${v.stock || 0}">${escapeHTML(v.name)}${p.delivery_type === "code" && state.settings.show_stock !== false ? ` — ${v.stock || 0} ${t("left")}` : ""}</option>`).join("")}</select></div>` : ""}<div class="product-description">${desc ? escapeHTML(desc).replace(/\n/g, "<br>") : t("No description has been added for this product yet.")}</div>${(p.reviews || []).length ? `<div class="admin-panel" style="margin-top:20px"><h3>Customer reviews</h3>${p.reviews.map((r) => `<div class="line" style="padding:10px 0"><span><b>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</b><br><small>${escapeHTML(r.user_name || "Verified customer")}</small></span><span style="max-width:55%">${escapeHTML(r.body || "")}</span></div>`).join("")}</div>` : ""}<div class="product-detail-actions"><button class="btn primary" id="productAdd" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Add to cart") : t("Add to cart")}</button><a class="btn ghost" href="/" data-home>${t("Back to store")}</a></div>${soldOut ? `<form id="stockWatchForm" class="notice" style="margin-top:14px"><b>${t("Get notified when back in stock")}</b><div class="field"><input type="email" id="stockWatchEmail" placeholder="${t("Email address")}" required value="${escapeHTML(state.user?.email||"")}"></div><button class="btn ghost">${t("Notify me")}</button></form>` : ""}</div></div><section class="container" style="margin:28px auto"><h3>${t("You may also like")}</h3><div class="product-grid">${state.products.filter(x=>x.id!==p.id && (x.category_id===p.category_id || x.platform===p.platform)).slice(0,4).map(x=>`<article class="product-card"><a class="product-card-anchor" href="/${encodeURIComponent(x.slug)}"><div class="product-image">${x.image_url?`<img src="${escapeHTML(x.image_url)}" alt="${escapeHTML(pName(x))}" loading="lazy">`:`<div class="no-image">K</div>`}</div><div class="product-body"><div class="product-name">${escapeHTML(pName(x))}</div></div></a><div class="price-row"><span class="price">${money(x.price)}</span><a class="mini" href="/${encodeURIComponent(x.slug)}">${t("View")}</a></div></article>`).join("")}</div></section></section>`;
     const updateVariant = () => {
       const sel = $("#productVariant");
       if (!sel) return;
@@ -609,6 +610,7 @@ async function openProductPage(slug) {
     };
     $("#productVariant")?.addEventListener("change", updateVariant);
     updateVariant();
+    $("#stockWatchForm")?.addEventListener("submit", async e => { e.preventDefault(); try { await api("/api/stock-watch", {method:"POST",body:JSON.stringify({product_id:p.id,email:$("#stockWatchEmail").value})}); toast(t("We'll notify you when stock returns.")); $("#stockWatchForm").reset(); } catch(err) { toast(err.message); } });
     $("#productAdd").onclick = () =>
       addToCart(
         p.id,
@@ -772,7 +774,7 @@ function openCheckout() {
   }, 0);
   openModal(
     t("Checkout"),
-    `<div class="notice">${t("You can check out as a guest. To keep order history, log in or create an account before placing the order.")}</div><div class="form-grid" style="margin-top:14px"><div class="field"><label>${t("Name")}</label><input id="guestName" placeholder="${t("Your name")}"></div><div class="field"><label>${t("Contact (WhatsApp or phone)")}</label><input id="guestContact" placeholder="${t("WhatsApp or phone")}"></div></div><div class="field"><label>${t("Discount code")}</label><div style="display:flex;gap:8px"><input id="discountCode" placeholder="${t("Optional code")}" style="flex:1"><button type="button" class="btn ghost" id="applyDiscount">${t("Apply")}</button></div></div><div class="field"><label>${t("Payment proof")} <small>(${t("optional")})</small></label><input id="checkoutProof" type="file" accept="image/*"></div><div class="checkout-summary"><div class="line"><span>${t("Subtotal")}</span><span id="coSubtotal">${money(subtotal)}</span></div><div class="line"><span>${t("Discount")}</span><span id="coDiscount">${money(0)}</span></div><div class="line total"><span>${t("Total")}</span><span id="coTotal">${money(subtotal)}</span></div></div><div style="margin-top:18px"><b>${t("Payment method")}</b><div class="payment-grid" id="payments"></div></div><div class="modal-actions"><button class="btn ghost" id="backCart">${t("Back")}</button><button class="btn primary" id="placeOrder">${t("Place order")}</button></div>`,
+    `<div class="notice">${t("You can check out as a guest. To keep order history, log in or create an account before placing the order.")}</div><div class="form-grid" style="margin-top:14px"><div class="field"><label>${t("Name")}</label><input id="guestName" placeholder="${t("Your name")}"></div><div class="field"><label>${t("Contact (WhatsApp or phone)")}</label><input id="guestContact" placeholder="${t("WhatsApp or phone")}"></div></div><div class="field"><label>${t("Discount code")}</label><div style="display:flex;gap:8px"><input id="discountCode" placeholder="${t("Optional code")}" style="flex:1"><button type="button" class="btn ghost" id="applyDiscount">${t("Apply")}</button></div></div><div class="field"><label>${t("Referral code")} <small>(${t("optional")})</small></label><input id="referralCode" placeholder="${t("Friend's referral code")}"></div><div class="field"><label>${t("Payment proof")} <small>(${t("optional")})</small></label><input id="checkoutProof" type="file" accept="image/*"></div><div class="checkout-summary"><div class="line"><span>${t("Subtotal")}</span><span id="coSubtotal">${money(subtotal)}</span></div><div class="line"><span>${t("Discount")}</span><span id="coDiscount">${money(0)}</span></div><div class="line total"><span>${t("Total")}</span><span id="coTotal">${money(subtotal)}</span></div></div><div style="margin-top:18px"><b>${t("Payment method")}</b><div class="payment-grid" id="payments"></div></div><div class="modal-actions"><button class="btn ghost" id="backCart">${t("Back")}</button><button class="btn primary" id="placeOrder">${t("Place order")}</button></div>`,
   );
   $("#backCart").onclick = openCart;
   renderPaymentOptions();
@@ -798,14 +800,14 @@ function openCheckout() {
     }
   };
 }
-async function uploadPaymentProof(orderId, file, contact = "") {
+async function uploadPaymentProof(orderId, file, contact = "", reference = "") {
   if (!file) return;
   const fd = new FormData();
   fd.append("file", file);
   const res = await fetch(`/api/orders/${orderId}/payment-proof`, {
     method: "POST",
     credentials: "same-origin",
-    headers: contact ? { "X-Order-Contact": contact } : {},
+    headers: { ...(contact ? { "X-Order-Contact": contact } : {}), ...(reference ? { "X-Payment-Reference": reference } : {}) },
     body: fd,
   });
   let body = {};
@@ -864,6 +866,7 @@ async function placeOrder() {
         guest_name: guestName,
         guest_contact: guestContact,
         discount_code: $("#discountCode").value,
+        referral_code: $("#referralCode")?.value || "",
         payment_method: state.selectedPayment,
       }),
     });
@@ -920,8 +923,9 @@ function openAuth() {
 }
 function showLogin() {
   $("#authForm").innerHTML =
-    `<form id="loginForm"><div class="field"><label>${t("Email")}</label><input id="email" type="email" required></div><div class="field"><label>${t("Password")}</label><input id="password" type="password" required></div><button class="btn primary" type="submit">${t("Log in")}</button></form>`;
+    `<form id="loginForm"><div class="field"><label>${t("Email")}</label><input id="email" type="email" required></div><div class="field"><label>${t("Password")}</label><input id="password" type="password" required></div><button class="btn primary" type="submit">${t("Log in")}</button><button type="button" class="mini" id="forgotPasswordBtn">${t("Forgot password?")}</button></form>`;
   authTabs("loginTab");
+  $("#forgotPasswordBtn").onclick = async () => { const email=$("#email").value.trim(); if(!email){toast(t("Enter your email first."));return;} try { const r=await api("/api/auth/password-reset/request",{method:"POST",body:JSON.stringify({email})}); toast(r.message||t("If the account exists, a reset link will be sent.")); } catch(err){toast(err.message);} };
   $("#loginForm").onsubmit = async (e) => {
     e.preventDefault();
     try {
@@ -995,18 +999,19 @@ function reviewForm(productId, orderId) {
 }
 async function openUserAccount() {
   let orders = [],
-    notifications = [];
+    notifications = [], referral = null;
   try {
     [orders, notifications] = await Promise.all([
       api("/api/orders"),
       api("/api/notifications"),
     ]);
+    if (state.user.role !== "admin") referral = await api("/api/referrals").catch(()=>null);
   } catch (e) {
     toast(e.message);
   }
   openModal(
     t("Hi, {0}", escapeHTML(state.user.name)),
-    `<div class="notice"><b>${escapeHTML(state.user.email)}</b><br>${state.user.role === "admin" ? t("Administrator account") : t("Customer account")}</div>${
+    `<div class="notice"><b>${escapeHTML(state.user.email)}</b><br>${state.user.role === "admin" ? t("Administrator account") : t("Customer account")}</div>${referral ? `<div class="notice" style="margin-top:10px"><b>${t("Your referral code")}: <code>${escapeHTML(referral.code)}</code></b><button class="mini" data-copy="${escapeHTML(referral.code)}">${t("Copy")}</button><br><small>${t("Referral credit earned")}: ${money(referral.balance)}</small></div>` : ""}${
       notifications.length
         ? `<h3 style="margin:18px 0 8px">Notifications</h3>${notifications
             .slice(0, 8)
@@ -1044,13 +1049,15 @@ async function openAdmin() {
     `<div class="admin-shell"><aside class="admin-side" id="adminSide">${[
       ["dashboard", "Dashboard"],
       ["products", "Products"],
-      ["merge", "Combine products"],
       ["categories", "Categories"],
       ["inventory", "Digital codes"],
       ["orders", "Orders"],
       ["customers", "Customers"],
       ["discounts", "Discounts"],
       ["reviews", "Reviews"],
+      ["support", "Order support"],
+      ["suppliers", "Suppliers & profit"],
+      ["refunds", "Refund log"],
       ["audit", "Audit log"],
       ["settings", "Settings"],
     ]
@@ -1077,7 +1084,7 @@ async function renderAdminTab() {
   try {
     if (tab === "dashboard") {
       const d = await api("/api/admin/summary");
-      main.innerHTML = `<div class="admin-top"><h2>Dashboard</h2><span class="eyebrow">LIVE DATA</span></div><div class="stats"><div class="stat"><small>AWAITING PAYMENT</small><b>${d.awaiting_payment}</b></div><div class="stat"><small>ORDERS</small><b>${d.orders}</b></div><div class="stat"><small>ACTIVE PRODUCTS</small><b>${d.products}</b></div><div class="stat"><small>PAID REVENUE</small><b>${money(d.paid_revenue)}</b></div><div class="stat"><small>7-DAY REVENUE</small><b>${money(d.revenue_7d)}</b></div><div class="stat"><small>30-DAY REVENUE</small><b>${money(d.revenue_30d)}</b></div><div class="stat"><small>AVG ORDER</small><b>${money(d.avg_order)}</b></div><div class="stat"><small>CANCELLED</small><b>${d.cancelled}</b></div></div><div class="admin-panel"><div class="panel-head"><h3>Store health</h3></div><div class="modal-body"><div class="line"><span>Customers</span><b>${d.customers}</b></div><div class="line"><span>Categories</span><b>${d.categories}</b></div><div class="line"><span>Available digital codes</span><b>${d.available_codes}</b></div><div class="line"><span>Payment methods ready</span><b>${PAY.filter(([k]) => state.settings[k + "_ready"]).length}/3</b></div><div class="line"><span>Accepting orders</span><b>${state.settings.orders_open === false ? "Paused" : "Yes"}</b></div></div></div><div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Operations</h3></div><div class="modal-body"><div class="modal-actions"><button class="btn ghost" id="cleanupReservations">Release expired reservations</button><button class="btn ghost" id="sendLowStock">Send low-stock Discord alert</button></div><small>These are manual tools. Nothing runs against your existing orders/inventory unless you click a button.</small></div></div>${d.low_stock.length ? `<div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Low stock</h3></div><div class="modal-body">${d.low_stock.map((x) => `<div class="line"><span>${escapeHTML(x.name)}</span><b>${x.stock} left</b></div>`).join("")}</div></div>` : ""}`;
+      main.innerHTML = `<div class="admin-top"><h2>Dashboard</h2><span class="eyebrow">LIVE DATA</span></div><div class="stats"><div class="stat"><small>AWAITING PAYMENT</small><b>${d.awaiting_payment}</b></div><div class="stat"><small>ORDERS</small><b>${d.orders}</b></div><div class="stat"><small>ACTIVE PRODUCTS</small><b>${d.products}</b></div><div class="stat"><small>PAID REVENUE</small><b>${money(d.paid_revenue)}</b></div><div class="stat"><small>7-DAY REVENUE</small><b>${money(d.revenue_7d)}</b></div><div class="stat"><small>30-DAY REVENUE</small><b>${money(d.revenue_30d)}</b></div><div class="stat"><small>AVG ORDER</small><b>${money(d.avg_order)}</b></div><div class="stat"><small>CANCELLED</small><b>${d.cancelled}</b></div></div><div class="admin-panel"><div class="panel-head"><h3>Store health</h3></div><div class="modal-body"><div class="line"><span>Customers</span><b>${d.customers}</b></div><div class="line"><span>Categories</span><b>${d.categories}</b></div><div class="line"><span>Available digital codes</span><b>${d.available_codes}</b></div><div class="line"><span>Payment methods ready</span><b>${PAY.filter(([k]) => state.settings[k + "_ready"]).length}/3</b></div><div class="line"><span>Accepting orders</span><b>${state.settings.orders_open === false ? "Paused" : "Yes"}</b></div></div></div><div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Operations</h3></div><div class="modal-body"><div class="modal-actions"><button class="btn ghost" id="cleanupReservations">Release expired reservations</button><button class="btn ghost" id="sendLowStock">Send low-stock Discord alert</button><button class="btn ghost" id="createBackup">Create D1 backup in R2</button></div><small>These are manual tools. Nothing runs against your existing orders/inventory unless you click a button.</small></div></div>${d.low_stock.length ? `<div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Low stock</h3></div><div class="modal-body">${d.low_stock.map((x) => `<div class="line"><span>${escapeHTML(x.name)}</span><b>${x.stock} left</b></div>`).join("")}</div></div>` : ""}`;
     }
     if (tab === "dashboard") {
       $("#cleanupReservations")?.addEventListener("click", async () => {
@@ -1101,6 +1108,24 @@ async function renderAdminTab() {
           toast(e.message);
         }
       });
+      $("#createBackup")?.addEventListener("click", async () => {
+        const button = $("#createBackup");
+        button.disabled = true;
+        button.textContent = "Creating backup…";
+        try {
+          const r = await api("/api/admin/backup", { method: "POST" });
+          toast(`Backup saved (${r.tables} tables). Keep the R2 bucket private.`);
+        } catch (e) { toast(e.message); }
+        finally { button.disabled = false; button.textContent = "Create D1 backup in R2"; }
+      });
+      try {
+        const report = await api("/api/admin/reports");
+        const card = document.createElement("div");
+        card.className = "admin-panel";
+        card.style.marginTop = "12px";
+        card.innerHTML = `<div class="panel-head"><h3>Checkout funnel · last 30 days</h3></div><div class="modal-body"><div class="line"><span>Checkout started</span><b>${report.checkout_started}</b></div><div class="line"><span>Checkout completed</span><b>${report.checkout_completed}</b></div><div class="line"><span>Completion rate</span><b>${report.checkout_started ? Math.round(report.checkout_completed / report.checkout_started * 100) : 0}%</b></div><h4 style="margin-top:14px">Top products by paid revenue</h4>${report.products.map(p => `<div class="line"><span>${escapeHTML(p.product_name)} <small>· ${p.units} units</small></span><b>${money(p.gross)}</b></div>`).join("") || '<p class="muted">No paid product sales in this period.</p>'}</div>`;
+        main.appendChild(card);
+      } catch (e) { console.warn("report unavailable", e); }
     } else if (tab === "products") await adminProducts(main);
     else if (tab === "merge") await adminMerge(main);
     else if (tab === "categories") await adminCategories(main);
@@ -1109,10 +1134,23 @@ async function renderAdminTab() {
     else if (tab === "customers") await adminCustomers(main);
     else if (tab === "discounts") await adminDiscounts(main);
     else if (tab === "reviews") await adminReviews(main);
+    else if (tab === "support") {
+      const rows=await api("/api/admin/support"); main.innerHTML=`<div class="admin-top"><h2>Order support</h2><span class="eyebrow">${rows.length} MESSAGES</span></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Order</th><th>Author</th><th>Message</th><th>Time</th><th>Reply</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHTML(r.order_number)}</td><td>${escapeHTML(r.author_role)}</td><td>${escapeHTML(r.message)}</td><td>${escapeHTML(r.created_at)}</td><td><button class="mini" data-support-reply="${r.order_id}">Reply</button></td></tr>`).join("")||'<tr><td colspan="5">No support messages yet.</td></tr>'}</tbody></table></div></div>`; $$('[data-support-reply]').forEach(b=>b.onclick=async()=>{const message=prompt('Reply to order customer:');if(!message)return;try{await api('/api/admin/support/'+b.dataset.supportReply,{method:'POST',body:JSON.stringify({message})});toast('Reply sent.');renderAdminTab();}catch(e){toast(e.message);}});
+    }
+    else if (tab === "suppliers") {
+      const [suppliers,batches,profit,products]=await Promise.all([api('/api/admin/suppliers'),api('/api/admin/supplier-batches'),api('/api/admin/reports/profit'),api('/api/admin/products')]);
+      main.innerHTML=`<div class="admin-top"><h2>Suppliers & profit</h2></div><div class="admin-panel"><div class="modal-body"><h3>Add supplier</h3><form id="supplierForm" class="form-grid"><div class="field"><label>Name</label><input name="name" required></div><div class="field"><label>Contact</label><input name="contact"></div><div class="field"><label>Notes</label><input name="notes"></div><button class="btn primary">Save supplier</button></form><h3 style="margin-top:18px">Record purchased batch</h3><form id="batchForm" class="form-grid"><div class="field"><label>Supplier</label><select name="supplier_id"><option value="">Unspecified</option>${suppliers.map(x=>`<option value="${x.id}">${escapeHTML(x.name)}</option>`).join('')}</select></div><div class="field"><label>Product</label><select name="product_id" required>${products.map(x=>`<option value="${x.id}">${escapeHTML(x.name)}</option>`).join('')}</select></div><div class="field"><label>Quantity purchased</label><input name="quantity" type="number" min="1" required></div><div class="field"><label>Unit cost</label><input name="unit_cost" type="number" min="0" step="0.01" required></div><div class="field"><label>Invoice/reference</label><input name="reference"></div><button class="btn primary">Record batch</button></form></div></div><div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Profit by product (estimated)</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Revenue</th><th>Estimated cost</th><th>Gross profit</th><th>Stock threshold</th></tr></thead><tbody>${profit.map(x=>`<tr><td>${escapeHTML(x.name)}</td><td>${money(x.revenue)}</td><td>${money(x.cost)}</td><td>${money(x.gross_profit)}</td><td><input type="number" min="0" value="${products.find(p=>p.id===x.id)?.low_stock_threshold??''}" placeholder="Global" data-stock-threshold="${x.id}" style="width:90px"><button class="mini" data-save-threshold="${x.id}">Save</button></td></tr>`).join('')}</tbody></table></div></div><div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Supplier batches</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Date</th><th>Supplier</th><th>Product</th><th>Qty</th><th>Unit cost</th><th>Reference</th></tr></thead><tbody>${batches.map(x=>`<tr><td>${escapeHTML(x.created_at)}</td><td>${escapeHTML(x.supplier_name||'—')}</td><td>${escapeHTML(x.product_name)}</td><td>${x.quantity}</td><td>${money(x.unit_cost)}</td><td>${escapeHTML(x.reference||'')}</td></tr>`).join('')}</tbody></table></div></div>`;
+      $('#supplierForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);try{await api('/api/admin/suppliers',{method:'POST',body:JSON.stringify(Object.fromEntries(f))});toast('Supplier saved.');renderAdminTab();}catch(err){toast(err.message);}};
+      $('#batchForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),b=Object.fromEntries(f);b.quantity=Number(b.quantity);b.unit_cost=Number(b.unit_cost);try{await api('/api/admin/supplier-batches',{method:'POST',body:JSON.stringify(b)});toast('Batch recorded.');renderAdminTab();}catch(err){toast(err.message);}};
+      $$('[data-save-threshold]').forEach(b=>b.onclick=async()=>{const input=$(`[data-stock-threshold="${b.dataset.saveThreshold}"]`);try{await api('/api/admin/stock-threshold',{method:'PUT',body:JSON.stringify({product_id:Number(b.dataset.saveThreshold),threshold:input.value===''?null:Number(input.value)})});toast('Threshold saved.');}catch(err){toast(err.message);}});
+    }
+    else if (tab === "refunds") {
+      const rows=await api('/api/admin/refunds'); main.innerHTML=`<div class="admin-top"><h2>Refund & dispute log</h2></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Order</th><th>Reason</th><th>Notes</th><th>Admin</th><th>Time</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${escapeHTML(x.order_number)}</td><td>${escapeHTML(x.reason_code)}</td><td>${escapeHTML(x.notes||'')}</td><td>${escapeHTML(x.admin_name||'Admin')}</td><td>${escapeHTML(x.created_at)}</td></tr>`).join('')||'<tr><td colspan="5">No refunds logged yet.</td></tr>'}</tbody></table></div></div>`;
+    }
     else if (tab === "audit") await adminAudit(main);
     else if (tab === "settings") await adminSettings(main);
     $$("#adminSide button").forEach((b) =>
-      b.classList.toggle("active", b.dataset.tab === t),
+      b.classList.toggle("active", b.dataset.tab === tab),
     );
   } catch (e) {
     main.innerHTML = `<div class="notice danger-text">${escapeHTML(e.message)}</div>`;
@@ -1487,7 +1525,7 @@ async function adminInventory(main) {
 function inventoryForm(products) {
   openModal(
     "Add digital codes",
-    `<form id="invForm"><div class="field"><label>Product</label><select id="invProduct" required><option value="">Choose product</option>${products.map((p) => `<option value="${p.id}">${escapeHTML(p.name)}</option>`).join("")}</select></div><div class="field"><label>Variant / denomination</label><select id="invVariant"><option value="">Base product stock</option></select></div><div class="field"><label>Codes, one per line</label><textarea id="invCodes" placeholder="CODE-ONE\nCODE-TWO\nCODE-THREE" required></textarea></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelInv">Cancel</button><button class="btn primary">Add codes</button></div></form>`,
+    `<form id="invForm"><div class="field"><label>Product</label><select id="invProduct" required><option value="">Choose product</option>${products.map((p) => `<option value="${p.id}">${escapeHTML(p.name)}</option>`).join("")}</select></div><div class="field"><label>Variant / denomination</label><select id="invVariant"><option value="">Base product stock</option></select></div><div class="field"><label>Codes (one per line or CSV)</label><textarea id="invCodes" placeholder="CODE-ONE\nCODE-TWO\nCODE-THREE\n—or CSV with a code column" required></textarea></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelInv">Cancel</button><button class="btn primary">Add codes</button></div></form>`,
   );
   $("#cancelInv").onclick = () => openAdmin();
   $("#invProduct").onchange = () => {
@@ -1522,13 +1560,13 @@ function inventoryForm(products) {
 }
 async function adminOrders(main) {
   const rows = await api("/api/admin/orders");
-  main.innerHTML = `<div class="admin-top"><h2>Orders</h2><span class="eyebrow">${rows.length} TOTAL</span></div><div class="form-grid" style="margin-bottom:12px"><div class="field"><input id="oSearch" placeholder="Search order, name, contact, item..."></div><div class="field"><select id="oFilter"><option value="">All statuses</option><option value="awaiting_payment">Awaiting payment</option><option value="paid">Paid</option><option value="pending">Pending delivery</option><option value="fulfilled">Fulfilled</option><option value="cancelled">Cancelled</option></select></div></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Order</th><th>Customer</th><th>Total</th><th>Payment</th><th>Fulfillment</th><th>Created</th><th></th></tr></thead><tbody id="oBody"></tbody></table></div></div>`;
+  main.innerHTML = `<div class="admin-top"><h2>Orders</h2><span class="eyebrow">${rows.length} TOTAL</span></div><div class="modal-actions" style="margin-bottom:12px"><button class="btn ghost" id="needsReviewBtn">Needs review (${rows.filter(o => o.payment_status === "awaiting_payment" && !!o.payment_proof_key).length})</button><a class="btn ghost" href="/api/admin/orders.csv" target="_blank" rel="noopener">Export CSV</a></div><div class="form-grid" style="margin-bottom:12px"><div class="field"><input id="oSearch" placeholder="Search order, name, contact, item..."></div><div class="field"><select id="oFilter"><option value="">All statuses</option><option value="awaiting_payment">Awaiting payment</option><option value="proof_review">Needs review: proof uploaded</option><option value="paid">Paid</option><option value="pending">Pending delivery</option><option value="fulfilled">Fulfilled</option><option value="cancelled">Cancelled</option></select></div></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Order</th><th>Customer</th><th>Total</th><th>Payment</th><th>Fulfillment</th><th>Created</th><th></th></tr></thead><tbody id="oBody"></tbody></table></div></div>`;
   const draw = () => {
     const q = $("#oSearch").value.toLowerCase(),
       f = $("#oFilter").value,
       list = rows.filter(
         (o) =>
-          (!f || o.payment_status === f || o.fulfillment_status === f) &&
+          (!f || (f === "proof_review" ? o.payment_status === "awaiting_payment" && !!o.payment_proof_key : o.payment_status === f || o.fulfillment_status === f)) &&
           (!q ||
             `${o.order_number} ${o.user_name || ""} ${o.guest_name || ""} ${o.user_email || ""} ${o.guest_contact || ""} ${o.item_summary || ""}`
               .toLowerCase()
@@ -1538,7 +1576,7 @@ async function adminOrders(main) {
       list
         .map(
           (o) =>
-            `<tr><td><b>${escapeHTML(o.order_number)}</b><br><small>${escapeHTML(o.item_summary || "")}</small></td><td>${escapeHTML(o.user_name || o.guest_name || "Guest")}<br><small>${escapeHTML(o.user_email || o.guest_contact || "")}</small></td><td>${money(o.total)}${o.discount_code ? `<br><small>code ${escapeHTML(o.discount_code)}</small>` : ""}</td><td>${escapeHTML(payNameEN(o.payment_method))}<br><small>${escapeHTML(o.payment_status)}</small></td><td>${escapeHTML(o.fulfillment_status)}</td><td>${escapeHTML(o.created_at)}</td><td><button class="mini" data-order="${o.id}">Manage</button></td></tr>`,
+            `<tr><td><b>${escapeHTML(o.order_number)}</b>${o.payment_proof_key ? '<br><a href="/api/admin/orders/' + o.id + '/payment-proof" target="_blank" rel="noopener">View proof</a>' : ''}${o.payment_reference ? '<br><small>Transfer ref: ' + escapeHTML(o.payment_reference) + '</small>' : ''}${(o.proof_sha256 && rows.some(x=>x.id!==o.id && x.proof_sha256===o.proof_sha256) || o.payment_reference && rows.some(x=>x.id!==o.id && String(x.payment_reference||'').toLowerCase()===String(o.payment_reference).toLowerCase())) ? '<br><b class="danger-text">Possible duplicate payment</b>' : ''}<br><small>${escapeHTML(o.item_summary || "")}</small></td><td>${escapeHTML(o.user_name || o.guest_name || "Guest")}<br><small>${escapeHTML(o.user_email || o.guest_contact || "")}</small></td><td>${money(o.total)}${o.discount_code ? `<br><small>code ${escapeHTML(o.discount_code)}</small>` : ""}</td><td>${escapeHTML(payNameEN(o.payment_method))}<br><small>${escapeHTML(o.payment_status)}</small></td><td>${escapeHTML(o.fulfillment_status)}</td><td>${escapeHTML(o.created_at)}</td><td><button class="mini" data-order="${o.id}">Manage</button></td></tr>`,
         )
         .join("") || `<tr><td colspan="7" class="empty">No orders.</td></tr>`;
     $$("[data-order]").forEach(
@@ -1547,13 +1585,14 @@ async function adminOrders(main) {
   };
   $("#oSearch").oninput = draw;
   $("#oFilter").onchange = draw;
+  $("#needsReviewBtn").onclick = () => { $("#oFilter").value = "proof_review"; draw(); };
   draw();
 }
 async function orderForm(id) {
   const { order, items, codes } = await api("/api/admin/orders/" + id);
   openModal(
     `Order ${escapeHTML(order.order_number)}`,
-    `<div class="checkout-summary"><div class="line"><span>Customer</span><b>${escapeHTML(order.user_name || order.guest_name || "Guest")}</b></div><div class="line"><span>Contact</span><span>${escapeHTML(order.user_email || order.guest_contact || "")}</span></div><div class="line"><span>Total</span><b>${money(order.total)}</b></div></div>${order.payment_proof ? `<div class="notice" style="margin-top:12px"><b>Payment proof</b><br><a class="btn ghost" href="/api/admin/orders/${id}/payment-proof" target="_blank">View proof</a></div>` : ""}<h3 style="margin:20px 0 8px">Items</h3>${items.map((i) => `<div class="line"><span>${escapeHTML(i.product_name)}${i.variant_name ? ` — ${escapeHTML(i.variant_name)}` : ""} × ${i.quantity}</span><span>${money(i.unit_price * i.quantity)}</span></div>`).join("")}<form id="orderForm"><div class="form-grid"><div class="field"><label>Payment status</label><select id="oPayment">${["awaiting_payment", "paid", "failed", "refunded"].map((x) => `<option ${x === order.payment_status ? "selected" : ""}>${x}</option>`).join("")}</select></div><div class="field"><label>Fulfillment</label><select id="oFulfill">${["pending", "processing", "fulfilled", "cancelled"].map((x) => `<option ${x === order.fulfillment_status ? "selected" : ""}>${x}</option>`).join("")}</select></div></div><div class="field"><label>${t("Delivery message")}</label><textarea id="oDelivery">${escapeHTML(order.delivery_message || "")}</textarea></div><div class="field"><label>Notes</label><textarea id="oNotes">${escapeHTML(order.notes || "")}</textarea></div>${codes.length ? `<div class="notice">Assigned codes: ${codes.map((c) => `<code>${escapeHTML(c.code)}</code>`).join(", ")}</div>` : ""}<div class="modal-actions"><button type="button" class="btn ghost" id="cancelOrder">Close</button><button type="button" class="btn primary" id="markPaidDeliver">${t("Mark paid & deliver")}</button><button class="btn primary">Save order</button></div></form>`,
+    `<div class="checkout-summary"><div class="line"><span>Customer</span><b>${escapeHTML(order.user_name || order.guest_name || "Guest")}</b></div><div class="line"><span>Contact</span><span>${escapeHTML(order.user_email || order.guest_contact || "")}</span></div><div class="line"><span>Total</span><b>${money(order.total)}</b></div></div>${order.payment_proof ? `<div class="notice" style="margin-top:12px"><b>Payment proof</b><br><a class="btn ghost" href="/api/admin/orders/${id}/payment-proof" target="_blank">View proof</a></div>` : ""}<h3 style="margin:20px 0 8px">Items</h3>${items.map((i) => `<div class="line"><span>${escapeHTML(i.product_name)}${i.variant_name ? ` — ${escapeHTML(i.variant_name)}` : ""} × ${i.quantity}</span><span>${money(i.unit_price * i.quantity)}</span></div>`).join("")}<form id="orderForm"><div class="form-grid"><div class="field"><label>Payment status</label><select id="oPayment">${["awaiting_payment", "paid", "failed", "refunded"].map((x) => `<option ${x === order.payment_status ? "selected" : ""}>${x}</option>`).join("")}</select></div><div class="field"><label>Fulfillment</label><select id="oFulfill">${["pending", "processing", "fulfilled", "cancelled"].map((x) => `<option ${x === order.fulfillment_status ? "selected" : ""}>${x}</option>`).join("")}</select></div></div><div class="field"><label>${t("Delivery message")}</label><textarea id="oDelivery">${escapeHTML(order.delivery_message || "")}</textarea></div><div class="field"><label>Notes</label><textarea id="oNotes">${escapeHTML(order.notes || "")}</textarea></div><div class="field"><label>Refund reason (used if marking refunded)</label><select id="oRefundReason"><option value="other">Other</option><option value="duplicate_payment">Duplicate payment</option><option value="out_of_stock">Out of stock</option><option value="customer_request">Customer request</option><option value="fraud">Fraud / dispute</option><option value="delivery_failure">Delivery failure</option></select></div>${codes.length ? `<div class="notice">Assigned codes: ${codes.map((c) => `<code>${escapeHTML(c.code)}</code>`).join(", ")}</div>` : ""}<div class="modal-actions"><button type="button" class="btn ghost" id="cancelOrder">Close</button><button type="button" class="btn primary" id="markPaidDeliver">${t("Mark paid & deliver")}</button><button class="btn primary">Save order</button></div></form>`,
   );
   $("#cancelOrder").onclick = () => openAdmin();
   const save = async (payment, fulfill) => {
@@ -1564,6 +1603,8 @@ async function orderForm(id) {
         fulfillment_status: fulfill,
         notes: $("#oNotes").value,
         delivery_message: $("#oDelivery").value,
+        refund_reason_code: $("#oRefundReason")?.value || "other",
+        refund_notes: $("#oNotes").value,
       }),
     });
     toast("Order updated.");
@@ -1609,7 +1650,7 @@ async function adminDiscounts(main) {
 function discountForm(d = null) {
   openModal(
     d ? "Edit discount" : "Add discount",
-    `<form id="discForm"><div class="form-grid"><div class="field"><label>Code</label><input id="dCode" value="${escapeHTML(d?.code || "")}" required></div><div class="field"><label>Type</label><select id="dType"><option value="percentage" ${d?.type !== "fixed" ? "selected" : ""}>Percentage</option><option value="fixed" ${d?.type === "fixed" ? "selected" : ""}>Fixed amount</option></select></div><div class="field"><label>Amount</label><input id="dAmount" type="number" step="0.01" value="${d?.amount ?? ""}" required></div><div class="field"><label>Minimum order</label><input id="dMin" type="number" step="0.01" value="${d?.min_order ?? 0}"></div><div class="field"><label>Max uses (empty = unlimited)</label><input id="dMax" type="number" min="0" value="${d?.max_uses ?? ""}"></div><div class="field"><label>Expires at</label><input id="dExpiry" type="datetime-local" value="${toLocalInput(d?.expires_at)}"></div></div><label><input id="dActive" type="checkbox" ${d?.active !== 0 ? "checked" : ""}> Active</label><div class="modal-actions"><button type="button" class="btn ghost" id="cancelD">Cancel</button><button class="btn primary">Save discount</button></div></form>`,
+    `<form id="discForm"><div class="form-grid"><div class="field"><label>Code</label><input id="dCode" value="${escapeHTML(d?.code || "")}" required></div><div class="field"><label>Type</label><select id="dType"><option value="percentage" ${d?.type !== "fixed" ? "selected" : ""}>Percentage</option><option value="fixed" ${d?.type === "fixed" ? "selected" : ""}>Fixed amount</option></select></div><div class="field"><label>Amount</label><input id="dAmount" type="number" step="0.01" value="${d?.amount ?? ""}" required></div><div class="field"><label>Minimum order</label><input id="dMin" type="number" step="0.01" value="${d?.min_order ?? 0}"></div><div class="field"><label>Max uses (empty = unlimited)</label><input id="dMax" type="number" min="0" value="${d?.max_uses ?? ""}"></div><div class="field"><label>Expires at</label><input id="dExpiry" type="datetime-local" value="${toLocalInput(d?.expires_at)}"></div><div class="field"><label>Product ID (optional)</label><input id="dProduct" type="number" min="1" value="${d?.product_id ?? ""}" placeholder="Restrict to product ID"></div><div class="field"><label>Category ID (optional)</label><input id="dCategory" type="number" min="1" value="${d?.category_id ?? ""}" placeholder="Restrict to category ID"></div><div class="field"><label>Bundle quantity (optional)</label><input id="dBundleQty" type="number" min="1" value="${d?.bundle_quantity ?? ""}" placeholder="Buy N eligible items"></div><div class="field"><label>Bundle discount %</label><input id="dBundlePct" type="number" min="1" max="100" value="${d?.bundle_percent ?? ""}"></div></div><label><input id="dFirstOrder" type="checkbox" ${d?.first_order_only ? "checked" : ""}> First paid order only</label><br><label><input id="dActive" type="checkbox" ${d?.active !== 0 ? "checked" : ""}> Active</label><div class="modal-actions"><button type="button" class="btn ghost" id="cancelD">Cancel</button><button class="btn primary">Save discount</button></div></form>`,
   );
   $("#cancelD").onclick = () => {
     closeModal();
@@ -1630,6 +1671,11 @@ function discountForm(d = null) {
             ? new Date($("#dExpiry").value).toISOString()
             : "",
           active: $("#dActive").checked,
+          first_order_only: $("#dFirstOrder").checked,
+          product_id: $("#dProduct").value,
+          category_id: $("#dCategory").value,
+          bundle_quantity: $("#dBundleQty").value,
+          bundle_percent: $("#dBundlePct").value,
         }),
       });
       toast("Discount saved.");
@@ -1893,6 +1939,10 @@ function showHome() {
   applySettings();
   renderCategories();
   renderProducts();
+  try {
+    const viewed=JSON.parse(localStorage.getItem("kardivo_recently_viewed")||"[]").filter(x=>x.slug).slice(0,4);
+    if(viewed.length){const section=document.createElement("section");section.className="container";section.style.margin="24px auto";section.innerHTML=`<h3>${t("Recently viewed")}</h3><div class="product-grid">${viewed.map(x=>`<article class="product-card"><a class="product-card-anchor" href="/${encodeURIComponent(x.slug)}"><div class="product-image">${x.image_url?`<img src="${escapeHTML(x.image_url)}" alt="${escapeHTML(x.name)}" loading="lazy">`:`<div class="no-image">K</div>`}</div><div class="product-body"><div class="product-name">${escapeHTML(state.lang==="ar"&&x.name_ar?x.name_ar:x.name)}</div></div></a><div class="price-row"><span class="price">${money(x.price)}</span><a class="mini" href="/${encodeURIComponent(x.slug)}">${t("View")}</a></div></article>`).join("")}</div>`;$("#store")?.after(section);}
+  } catch {}
   $("#sort").value = state.sort;
   $("#search").value = state.query;
 }
@@ -1927,8 +1977,9 @@ function orderBlock(o) {
     o.fulfillment_status !== "cancelled"
     ? `<div class="field" style="margin-top:10px"><label>${t("Payment proof")}</label><input id="proof-${o.id}" type="file" accept="image/*"><button type="button" class="mini" data-upload-proof="${o.id}" style="margin-top:6px">${t("Upload screenshot")}</button></div>`
     : "";
-  return `<div class="notice" style="margin-bottom:10px"><div class="line"><b>${escapeHTML(o.order_number)}</b><span>${money(o.total)}</span></div><small>${escapeHTML(o.item_summary || "")}</small><br><small>${t("Payment: {0} · Delivery: {1} · {2}", st(o.payment_status), st(o.fulfillment_status), escapeHTML(o.created_at))}</small>${o.delivery_message ? `<div class="notice success-text" style="margin-top:10px"><b>${t("Delivery message")}</b><br>${escapeHTML(o.delivery_message).replace(/\n/g, "<br>")}</div>` : ""}${(o.codes || []).length ? `<div style="margin-top:10px"><b>${t("Your codes")}</b>${o.codes.map((c) => `<div class="line"><span>${escapeHTML(c.product_name)}${c.variant_name ? ` — ${escapeHTML(c.variant_name)}` : ""}<br><code>${escapeHTML(c.code)}</code></span><span><button class="mini" data-copy="${escapeHTML(c.code)}">${t("Copy")}</button>${state.user ? ` <button class="mini" data-review-product="${c.product_id}" data-review-order="${o.id}">Review</button>` : ""}</span></div>`).join("")}</div>` : ""}${proof}</div>`;
+  return `<div class="notice" style="margin-bottom:10px"><div class="line"><b>${escapeHTML(o.order_number)}</b><span>${money(o.total)}</span></div><small>${escapeHTML(o.item_summary || "")}</small><br><small>${t("Payment: {0} · Delivery: {1} · {2}", st(o.payment_status), st(o.fulfillment_status), escapeHTML(o.created_at))}</small>${o.delivery_message ? `<div class="notice success-text" style="margin-top:10px"><b>${t("Delivery message")}</b><br>${escapeHTML(o.delivery_message).replace(/\n/g, "<br>")}${o.fulfillment_status === "fulfilled" && state.settings.whatsapp ? `<p><a class="mini" target="_blank" rel="noopener" href="https://wa.me/${String(state.settings.whatsapp).replace(/\D/g,"")}?text=${encodeURIComponent(`Order ${o.order_number} delivery: ${o.delivery_message}`)}">${t("Ask about delivery on WhatsApp")}</a></p>` : ""}</div>` : ""}${o.timeline?.length ? `<h4 style="margin-top:12px">${t("Order timeline")}</h4>${o.timeline.map(ev=>`<div class="line"><span>${escapeHTML(ev.event.replaceAll("_"," "))}<br><small>${escapeHTML(ev.details||"")}</small></span><small>${escapeHTML(ev.created_at)}</small></div>`).join("")}` : ""}${o.support_messages ? `<div class="notice" style="margin-top:12px"><b>${t("Order support")}</b>${o.support_messages.map(m=>`<div class="line"><span><b>${escapeHTML(m.author_role==="admin"?"Kardivo Support":"You")}</b><br>${escapeHTML(m.message)}</span><small>${escapeHTML(m.created_at)}</small></div>`).join("")}<form data-support-form="${o.id}" data-contact="${escapeHTML(o.guest_contact||"")}"><div class="field"><textarea name="message" required maxlength="2000" placeholder="${t("Message support about this order")}"></textarea></div><button class="mini">${t("Send message")}</button></form></div>` : ""}${(o.codes || []).length ? `<div style="margin-top:10px"><b>${t("Your codes")}</b>${o.codes.map((c) => `<div class="line"><span>${escapeHTML(c.product_name)}${c.variant_name ? ` — ${escapeHTML(c.variant_name)}` : ""}<br><code>${escapeHTML(c.code)}</code></span><span><button class="mini" data-copy="${escapeHTML(c.code)}">${t("Copy")}</button>${state.user ? ` <button class="mini" data-review-product="${c.product_id}" data-review-order="${o.id}">Review</button>` : ""}</span></div>`).join("")}</div>` : ""}${proof}</div>`;
 }
+function bindOrderSupport() { $$('[data-support-form]').forEach(form => form.onsubmit=async e=>{e.preventDefault(); const id=Number(form.dataset.supportForm), message=form.elements.message.value; try { await api("/api/orders/support",{method:"POST",body:JSON.stringify({order_id:id,message,contact:form.dataset.contact||$("#tContact")?.value||""})}); toast(t("Message sent.")); $("#trackForm")?.requestSubmit(); } catch(err){toast(err.message);} }); }
 function openTrack() {
   openModal(
     t("Track your order"),
@@ -1955,12 +2006,12 @@ function openTrack() {
               return;
             }
             try {
-              await uploadPaymentProof(
+              const uploadResult = await uploadPaymentProof(
                 Number(b.dataset.uploadProof),
                 f,
                 $("#tContact").value,
               );
-              toast(t("Proof uploaded."));
+              toast(uploadResult.possible_duplicate ? t("Proof uploaded, but it may duplicate another order. Support will review it.") : t("Proof uploaded."));
               $("#trackForm").requestSubmit();
             } catch (err) {
               toast(err.message);
@@ -2060,3 +2111,5 @@ window.addEventListener("popstate", () => route());
 setDir();
 translateStatic();
 boot();
+if ("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));
+try { const resetToken=new URLSearchParams(location.search).get("reset_token"); if(resetToken){ openModal(t("Reset password"),`<form id="resetPasswordForm"><div class="field"><label>${t("New password")}</label><input id="resetPassword" type="password" minlength="8" required></div><button class="btn primary">${t("Set new password")}</button></form>`); $("#resetPasswordForm").onsubmit=async e=>{e.preventDefault();try{await api("/api/auth/password-reset/complete",{method:"POST",body:JSON.stringify({token:resetToken,password:$("#resetPassword").value})});history.replaceState({},"",location.pathname);toast(t("Password updated. Please log in."));closeModal();openAuth();}catch(err){toast(err.message);}}; } } catch {}
