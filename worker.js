@@ -263,7 +263,7 @@ const DEFAULTS = {
   backup_keep: "14",
   testimonials_enabled: "1",
 };
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 11;
 // Columns added over time. Each is added only if missing (additive, never destructive).
 const COLUMN_ADDS = [
   ["discounts", "max_uses", "INTEGER"],
