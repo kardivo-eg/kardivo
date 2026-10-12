@@ -103,8 +103,8 @@ const AR = {
   "Total to pay": "المطلوب دفعه",
   Payment: "الدفع",
   "Send payment to": "حوّل المبلغ على",
-  'Sign in to your account to view and follow this order.':
-    "سجّل دخولك لحسابك لعرض تفاصيل الطلب ومتابعته.",
+  'You can check this order any time with "Track order" using the order number and the contact you entered.':
+    "تقدر تتابع الطلب في أي وقت من «تتبّع الطلب» برقم الطلب ورقم التواصل اللي كتبته.",
   "Open WhatsApp Support": "افتح واتساب الدعم",
   Done: "تمام",
   From: "ابتداءً من",
@@ -578,11 +578,7 @@ async function boot() {
     if (qs.get("reset")) {
       openReset(qs.get("reset"));
       history.replaceState({}, "", location.pathname + location.hash);
-    } else if (qs.get("track")) {
-      // Legacy public tracking links now lead to the customer account instead.
-      history.replaceState({}, "", location.pathname + "#account");
-      if (state.user) openAccount();
-    }
+    } else if (qs.get("track")) openTrack(qs.get("track"));
     if (state.user?.role === "admin") {
       const oid = Number(qs.get("admin_order"));
       if (oid || qs.get("admin_tab")) {
@@ -1303,7 +1299,7 @@ async function placeOrder() {
         r.paid
           ? `<div class="notice success-text" style="margin-top:10px">${t("Nothing to pay. Your order is confirmed and will be delivered shortly.")}</div>`
           : `<div class="line"><span>${t("Payment")}</span><b>${escapeHTML(payName(r.payment_method))}</b></div><div class="destination"><b>${t("Send payment to")}</b><code>${escapeHTML(r.destination)}</code></div>`
-      }<p style="color:#aaa1b1;font-size:12px">${escapeHTML(r.support_text)}</p>${proofMsg ? `<p style="color:#aaa1b1;font-size:12px">${escapeHTML(proofMsg)}</p>` : ""}<p style="color:#aaa1b1;font-size:12px">${t('Sign in to your account to view and follow this order.')}</p></div><div class="modal-actions">${r.whatsapp ? `<a class="btn primary" href="${escapeHTML(r.whatsapp)}" target="_blank" rel="noreferrer">${t("Open WhatsApp Support")} ${arrow()}</a>` : ""}<button class="btn ghost" id="doneOrder">${t("Done")}</button></div>`,
+      }<p style="color:#aaa1b1;font-size:12px">${escapeHTML(r.support_text)}</p>${proofMsg ? `<p style="color:#aaa1b1;font-size:12px">${escapeHTML(proofMsg)}</p>` : ""}<p style="color:#aaa1b1;font-size:12px">${t('You can check this order any time with "Track order" using the order number and the contact you entered.')}</p></div><div class="modal-actions">${r.whatsapp ? `<a class="btn primary" href="${escapeHTML(r.whatsapp)}" target="_blank" rel="noreferrer">${t("Open WhatsApp Support")} ${arrow()}</a>` : ""}<button class="btn ghost" id="doneOrder">${t("Done")}</button></div>`,
     );
     $("#doneOrder").onclick = closeModal;
   } catch (e) {
@@ -1478,6 +1474,61 @@ function bindOrderExtras(contact) {
   $$("[data-thread]").forEach(
     (d) => (d.ontoggle = () => d.open && loadThread(Number(d.dataset.thread), contact)),
   );
+}
+function orderBlock(o) {
+  const st = (x) => escapeHTML(statusName(x));
+  const proof =
+    !o.payment_proof &&
+    o.payment_status === "awaiting_payment" &&
+    o.fulfillment_status !== "cancelled"
+    ? `<div class="field" style="margin-top:10px"><label>${t("Payment proof")}</label><input id="proof-${o.id}" type="file" accept="image/*"><input id="ref-${o.id}" placeholder="${t("Transfer reference (optional)")}" style="margin-top:6px"><button type="button" class="mini" data-upload-proof="${o.id}" style="margin-top:6px">${t("Upload screenshot")}</button></div>`
+    : "";
+  return `<div class="notice" style="margin-bottom:10px"><div class="line"><b>${escapeHTML(o.order_number)}</b><span>${money(o.total)}</span></div><small>${escapeHTML(o.item_summary || "")}</small><br><small>${t("Payment: {0} · Delivery: {1} · {2}", st(o.payment_status), st(o.fulfillment_status), escapeHTML(fmtTime(o.created_at)))}</small>${timelineHTML(o)}${o.delivery_message ? `<div class="notice success-text" style="margin-top:10px"><b>${t("Delivery message")}</b><br>${escapeHTML(o.delivery_message).replace(/\n/g, "<br>")}</div>` : ""}${(o.codes || []).length ? `<div style="margin-top:10px"><b>${t("Your codes")}</b>${o.codes.map((c) => `<div class="line"><span>${escapeHTML(c.product_name)}${c.variant_name ? ` — ${escapeHTML(c.variant_name)}` : ""}<br><code>${escapeHTML(c.code)}</code></span><span><button class="mini" data-copy="${escapeHTML(c.code)}">${t("Copy")}</button>${state.user ? ` <button class="mini" data-review-product="${c.product_id}" data-review-order="${o.id}">${t("Review")}</button>` : ""}</span></div>`).join("")}</div>` : ""}${proof}<details class="thread-box" data-thread="${o.id}"><summary>${t("Messages with support")}</summary><div class="thread-body" id="thread-${o.id}"></div></details></div>`;
+}
+function openTrack(prefill = "") {
+  openModal(
+    t("Track your order"),
+    `<form id="trackForm"><div class="field"><label>${t("Order number")}</label><input id="tNum" required placeholder="KDV-2026-XXXXXXXX" value="${escapeHTML(prefill)}"></div><div class="field"><label>${t("Contact you used (WhatsApp / phone / account email)")}</label><input id="tContact" required></div><button class="btn primary">${t("Find order")}</button></form><div id="trackResult" style="margin-top:16px"></div>`,
+  );
+  $("#trackForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const o = await api("/api/orders/lookup", {
+        method: "POST",
+        body: JSON.stringify({
+          order_number: $("#tNum").value,
+          contact: $("#tContact").value,
+        }),
+      });
+      $("#trackResult").innerHTML = orderBlock(o);
+      bindOrderExtras($("#tContact").value);
+      $$("[data-upload-proof]").forEach(
+        (b) =>
+          (b.onclick = async () => {
+            const f = $(`#proof-${b.dataset.uploadProof}`)?.files?.[0];
+            if (!f) {
+              toast(t("Choose a file first."));
+              return;
+            }
+            try {
+              await uploadPaymentProof(
+                Number(b.dataset.uploadProof),
+                f,
+                $("#tContact").value,
+                $(`#ref-${b.dataset.uploadProof}`)?.value.trim() || "",
+              );
+              toast(t("Proof uploaded."));
+              $("#trackForm").requestSubmit();
+            } catch (err) {
+              toast(err.message);
+            }
+          }),
+      );
+    } catch (err) {
+      $("#trackResult").innerHTML =
+        `<div class="notice danger-text">${escapeHTML(err.message)}</div>`;
+    }
+  };
 }
 function reviewForm(productId, orderId) {
   openModal(
@@ -1678,7 +1729,7 @@ async function adminDashboard(main) {
   main.innerHTML = `<div class="admin-top"><h2>Dashboard</h2><select id="repDays">${[7, 30, 90, 365].map((n) => `<option value="${n}" ${n === r.days ? "selected" : ""}>Last ${n} days</option>`).join("")}</select></div>
   ${d.review_queue ? `<div class="notice" style="margin-bottom:12px"><b>${d.review_queue}</b> order(s) have a payment proof waiting. <button class="mini primary" id="goQueue">Review now</button></div>` : ""}
   <div class="stats"><div class="stat"><small>AWAITING PAYMENT</small><b>${d.awaiting_payment}</b></div><div class="stat"><small>ORDERS</small><b>${d.orders}</b></div><div class="stat"><small>PAID REVENUE</small><b>${money(d.paid_revenue)}</b></div><div class="stat"><small>7-DAY REVENUE</small><b>${money(d.revenue_7d)}</b></div><div class="stat"><small>30-DAY REVENUE</small><b>${money(d.revenue_30d)}</b></div><div class="stat"><small>AVG ORDER</small><b>${money(d.avg_order)}</b></div><div class="stat"><small>AVAILABLE CODES</small><b>${d.available_codes}</b></div><div class="stat"><small>CUSTOMERS</small><b>${d.customers}</b></div></div>
-  <div class="admin-panel admin-quick-actions"><div class="panel-head"><div><h3>Quick actions</h3><small>Jump straight to the jobs you do most</small></div></div><div class="admin-quick-grid"><button type="button" data-admin-jump="queue"><span>01</span><b>Review payments</b><small>${d.review_queue || 0} awaiting proof review</small></button><button type="button" data-admin-jump="orders"><span>02</span><b>Find an order</b><small>Search any order and open its details</small></button><button type="button" data-admin-jump="products"><span>03</span><b>Manage products</b><small>Prices, images, stock and delivery</small></button><button type="button" data-admin-jump="merge"><span>04</span><b>Manage variations</b><small>Combine safely with preview and undo</small></button><button type="button" data-admin-jump="settings"><span>05</span><b>Storefront & campaigns</b><small>Edit bilingual homepage content</small></button></div></div>
+  <div class="admin-panel admin-quick-actions"><div class="panel-head"><div><h3>Quick actions</h3><small>Jump straight to the jobs you do most</small></div></div><div class="admin-quick-grid"><button type="button" data-admin-jump="queue"><span>01</span><b>Review payments</b><small>${d.review_queue || 0} awaiting proof review</small></button><button type="button" data-admin-jump="products"><span>02</span><b>Manage products</b><small>Prices, images, stock and delivery</small></button><button type="button" data-admin-jump="merge"><span>03</span><b>Manage variations</b><small>Combine safely with preview and undo</small></button><button type="button" data-admin-jump="settings"><span>04</span><b>Storefront & campaigns</b><small>Edit bilingual homepage content</small></button></div></div>
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Checkout funnel · last ${r.days} days</h3></div><div class="modal-body"><div class="funnel"><div class="stat"><small>CHECKOUT STARTED</small><b>${f.started}</b></div><div class="stat"><small>CHECKOUT COMPLETED</small><b>${f.completed}</b></div><div class="stat"><small>COMPLETION RATE</small><b>${f.rate}%</b></div><div class="stat"><small>PAID ORDERS</small><b>${f.paid_orders}</b></div></div><small>Counts unique browsing sessions. "Started" = opened checkout; "completed" = placed an order.</small></div></div>
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Revenue · last ${r.days} days</h3></div><div class="modal-body"><div class="line"><span>Cash revenue (paid orders)</span><b>${money(r.cash_revenue)}</b></div><div class="line"><span>Discounts given</span><b>${money(r.discounts_given)}</b></div><div class="line"><span>Store credit used</span><b>${moneyEGP(r.credit_used)}</b></div><div class="line"><span>Supplier cost</span><b>${money(r.total_cost)}</b></div><div class="line"><span>Estimated profit</span><b>${money(r.profit_estimate)}</b></div>${r.costs_incomplete ? `<small>Some products have no cost recorded, so profit is overstated. Add a supplier cost when importing codes, or a cost price on manual products.</small>` : ""}<div class="bars" title="Daily revenue">${r.daily.map((x) => `<span style="height:${Math.max(4, Math.round((x.revenue / maxRev) * 100))}%" title="${escapeHTML(x.date)}: ${money(x.revenue)} (${x.orders} orders)"></span>`).join("") || `<small>No paid orders in this period.</small>`}</div></div></div>
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Top products & profit</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Units</th><th>Revenue</th><th>Cost</th><th>Profit</th></tr></thead><tbody>${r.products.map((p) => `<tr><td>${escapeHTML(p.name)}</td><td>${p.units}</td><td>${money(p.revenue)}</td><td>${p.cost == null ? "—" : money(p.cost)}</td><td>${p.profit == null ? "—" : money(p.profit)}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">No sales yet.</td></tr>`}</tbody></table></div></div>
@@ -1693,10 +1744,9 @@ async function adminDashboard(main) {
     state.admin.tab = "queue";
     renderAdminTab();
   });
-  $$("[data-admin-jump]").forEach(b => b.addEventListener("click", async () => {
+  $$("[data-admin-jump]").forEach(b => b.addEventListener("click", () => {
     state.admin.tab = b.dataset.adminJump;
-    await renderAdminTab();
-    if (state.admin.tab === "orders") $("#oSearch")?.focus();
+    renderAdminTab();
   }));
   const act = (id, path, msg) =>
     $(id)?.addEventListener("click", async (e) => {
@@ -3050,8 +3100,13 @@ async function adminCustomers(main) {
 }
 $("#langBtn").onclick = () => setLang(state.lang === "ar" ? "en" : "ar");
 $("#currencyBtn").addEventListener("click", (event) => { event.preventDefault(); toggleCurrency(); });
+$("#footerTrack").onclick = (e) => {
+  e.preventDefault();
+  openTrack();
+};
 $("#cartBtn").onclick = openCart;
 $("#accountBtn").onclick = openAccount;
+$("#trackBtn").onclick = openTrack;
 $("#footerAccount").onclick = (e) => {
   e.preventDefault();
   openAccount();
