@@ -320,8 +320,8 @@ const SCHEMA_TABLES = [
   // ---- V10 ----
   "CREATE TABLE IF NOT EXISTS order_events(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER NOT NULL,kind TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
   "CREATE INDEX IF NOT EXISTS idx_order_events_order ON order_events(order_id,id)",
-  "CREATE TABLE IF NOT EXISTS support_messages(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER NOT NULL,sender TEXT NOT NULL,body TEXT NOT NULL,read_by_admin INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
-  "CREATE INDEX IF NOT EXISTS idx_support_order ON support_messages(order_id,id)",
+  "CREATE TABLE IF NOT EXISTS order_messages(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER NOT NULL,sender TEXT NOT NULL,body TEXT NOT NULL,read_by_admin INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE INDEX IF NOT EXISTS idx_ordmsg_order ON order_messages(order_id,id)",
   "CREATE TABLE IF NOT EXISTS refund_log(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER NOT NULL,kind TEXT NOT NULL DEFAULT 'refund',reason TEXT NOT NULL,note TEXT DEFAULT '',amount REAL,admin_user_id INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
   "CREATE INDEX IF NOT EXISTS idx_refund_order ON refund_log(order_id)",
   "CREATE TABLE IF NOT EXISTS supplier_batches(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,variant_id INTEGER,supplier TEXT DEFAULT '',unit_cost REAL,quantity INTEGER NOT NULL DEFAULT 0,note TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
@@ -1460,7 +1460,7 @@ function buildTimeline(o, events) {
   return steps;
 }
 // ---- backups: D1 -> gzipped SQL dump in R2 ----
-const BACKUP_TABLES = ["users","categories","products","product_variants","variant_sources","supplier_batches","inventory","discounts","orders","order_items","settings","order_events","support_messages","refund_log","stock_subscriptions","credit_ledger","audit_logs","checkout_events","product_reviews","customer_notifications"];
+const BACKUP_TABLES = ["users","categories","products","product_variants","variant_sources","supplier_batches","inventory","discounts","orders","order_items","settings","order_events","order_messages","refund_log","stock_subscriptions","credit_ledger","audit_logs","checkout_events","product_reviews","customer_notifications"];
 async function runBackup(env, keep = 14) {
   const bucket = bucketOf(env);
   if (!bucket) return { ok: false, error: "R2 storage is not configured." };
@@ -2303,14 +2303,14 @@ async function api(req, env, url, ctx) {
       allowed = !!(await env.DB.prepare("SELECT 1 x FROM users WHERE id=? AND LOWER(email)=?").bind(o.user_id, contact).first());
     if (!allowed) return json({ error: "Order verification failed." }, 403);
     if (method === "GET")
-      return json((await env.DB.prepare("SELECT id,sender,body,created_at FROM support_messages WHERE order_id=? ORDER BY id").bind(id).all()).results);
+      return json((await env.DB.prepare("SELECT id,sender,body,created_at FROM order_messages WHERE order_id=? ORDER BY id").bind(id).all()).results);
     if (method === "POST") {
       const b = await readJson(req),
         text = clean(b.body).slice(0, 1000);
       if (!text) return json({ error: "Write a message first." }, 400);
       if (!(await throttle(env, `msg:${ipOf(req)}`, 20, 3600000)))
         return json({ error: "Too many attempts. Try again later." }, 429);
-      await env.DB.prepare("INSERT INTO support_messages(order_id,sender,body,read_by_admin) VALUES(?,'customer',?,0)").bind(id, text).run();
+      await env.DB.prepare("INSERT INTO order_messages(order_id,sender,body,read_by_admin) VALUES(?,'customer',?,0)").bind(id, text).run();
       adminAlert(env, ctx, {
         kind: "message",
         title: `New message on ${o.order_number}`,
@@ -2397,7 +2397,7 @@ async function api(req, env, url, ctx) {
       q("SELECT COUNT(*) n FROM inventory WHERE status='available'"),
       q("SELECT COUNT(*) n FROM orders WHERE payment_status='awaiting_payment' AND fulfillment_status<>'cancelled'"),
       q("SELECT COUNT(*) n FROM orders WHERE payment_status='awaiting_payment' AND fulfillment_status<>'cancelled' AND payment_proof_key IS NOT NULL"),
-      q("SELECT COUNT(DISTINCT order_id) n FROM support_messages WHERE sender='customer' AND read_by_admin=0"),
+      q("SELECT COUNT(DISTINCT order_id) n FROM order_messages WHERE sender='customer' AND read_by_admin=0"),
       q("SELECT COUNT(*) n FROM stock_subscriptions WHERE status='ready'"),
       lowStockList(env, st),
       env.DB.prepare("SELECT job,ran_at,ok,detail FROM job_runs ORDER BY job").all(),
@@ -2872,7 +2872,7 @@ async function api(req, env, url, ctx) {
     return json(
       (
         await env.DB.prepare(
-          "SELECT o.*,u.name user_name,u.email user_email,(SELECT GROUP_CONCAT(oi.product_name || CASE WHEN COALESCE(oi.variant_name,'')<>'' THEN ' — '||oi.variant_name ELSE '' END || ' × ' || oi.quantity, ', ') FROM order_items oi WHERE oi.order_id=o.id) item_summary,(SELECT COUNT(*) FROM support_messages m WHERE m.order_id=o.id AND m.sender='customer' AND m.read_by_admin=0) unread FROM orders o LEFT JOIN users u ON u.id=o.user_id ORDER BY o.id DESC",
+          "SELECT o.*,u.name user_name,u.email user_email,(SELECT GROUP_CONCAT(oi.product_name || CASE WHEN COALESCE(oi.variant_name,'')<>'' THEN ' — '||oi.variant_name ELSE '' END || ' × ' || oi.quantity, ', ') FROM order_items oi WHERE oi.order_id=o.id) item_summary,(SELECT COUNT(*) FROM order_messages m WHERE m.order_id=o.id AND m.sender='customer' AND m.read_by_admin=0) unread FROM orders o LEFT JOIN users u ON u.id=o.user_id ORDER BY o.id DESC",
         ).all()
       ).results.map(({ payment_proof_hash, ...o }) => o),
     );
@@ -2912,11 +2912,11 @@ async function api(req, env, url, ctx) {
         .all()
     ).results;
     const [messages, events, issues] = await Promise.all([
-      env.DB.prepare("SELECT id,sender,body,created_at FROM support_messages WHERE order_id=? ORDER BY id").bind(order.id).all(),
+      env.DB.prepare("SELECT id,sender,body,created_at FROM order_messages WHERE order_id=? ORDER BY id").bind(order.id).all(),
       env.DB.prepare("SELECT kind,created_at FROM order_events WHERE order_id=? ORDER BY id").bind(order.id).all(),
       env.DB.prepare("SELECT l.*,u.name admin_name FROM refund_log l LEFT JOIN users u ON u.id=l.admin_user_id WHERE l.order_id=? ORDER BY l.id").bind(order.id).all(),
     ]);
-    await env.DB.prepare("UPDATE support_messages SET read_by_admin=1 WHERE order_id=? AND sender='customer' AND read_by_admin=0").bind(order.id).run();
+    await env.DB.prepare("UPDATE order_messages SET read_by_admin=1 WHERE order_id=? AND sender='customer' AND read_by_admin=0").bind(order.id).run();
     order.payment_proof = !!order.payment_proof_key;
     order.timeline = buildTimeline(order, events.results);
     delete order.payment_proof_hash;
@@ -2954,7 +2954,7 @@ async function api(req, env, url, ctx) {
       await logEvent(env, id, "proof_rejected");
       const why = clean(b.reason).slice(0, 300);
       const msg = why ? `Your payment proof for ${existing.order_number} could not be verified: ${why}. Please upload a clear screenshot of the transfer.` : `Your payment proof for ${existing.order_number} could not be verified. Please upload a clear screenshot of the transfer.`;
-      await env.DB.prepare("INSERT INTO support_messages(order_id,sender,body,read_by_admin) VALUES(?,'admin',?,1)").bind(id, msg).run();
+      await env.DB.prepare("INSERT INTO order_messages(order_id,sender,body,read_by_admin) VALUES(?,'admin',?,1)").bind(id, msg).run();
       await customerNotify(env, existing.user_id, id, "payment", "Payment proof needs to be re-sent", msg);
       await audit(env, me, "proof_rejected", "order", id, why);
       return json({ ok: true });
@@ -2975,7 +2975,7 @@ async function api(req, env, url, ctx) {
     if (act === "reply") {
       const text = clean(b.body).slice(0, 1000);
       if (!text) return json({ error: "Write a message first." }, 400);
-      await env.DB.prepare("INSERT INTO support_messages(order_id,sender,body,read_by_admin) VALUES(?,'admin',?,1)").bind(id, text).run();
+      await env.DB.prepare("INSERT INTO order_messages(order_id,sender,body,read_by_admin) VALUES(?,'admin',?,1)").bind(id, text).run();
       await customerNotify(env, existing.user_id, id, "support", "New reply from support", text);
       const u = existing.user_id ? await env.DB.prepare("SELECT email FROM users WHERE id=?").bind(existing.user_id).first() : null;
       const to = u?.email || (looksEmail(existing.guest_contact) ? clean(existing.guest_contact) : "");
@@ -2990,7 +2990,7 @@ async function api(req, env, url, ctx) {
     return json(
       (
         await env.DB.prepare(
-          "SELECT o.id,o.order_number,COALESCE(u.name,o.guest_name,'Guest') customer,(SELECT body FROM support_messages m WHERE m.order_id=o.id ORDER BY m.id DESC LIMIT 1) last_body,(SELECT sender FROM support_messages m WHERE m.order_id=o.id ORDER BY m.id DESC LIMIT 1) last_sender,(SELECT MAX(created_at) FROM support_messages m WHERE m.order_id=o.id) last_at,(SELECT COUNT(*) FROM support_messages m WHERE m.order_id=o.id AND m.sender='customer' AND m.read_by_admin=0) unread FROM orders o LEFT JOIN users u ON u.id=o.user_id WHERE EXISTS (SELECT 1 FROM support_messages m WHERE m.order_id=o.id) ORDER BY last_at DESC LIMIT 100",
+          "SELECT o.id,o.order_number,COALESCE(u.name,o.guest_name,'Guest') customer,(SELECT body FROM order_messages m WHERE m.order_id=o.id ORDER BY m.id DESC LIMIT 1) last_body,(SELECT sender FROM order_messages m WHERE m.order_id=o.id ORDER BY m.id DESC LIMIT 1) last_sender,(SELECT MAX(created_at) FROM order_messages m WHERE m.order_id=o.id) last_at,(SELECT COUNT(*) FROM order_messages m WHERE m.order_id=o.id AND m.sender='customer' AND m.read_by_admin=0) unread FROM orders o LEFT JOIN users u ON u.id=o.user_id WHERE EXISTS (SELECT 1 FROM order_messages m WHERE m.order_id=o.id) ORDER BY last_at DESC LIMIT 100",
         ).all()
       ).results,
     );
