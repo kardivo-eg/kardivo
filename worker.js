@@ -263,7 +263,7 @@ const DEFAULTS = {
   backup_keep: "14",
   testimonials_enabled: "1",
 };
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 12;
 // Columns added over time. Each is added only if missing (additive, never destructive).
 const COLUMN_ADDS = [
   ["discounts", "max_uses", "INTEGER"],
@@ -318,23 +318,23 @@ const SCHEMA_TABLES = [
   "CREATE INDEX IF NOT EXISTS idx_notifications_user ON customer_notifications(user_id,created_at)",
   "CREATE TABLE IF NOT EXISTS login_attempts(key TEXT PRIMARY KEY,count INTEGER NOT NULL,reset_at INTEGER NOT NULL)",
   // ---- V10 ----
-  "CREATE TABLE IF NOT EXISTS order_events(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER NOT NULL,kind TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
-  "CREATE INDEX IF NOT EXISTS idx_order_events_order ON order_events(order_id,id)",
-  "CREATE TABLE IF NOT EXISTS order_messages(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER NOT NULL,sender TEXT NOT NULL,body TEXT NOT NULL,read_by_admin INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
-  "CREATE INDEX IF NOT EXISTS idx_ordmsg_order ON order_messages(order_id,id)",
-  "CREATE TABLE IF NOT EXISTS refund_log(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER NOT NULL,kind TEXT NOT NULL DEFAULT 'refund',reason TEXT NOT NULL,note TEXT DEFAULT '',amount REAL,admin_user_id INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
-  "CREATE INDEX IF NOT EXISTS idx_refund_order ON refund_log(order_id)",
-  "CREATE TABLE IF NOT EXISTS supplier_batches(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,variant_id INTEGER,supplier TEXT DEFAULT '',unit_cost REAL,quantity INTEGER NOT NULL DEFAULT 0,note TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
-  "CREATE TABLE IF NOT EXISTS stock_subscriptions(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,variant_id INTEGER,contact TEXT NOT NULL,is_email INTEGER NOT NULL DEFAULT 0,user_id INTEGER,lang TEXT DEFAULT 'ar',status TEXT NOT NULL DEFAULT 'waiting',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,notified_at TEXT)",
-  "CREATE INDEX IF NOT EXISTS idx_stocksub_product ON stock_subscriptions(product_id,status)",
-  "CREATE TABLE IF NOT EXISTS credit_ledger(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,amount REAL NOT NULL,reason TEXT NOT NULL,order_id INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
-  "CREATE INDEX IF NOT EXISTS idx_credit_user ON credit_ledger(user_id,id)",
-  "CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_once ON credit_ledger(order_id,reason) WHERE reason IN ('referral_reward','referral_reversal','credit_returned')",
+  "CREATE TABLE IF NOT EXISTS kd_order_events(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER NOT NULL,kind TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE INDEX IF NOT EXISTS idx_order_events_order ON kd_order_events(order_id,id)",
+  "CREATE TABLE IF NOT EXISTS kd_order_messages(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER NOT NULL,sender TEXT NOT NULL,body TEXT NOT NULL,read_by_admin INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE INDEX IF NOT EXISTS idx_ordmsg_order ON kd_order_messages(order_id,id)",
+  "CREATE TABLE IF NOT EXISTS kd_refund_log(id INTEGER PRIMARY KEY AUTOINCREMENT,order_id INTEGER NOT NULL,kind TEXT NOT NULL DEFAULT 'refund',reason TEXT NOT NULL,note TEXT DEFAULT '',amount REAL,admin_user_id INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE INDEX IF NOT EXISTS idx_refund_order ON kd_refund_log(order_id)",
+  "CREATE TABLE IF NOT EXISTS kd_supplier_batches(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,variant_id INTEGER,supplier TEXT DEFAULT '',unit_cost REAL,quantity INTEGER NOT NULL DEFAULT 0,note TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE TABLE IF NOT EXISTS kd_stock_subscriptions(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,variant_id INTEGER,contact TEXT NOT NULL,is_email INTEGER NOT NULL DEFAULT 0,user_id INTEGER,lang TEXT DEFAULT 'ar',status TEXT NOT NULL DEFAULT 'waiting',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,notified_at TEXT)",
+  "CREATE INDEX IF NOT EXISTS idx_stocksub_product ON kd_stock_subscriptions(product_id,status)",
+  "CREATE TABLE IF NOT EXISTS kd_credit_ledger(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,amount REAL NOT NULL,reason TEXT NOT NULL,order_id INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE INDEX IF NOT EXISTS idx_credit_user ON kd_credit_ledger(user_id,id)",
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_once ON kd_credit_ledger(order_id,reason) WHERE reason IN ('referral_reward','referral_reversal','credit_returned')",
   "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral ON users(referral_code)",
-  "CREATE TABLE IF NOT EXISTS password_resets(token_hash TEXT PRIMARY KEY,user_id INTEGER NOT NULL,expires_at INTEGER NOT NULL)",
-  "CREATE TABLE IF NOT EXISTS push_subscriptions(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,endpoint TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
-  "CREATE TABLE IF NOT EXISTS admin_alerts(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,title TEXT NOT NULL,body TEXT DEFAULT '',url TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
-  "CREATE TABLE IF NOT EXISTS job_runs(job TEXT PRIMARY KEY,ran_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,ok INTEGER NOT NULL DEFAULT 1,detail TEXT DEFAULT '')",
+  "CREATE TABLE IF NOT EXISTS kd_password_resets(token_hash TEXT PRIMARY KEY,user_id INTEGER NOT NULL,expires_at INTEGER NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS kd_push_subscriptions(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,endpoint TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE TABLE IF NOT EXISTS kd_admin_alerts(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,title TEXT NOT NULL,body TEXT DEFAULT '',url TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE TABLE IF NOT EXISTS kd_job_runs(job TEXT PRIMARY KEY,ran_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,ok INTEGER NOT NULL DEFAULT 1,detail TEXT DEFAULT '')",
   "CREATE INDEX IF NOT EXISTS idx_orders_hash ON orders(payment_proof_hash)",
   "CREATE INDEX IF NOT EXISTS idx_orders_ref ON orders(payment_ref)",
 ];
@@ -686,7 +686,7 @@ async function ordersWithCodes(env, where, ...binds) {
   const evs = orders.length
     ? (
         await env.DB.prepare(
-          `SELECT order_id,kind,created_at FROM order_events WHERE order_id IN (${orders.map(() => "?").join(",")}) ORDER BY id`,
+          `SELECT order_id,kind,created_at FROM kd_order_events WHERE order_id IN (${orders.map(() => "?").join(",")}) ORDER BY id`,
         )
           .bind(...orders.map((o) => o.id))
           .all()
@@ -781,21 +781,25 @@ function validateDiscount(b) {
 }
 const expiryOf = (v) => (v ? new Date(Date.parse(v)).toISOString() : null);
 async function planMerge(env, b) {
-  const targetId = Number(b.target_id),
+  const rawTarget = Number(b.target_id) || 0,
+    newName = rawTarget ? "" : clean(b.new_name).slice(0, 120),
     sourceIds = [
       ...new Set(
         (Array.isArray(b.source_ids) ? b.source_ids : [])
           .map(Number)
           .filter(Boolean)
-          .filter((x) => x !== targetId),
+          .filter((x) => x !== rawTarget),
       ),
-    ];
-  if (!targetId || !sourceIds.length)
+    ],
+    custom = b.options && typeof b.options === "object" ? b.options : {};
+  if ((!rawTarget && !newName) || !sourceIds.length)
     return {
-      error: "Choose a target product and at least one different source product.",
+      error: "Choose the product to combine into (or type a name for a new one) and at least one product to add.",
       status: 400,
     };
-  const ids = [targetId, ...sourceIds],
+  if (!rawTarget && sourceIds.length < 2)
+    return { error: "Choose at least two products to create a new combined product.", status: 400 };
+  const ids = rawTarget ? [rawTarget, ...sourceIds] : sourceIds,
     rows = (
       await env.DB.prepare(
         `SELECT p.*,(SELECT COUNT(*) FROM inventory i WHERE i.product_id=p.id AND i.status='available') stock,(SELECT COUNT(*) FROM order_items oi WHERE oi.product_id=p.id) orders FROM products p WHERE p.id IN (${inMarks(ids)})`,
@@ -805,74 +809,50 @@ async function planMerge(env, b) {
     ).results;
   if (rows.length !== ids.length)
     return { error: "One or more selected products no longer exist.", status: 404 };
-  const target = rows.find((x) => x.id === targetId),
-    sources = sourceIds.map((id) => rows.find((x) => x.id === id));
+  const sources = sourceIds.map((id) => rows.find((x) => x.id === id)),
+    target = rawTarget
+      ? rows.find((x) => x.id === rawTarget)
+      : { id: 0, isNew: true, name: newName, delivery_type: "code", stock: 0, orders: 0, price: Math.min(...sources.map((x) => Number(x.price))) };
   if (target.delivery_type !== "code")
-    return {
-      error:
-        "The target product must be a digital-code product for a safe stock-preserving merge.",
-      status: 400,
-    };
-  const base = await env.DB.prepare(
-      "SELECT COUNT(*) n FROM inventory WHERE product_id=? AND variant_id IS NULL",
-    )
-      .bind(targetId)
-      .first(),
-    selfMapped = await env.DB.prepare(
-      "SELECT 1 x FROM variant_sources vs JOIN product_variants v ON v.id=vs.variant_id WHERE v.product_id=? AND vs.source_product_id=?",
-    )
-      .bind(targetId, targetId)
-      .first(),
+    return { error: "The product you combine into must be a digital-code product.", status: 400 };
+  const base = rawTarget
+      ? await env.DB.prepare("SELECT COUNT(*) n FROM inventory WHERE product_id=? AND variant_id IS NULL").bind(rawTarget).first()
+      : { n: 0 },
+    selfMapped = rawTarget
+      ? await env.DB.prepare(
+          "SELECT 1 x FROM variant_sources vs JOIN product_variants v ON v.id=vs.variant_id WHERE v.product_id=? AND vs.source_product_id=?",
+        ).bind(rawTarget, rawTarget).first()
+      : null,
     needsSelf = Number(base.n) > 0 && !selfMapped,
     selfExisting = needsSelf
-      ? await env.DB.prepare(
-          "SELECT id FROM product_variants WHERE product_id=? AND name=?",
-        )
-          .bind(targetId, target.name)
-          .first()
+      ? await env.DB.prepare("SELECT id FROM product_variants WHERE product_id=? AND name=?").bind(rawTarget, target.name).first()
       : null,
-    names = new Set(needsSelf ? [target.name] : []),
+    names = new Set(needsSelf ? [target.name.toLowerCase()] : []),
     links = [];
   for (const source of sources) {
     if (source.delivery_type !== "code")
-      return {
-        error: `${source.name} is manual delivery. Merge only digital-code products in this tool.`,
-        status: 400,
-      };
-    if (names.has(source.name))
-      return {
-        error: `Two selected products have the same name (${source.name}). Rename one first so each denomination gets its own variant.`,
-        status: 400,
-      };
-    names.add(source.name);
-    const own = await env.DB.prepare(
-      "SELECT COUNT(*) n FROM product_variants WHERE product_id=?",
-    )
-      .bind(source.id)
-      .first();
+      return { error: `${source.name} is manual delivery. Only digital-code products can be combined.`, status: 400 };
+    const opt = custom[source.id] || custom[String(source.id)] || {},
+      name = clean(opt.name).slice(0, 120) || source.name,
+      price = opt.price === undefined || opt.price === "" || opt.price === null ? Number(source.price) : Number(opt.price);
+    if (!Number.isFinite(price) || price < 0)
+      return { error: `Enter a valid price for "${name}".`, status: 400 };
+    if (names.has(name.toLowerCase()))
+      return { error: `Two options would be called "${name}". Give each one its own option name.`, status: 400 };
+    names.add(name.toLowerCase());
+    const already = await env.DB.prepare("SELECT 1 x FROM variant_sources WHERE source_product_id=? AND variant_id IN (SELECT id FROM product_variants WHERE product_id<>?)").bind(source.id, source.id).first();
+    if (already) return { error: `${source.name} is already combined into another product. Undo that first.`, status: 409 };
+    const own = await env.DB.prepare("SELECT COUNT(*) n FROM product_variants WHERE product_id=?").bind(source.id).first();
     if (Number(own.n) > 0)
-      return {
-        error: `${source.name} already has variants. Merge that product manually first so its stock mapping stays unambiguous.`,
-        status: 400,
-      };
-    const existing = await env.DB.prepare(
-      "SELECT id FROM product_variants WHERE product_id=? AND name=?",
-    )
-      .bind(targetId, source.name)
-      .first();
+      return { error: `${source.name} already has options of its own. Combine only simple products (no options).`, status: 400 };
+    const existing = rawTarget
+      ? await env.DB.prepare("SELECT id FROM product_variants WHERE product_id=? AND name=?").bind(rawTarget, name).first()
+      : null;
     if (existing) {
-      const linked = await env.DB.prepare(
-        "SELECT id FROM variant_sources WHERE variant_id=? AND source_product_id=?",
-      )
-        .bind(existing.id, source.id)
-        .first();
-      if (linked)
-        return {
-          error: `${source.name} is already linked to this product.`,
-          status: 409,
-        };
+      const linked = await env.DB.prepare("SELECT id FROM variant_sources WHERE variant_id=? AND source_product_id=?").bind(existing.id, source.id).first();
+      if (linked) return { error: `${source.name} is already combined into this product.`, status: 409 };
     }
-    links.push({ source, existingId: existing ? existing.id : null });
+    links.push({ source, existingId: existing ? existing.id : null, name, price, old_price: opt.price === undefined || opt.price === "" ? source.old_price : null });
   }
   return {
     target,
@@ -986,7 +966,7 @@ async function vapidJwt(env, aud) {
 async function pushAdmins(env) {
   if (!pushReady(env)) return;
   try {
-    const subs = (await env.DB.prepare("SELECT id,endpoint FROM push_subscriptions").all()).results;
+    const subs = (await env.DB.prepare("SELECT id,endpoint FROM kd_push_subscriptions").all()).results;
     const jwts = new Map();
     await Promise.all(
       subs.slice(0, 20).map(async (sub) => {
@@ -1002,7 +982,7 @@ async function pushAdmins(env) {
             },
           });
           if (r.status === 404 || r.status === 410)
-            await env.DB.prepare("DELETE FROM push_subscriptions WHERE id=?").bind(sub.id).run();
+            await env.DB.prepare("DELETE FROM kd_push_subscriptions WHERE id=?").bind(sub.id).run();
         } catch (e) {
           console.error("push", e);
         }
@@ -1016,7 +996,7 @@ async function pushAdmins(env) {
 function adminAlert(env, ctx, { kind, title, body = "", url = "/", discord = null, label }) {
   const task = (async () => {
     try {
-      await env.DB.prepare("INSERT INTO admin_alerts(kind,title,body,url) VALUES(?,?,?,?)")
+      await env.DB.prepare("INSERT INTO kd_admin_alerts(kind,title,body,url) VALUES(?,?,?,?)")
         .bind(kind, String(title).slice(0, 200), String(body).slice(0, 500), url)
         .run();
     } catch (e) {
@@ -1029,7 +1009,7 @@ function adminAlert(env, ctx, { kind, title, body = "", url = "/", discord = nul
 }
 async function logEvent(env, orderId, kind) {
   try {
-    await env.DB.prepare("INSERT INTO order_events(order_id,kind) VALUES(?,?)").bind(orderId, kind).run();
+    await env.DB.prepare("INSERT INTO kd_order_events(order_id,kind) VALUES(?,?)").bind(orderId, kind).run();
   } catch (e) {
     console.error("event", e);
   }
@@ -1070,7 +1050,7 @@ async function releaseCredit(env, orderId) {
   try {
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO credit_ledger(user_id,amount,reason,order_id) VALUES(?,?,'credit_returned',?)",
+        "INSERT INTO kd_credit_ledger(user_id,amount,reason,order_id) VALUES(?,?,'credit_returned',?)",
       ).bind(o.user_id, Number(o.credit_used), orderId),
       env.DB.prepare("UPDATE users SET credit=credit+? WHERE id=?").bind(
         Number(o.credit_used),
@@ -1093,7 +1073,7 @@ async function grantReferral(env, o, s) {
   try {
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO credit_ledger(user_id,amount,reason,order_id) VALUES(?,?,'referral_reward',?)",
+        "INSERT INTO kd_credit_ledger(user_id,amount,reason,order_id) VALUES(?,?,'referral_reward',?)",
       ).bind(o.referrer_id, reward, o.id),
       env.DB.prepare("UPDATE users SET credit=credit+? WHERE id=?").bind(reward, o.referrer_id),
     ]);
@@ -1112,7 +1092,7 @@ async function grantReferral(env, o, s) {
 async function reverseReferral(env, o) {
   if (!o.referrer_id || !o.referral_rewarded) return;
   const r = await env.DB.prepare(
-    "SELECT amount FROM credit_ledger WHERE order_id=? AND reason='referral_reward'",
+    "SELECT amount FROM kd_credit_ledger WHERE order_id=? AND reason='referral_reward'",
   )
     .bind(o.id)
     .first();
@@ -1120,7 +1100,7 @@ async function reverseReferral(env, o) {
   try {
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO credit_ledger(user_id,amount,reason,order_id) VALUES(?,?,'referral_reversal',?)",
+        "INSERT INTO kd_credit_ledger(user_id,amount,reason,order_id) VALUES(?,?,'referral_reversal',?)",
       ).bind(o.referrer_id, -Number(r.amount), o.id),
       env.DB.prepare("UPDATE users SET credit=MAX(0,credit-?) WHERE id=?").bind(
         Number(r.amount),
@@ -1342,7 +1322,7 @@ async function importCodes(env, rows, opts = {}) {
       const cost = opts.unitCost === "" || opts.unitCost == null ? null : Number(opts.unitCost);
       batchId = (
         await env.DB.prepare(
-          "INSERT INTO supplier_batches(product_id,variant_id,supplier,unit_cost,quantity,note) VALUES(?,?,?,?,0,?)",
+          "INSERT INTO kd_supplier_batches(product_id,variant_id,supplier,unit_cost,quantity,note) VALUES(?,?,?,?,0,?)",
         )
           .bind(g.productId, g.variantId, clean(opts.supplier).slice(0, 120), Number.isFinite(cost) ? cost : null, clean(opts.note).slice(0, 300))
           .run()
@@ -1363,8 +1343,8 @@ async function importCodes(env, rows, opts = {}) {
     added += groupAdded;
     if (batchId) {
       if (groupAdded)
-        await env.DB.prepare("UPDATE supplier_batches SET quantity=? WHERE id=?").bind(groupAdded, batchId).run();
-      else await env.DB.prepare("DELETE FROM supplier_batches WHERE id=?").bind(batchId).run();
+        await env.DB.prepare("UPDATE kd_supplier_batches SET quantity=? WHERE id=?").bind(groupAdded, batchId).run();
+      else await env.DB.prepare("DELETE FROM kd_supplier_batches WHERE id=?").bind(batchId).run();
     }
     if (groupAdded) touched.push({ productId: g.productId, variantId: g.variantId });
   }
@@ -1374,14 +1354,14 @@ async function importCodes(env, rows, opts = {}) {
 async function notifyRestock(env, ctx, productId, variantId, origin = "") {
   const subs = (
     await env.DB.prepare(
-      "SELECT * FROM stock_subscriptions WHERE status='waiting' AND product_id=? AND COALESCE(variant_id,0)=COALESCE(?,0)",
+      "SELECT * FROM kd_stock_subscriptions WHERE status='waiting' AND product_id=? AND COALESCE(variant_id,0)=COALESCE(?,0)",
     )
       .bind(productId, variantId || null)
       .all()
   ).results;
   if (!subs.length) return 0;
   await env.DB.prepare(
-    "UPDATE stock_subscriptions SET status=CASE WHEN is_email=1 THEN 'notified' ELSE 'ready' END,notified_at=CURRENT_TIMESTAMP WHERE status='waiting' AND product_id=? AND COALESCE(variant_id,0)=COALESCE(?,0)",
+    "UPDATE kd_stock_subscriptions SET status=CASE WHEN is_email=1 THEN 'notified' ELSE 'ready' END,notified_at=CURRENT_TIMESTAMP WHERE status='waiting' AND product_id=? AND COALESCE(variant_id,0)=COALESCE(?,0)",
   )
     .bind(productId, variantId || null)
     .run();
@@ -1460,7 +1440,7 @@ function buildTimeline(o, events) {
   return steps;
 }
 // ---- backups: D1 -> gzipped SQL dump in R2 ----
-const BACKUP_TABLES = ["users","categories","products","product_variants","variant_sources","supplier_batches","inventory","discounts","orders","order_items","settings","order_events","order_messages","refund_log","stock_subscriptions","credit_ledger","audit_logs","checkout_events","product_reviews","customer_notifications"];
+const BACKUP_TABLES = ["users","categories","products","product_variants","variant_sources","kd_supplier_batches","inventory","discounts","orders","order_items","settings","kd_order_events","kd_order_messages","kd_refund_log","kd_stock_subscriptions","kd_credit_ledger","audit_logs","checkout_events","product_reviews","customer_notifications"];
 async function runBackup(env, keep = 14) {
   const bucket = bucketOf(env);
   if (!bucket) return { ok: false, error: "R2 storage is not configured." };
@@ -1504,7 +1484,7 @@ async function runBackup(env, keep = 14) {
 async function markJob(env, job, ok, detail) {
   try {
     await env.DB.prepare(
-      "INSERT INTO job_runs(job,ran_at,ok,detail) VALUES(?,CURRENT_TIMESTAMP,?,?) ON CONFLICT(job) DO UPDATE SET ran_at=CURRENT_TIMESTAMP,ok=excluded.ok,detail=excluded.detail",
+      "INSERT INTO kd_job_runs(job,ran_at,ok,detail) VALUES(?,CURRENT_TIMESTAMP,?,?) ON CONFLICT(job) DO UPDATE SET ran_at=CURRENT_TIMESTAMP,ok=excluded.ok,detail=excluded.detail",
     )
       .bind(job, ok ? 1 : 0, String(detail || "").slice(0, 300))
       .run();
@@ -1537,9 +1517,9 @@ async function runScheduled(env, ctx, event) {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM sessions WHERE expires_at<?").bind(Date.now()),
       env.DB.prepare("DELETE FROM login_attempts WHERE reset_at<?").bind(Date.now()),
-      env.DB.prepare("DELETE FROM password_resets WHERE expires_at<?").bind(Date.now()),
-      env.DB.prepare("DELETE FROM admin_alerts WHERE created_at<datetime('now','-30 days')"),
-      env.DB.prepare("DELETE FROM stock_subscriptions WHERE status<>'waiting' AND created_at<datetime('now','-60 days')"),
+      env.DB.prepare("DELETE FROM kd_password_resets WHERE expires_at<?").bind(Date.now()),
+      env.DB.prepare("DELETE FROM kd_admin_alerts WHERE created_at<datetime('now','-30 days')"),
+      env.DB.prepare("DELETE FROM kd_stock_subscriptions WHERE status<>'waiting' AND created_at<datetime('now','-60 days')"),
     ]);
     return "ok";
   });
@@ -1598,7 +1578,7 @@ async function applyOrderUpdate(env, ctx, admin, existing, want, origin) {
     await grantReferral(env, order, await allSettings(env));
   if (newRefund) {
     await reverseReferral(env, order);
-    await env.DB.prepare("INSERT INTO refund_log(order_id,kind,reason,note,amount,admin_user_id) VALUES(?,?,?,?,?,?)")
+    await env.DB.prepare("INSERT INTO kd_refund_log(order_id,kind,reason,note,amount,admin_user_id) VALUES(?,?,?,?,?,?)")
       .bind(id, "refund", want.refund_reason, clean(want.refund_note).slice(0, 500), Number.isFinite(Number(want.refund_amount)) && want.refund_amount !== "" && want.refund_amount != null ? Number(want.refund_amount) : Number(existing.total), admin?.id || null)
       .run();
   }
@@ -1817,8 +1797,8 @@ async function api(req, env, url, ctx) {
     if (!u) return okReply;
     const token = hex(crypto.getRandomValues(new Uint8Array(32)));
     await env.DB.batch([
-      env.DB.prepare("DELETE FROM password_resets WHERE user_id=?").bind(u.id),
-      env.DB.prepare("INSERT INTO password_resets(token_hash,user_id,expires_at) VALUES(?,?,?)").bind(await sha(token), u.id, Date.now() + 3600000),
+      env.DB.prepare("DELETE FROM kd_password_resets WHERE user_id=?").bind(u.id),
+      env.DB.prepare("INSERT INTO kd_password_resets(token_hash,user_id,expires_at) VALUES(?,?,?)").bind(await sha(token), u.id, Date.now() + 3600000),
     ]);
     const st = await allSettings(env),
       lang = b.lang === "en" ? "en" : "ar";
@@ -1832,10 +1812,10 @@ async function api(req, env, url, ctx) {
       return json({ error: "Too many attempts. Try again later." }, 429);
     if (pw.length < 8) return json({ error: "New password must be at least 8 characters." }, 400);
     const th = await sha(String(b.token || "")),
-      r = await env.DB.prepare("SELECT user_id,expires_at FROM password_resets WHERE token_hash=?").bind(th).first();
+      r = await env.DB.prepare("SELECT user_id,expires_at FROM kd_password_resets WHERE token_hash=?").bind(th).first();
     if (!r || r.expires_at < Date.now())
       return json({ error: "This reset link is invalid or has expired. Request a new one." }, 400);
-    const claim = await env.DB.prepare("DELETE FROM password_resets WHERE token_hash=?").bind(th).run();
+    const claim = await env.DB.prepare("DELETE FROM kd_password_resets WHERE token_hash=?").bind(th).run();
     if (!(claim.meta.changes > 0)) return json({ error: "This reset link is invalid or has expired. Request a new one." }, 400);
     await env.DB.batch([
       env.DB.prepare("UPDATE users SET password_hash=? WHERE id=?").bind(await hashPassword(pw), r.user_id),
@@ -1849,7 +1829,7 @@ async function api(req, env, url, ctx) {
       code = s.referral_enabled === "0" ? "" : await referralCodeFor(env, me.id),
       u = await env.DB.prepare("SELECT credit FROM users WHERE id=?").bind(me.id).first(),
       invited = await env.DB.prepare("SELECT COUNT(*) n FROM orders WHERE referrer_id=? AND fulfillment_status<>'cancelled'").bind(me.id).first(),
-      ledger = (await env.DB.prepare("SELECT amount,reason,created_at FROM credit_ledger WHERE user_id=? ORDER BY id DESC LIMIT 10").bind(me.id).all()).results;
+      ledger = (await env.DB.prepare("SELECT amount,reason,created_at FROM kd_credit_ledger WHERE user_id=? ORDER BY id DESC LIMIT 10").bind(me.id).all()).results;
     return json({
       enabled: s.referral_enabled !== "0",
       code,
@@ -1871,10 +1851,10 @@ async function api(req, env, url, ctx) {
     const p = await env.DB.prepare("SELECT id FROM products WHERE id=? AND active=1").bind(pid).first();
     if (!p) return json({ error: "Product not found." }, 404);
     const dup = await env.DB.prepare(
-      "SELECT id FROM stock_subscriptions WHERE status='waiting' AND product_id=? AND COALESCE(variant_id,0)=COALESCE(?,0) AND LOWER(contact)=?",
+      "SELECT id FROM kd_stock_subscriptions WHERE status='waiting' AND product_id=? AND COALESCE(variant_id,0)=COALESCE(?,0) AND LOWER(contact)=?",
     ).bind(pid, vid, contact.toLowerCase()).first();
     if (!dup)
-      await env.DB.prepare("INSERT INTO stock_subscriptions(product_id,variant_id,contact,is_email,user_id,lang) VALUES(?,?,?,?,?,?)")
+      await env.DB.prepare("INSERT INTO kd_stock_subscriptions(product_id,variant_id,contact,is_email,user_id,lang) VALUES(?,?,?,?,?,?)")
         .bind(pid, vid, contact, looksEmail(contact) ? 1 : 0, me?.id ?? null, b.lang === "en" ? "en" : "ar")
         .run();
     return json({ ok: true }, 201);
@@ -2080,7 +2060,7 @@ async function api(req, env, url, ctx) {
     }
     if (creditUsed > 0)
       await env.DB.prepare(
-        "INSERT INTO credit_ledger(user_id,amount,reason,order_id) VALUES(?,?,'order_payment',?)",
+        "INSERT INTO kd_credit_ledger(user_id,amount,reason,order_id) VALUES(?,?,'order_payment',?)",
       )
         .bind(me.id, -creditUsed, orderId)
         .run();
@@ -2303,14 +2283,14 @@ async function api(req, env, url, ctx) {
       allowed = !!(await env.DB.prepare("SELECT 1 x FROM users WHERE id=? AND LOWER(email)=?").bind(o.user_id, contact).first());
     if (!allowed) return json({ error: "Order verification failed." }, 403);
     if (method === "GET")
-      return json((await env.DB.prepare("SELECT id,sender,body,created_at FROM order_messages WHERE order_id=? ORDER BY id").bind(id).all()).results);
+      return json((await env.DB.prepare("SELECT id,sender,body,created_at FROM kd_order_messages WHERE order_id=? ORDER BY id").bind(id).all()).results);
     if (method === "POST") {
       const b = await readJson(req),
         text = clean(b.body).slice(0, 1000);
       if (!text) return json({ error: "Write a message first." }, 400);
       if (!(await throttle(env, `msg:${ipOf(req)}`, 20, 3600000)))
         return json({ error: "Too many attempts. Try again later." }, 429);
-      await env.DB.prepare("INSERT INTO order_messages(order_id,sender,body,read_by_admin) VALUES(?,'customer',?,0)").bind(id, text).run();
+      await env.DB.prepare("INSERT INTO kd_order_messages(order_id,sender,body,read_by_admin) VALUES(?,'customer',?,0)").bind(id, text).run();
       adminAlert(env, ctx, {
         kind: "message",
         title: `New message on ${o.order_number}`,
@@ -2397,10 +2377,10 @@ async function api(req, env, url, ctx) {
       q("SELECT COUNT(*) n FROM inventory WHERE status='available'"),
       q("SELECT COUNT(*) n FROM orders WHERE payment_status='awaiting_payment' AND fulfillment_status<>'cancelled'"),
       q("SELECT COUNT(*) n FROM orders WHERE payment_status='awaiting_payment' AND fulfillment_status<>'cancelled' AND payment_proof_key IS NOT NULL"),
-      q("SELECT COUNT(DISTINCT order_id) n FROM order_messages WHERE sender='customer' AND read_by_admin=0"),
-      q("SELECT COUNT(*) n FROM stock_subscriptions WHERE status='ready'"),
+      q("SELECT COUNT(DISTINCT order_id) n FROM kd_order_messages WHERE sender='customer' AND read_by_admin=0"),
+      q("SELECT COUNT(*) n FROM kd_stock_subscriptions WHERE status='ready'"),
       lowStockList(env, st),
-      env.DB.prepare("SELECT job,ran_at,ok,detail FROM job_runs ORDER BY job").all(),
+      env.DB.prepare("SELECT job,ran_at,ok,detail FROM kd_job_runs ORDER BY job").all(),
     ]);
     const [d7, d30, cancelled, avg] = await Promise.all([
       q("SELECT COALESCE(SUM(total),0) n FROM orders WHERE payment_status='paid' AND created_at>=datetime('now','-7 days')"),
@@ -2750,7 +2730,7 @@ async function api(req, env, url, ctx) {
     return json(
       (
         await env.DB.prepare(
-          "SELECT b.*,p.name product_name,COALESCE(v.name,'') variant_name,(SELECT COUNT(*) FROM inventory i WHERE i.batch_id=b.id AND i.status='available') available,(SELECT COUNT(*) FROM inventory i WHERE i.batch_id=b.id AND i.status IN ('sold','reserved')) used FROM supplier_batches b JOIN products p ON p.id=b.product_id LEFT JOIN product_variants v ON v.id=b.variant_id ORDER BY b.id DESC LIMIT 200",
+          "SELECT b.*,p.name product_name,COALESCE(v.name,'') variant_name,(SELECT COUNT(*) FROM inventory i WHERE i.batch_id=b.id AND i.status='available') available,(SELECT COUNT(*) FROM inventory i WHERE i.batch_id=b.id AND i.status IN ('sold','reserved')) used FROM kd_supplier_batches b JOIN products p ON p.id=b.product_id LEFT JOIN product_variants v ON v.id=b.variant_id ORDER BY b.id DESC LIMIT 200",
         ).all()
       ).results,
     );
@@ -2872,7 +2852,7 @@ async function api(req, env, url, ctx) {
     return json(
       (
         await env.DB.prepare(
-          "SELECT o.*,u.name user_name,u.email user_email,(SELECT GROUP_CONCAT(oi.product_name || CASE WHEN COALESCE(oi.variant_name,'')<>'' THEN ' — '||oi.variant_name ELSE '' END || ' × ' || oi.quantity, ', ') FROM order_items oi WHERE oi.order_id=o.id) item_summary,(SELECT COUNT(*) FROM order_messages m WHERE m.order_id=o.id AND m.sender='customer' AND m.read_by_admin=0) unread FROM orders o LEFT JOIN users u ON u.id=o.user_id ORDER BY o.id DESC",
+          "SELECT o.*,u.name user_name,u.email user_email,(SELECT GROUP_CONCAT(oi.product_name || CASE WHEN COALESCE(oi.variant_name,'')<>'' THEN ' — '||oi.variant_name ELSE '' END || ' × ' || oi.quantity, ', ') FROM order_items oi WHERE oi.order_id=o.id) item_summary,(SELECT COUNT(*) FROM kd_order_messages m WHERE m.order_id=o.id AND m.sender='customer' AND m.read_by_admin=0) unread FROM orders o LEFT JOIN users u ON u.id=o.user_id ORDER BY o.id DESC",
         ).all()
       ).results.map(({ payment_proof_hash, ...o }) => o),
     );
@@ -2912,11 +2892,11 @@ async function api(req, env, url, ctx) {
         .all()
     ).results;
     const [messages, events, issues] = await Promise.all([
-      env.DB.prepare("SELECT id,sender,body,created_at FROM order_messages WHERE order_id=? ORDER BY id").bind(order.id).all(),
-      env.DB.prepare("SELECT kind,created_at FROM order_events WHERE order_id=? ORDER BY id").bind(order.id).all(),
-      env.DB.prepare("SELECT l.*,u.name admin_name FROM refund_log l LEFT JOIN users u ON u.id=l.admin_user_id WHERE l.order_id=? ORDER BY l.id").bind(order.id).all(),
+      env.DB.prepare("SELECT id,sender,body,created_at FROM kd_order_messages WHERE order_id=? ORDER BY id").bind(order.id).all(),
+      env.DB.prepare("SELECT kind,created_at FROM kd_order_events WHERE order_id=? ORDER BY id").bind(order.id).all(),
+      env.DB.prepare("SELECT l.*,u.name admin_name FROM kd_refund_log l LEFT JOIN users u ON u.id=l.admin_user_id WHERE l.order_id=? ORDER BY l.id").bind(order.id).all(),
     ]);
-    await env.DB.prepare("UPDATE order_messages SET read_by_admin=1 WHERE order_id=? AND sender='customer' AND read_by_admin=0").bind(order.id).run();
+    await env.DB.prepare("UPDATE kd_order_messages SET read_by_admin=1 WHERE order_id=? AND sender='customer' AND read_by_admin=0").bind(order.id).run();
     order.payment_proof = !!order.payment_proof_key;
     order.timeline = buildTimeline(order, events.results);
     delete order.payment_proof_hash;
@@ -2954,7 +2934,7 @@ async function api(req, env, url, ctx) {
       await logEvent(env, id, "proof_rejected");
       const why = clean(b.reason).slice(0, 300);
       const msg = why ? `Your payment proof for ${existing.order_number} could not be verified: ${why}. Please upload a clear screenshot of the transfer.` : `Your payment proof for ${existing.order_number} could not be verified. Please upload a clear screenshot of the transfer.`;
-      await env.DB.prepare("INSERT INTO order_messages(order_id,sender,body,read_by_admin) VALUES(?,'admin',?,1)").bind(id, msg).run();
+      await env.DB.prepare("INSERT INTO kd_order_messages(order_id,sender,body,read_by_admin) VALUES(?,'admin',?,1)").bind(id, msg).run();
       await customerNotify(env, existing.user_id, id, "payment", "Payment proof needs to be re-sent", msg);
       await audit(env, me, "proof_rejected", "order", id, why);
       return json({ ok: true });
@@ -2966,7 +2946,7 @@ async function api(req, env, url, ctx) {
     }
     if (act === "dispute") {
       if (!DISPUTE_REASONS.includes(b.reason)) return json({ error: "Choose a dispute reason." }, 400);
-      await env.DB.prepare("INSERT INTO refund_log(order_id,kind,reason,note,amount,admin_user_id) VALUES(?,'dispute',?,?,?,?)")
+      await env.DB.prepare("INSERT INTO kd_refund_log(order_id,kind,reason,note,amount,admin_user_id) VALUES(?,'dispute',?,?,?,?)")
         .bind(id, b.reason, clean(b.note).slice(0, 500), optNum(b.amount), me.id)
         .run();
       await audit(env, me, "dispute_logged", "order", id, b.reason);
@@ -2975,7 +2955,7 @@ async function api(req, env, url, ctx) {
     if (act === "reply") {
       const text = clean(b.body).slice(0, 1000);
       if (!text) return json({ error: "Write a message first." }, 400);
-      await env.DB.prepare("INSERT INTO order_messages(order_id,sender,body,read_by_admin) VALUES(?,'admin',?,1)").bind(id, text).run();
+      await env.DB.prepare("INSERT INTO kd_order_messages(order_id,sender,body,read_by_admin) VALUES(?,'admin',?,1)").bind(id, text).run();
       await customerNotify(env, existing.user_id, id, "support", "New reply from support", text);
       const u = existing.user_id ? await env.DB.prepare("SELECT email FROM users WHERE id=?").bind(existing.user_id).first() : null;
       const to = u?.email || (looksEmail(existing.guest_contact) ? clean(existing.guest_contact) : "");
@@ -2990,19 +2970,19 @@ async function api(req, env, url, ctx) {
     return json(
       (
         await env.DB.prepare(
-          "SELECT o.id,o.order_number,COALESCE(u.name,o.guest_name,'Guest') customer,(SELECT body FROM order_messages m WHERE m.order_id=o.id ORDER BY m.id DESC LIMIT 1) last_body,(SELECT sender FROM order_messages m WHERE m.order_id=o.id ORDER BY m.id DESC LIMIT 1) last_sender,(SELECT MAX(created_at) FROM order_messages m WHERE m.order_id=o.id) last_at,(SELECT COUNT(*) FROM order_messages m WHERE m.order_id=o.id AND m.sender='customer' AND m.read_by_admin=0) unread FROM orders o LEFT JOIN users u ON u.id=o.user_id WHERE EXISTS (SELECT 1 FROM order_messages m WHERE m.order_id=o.id) ORDER BY last_at DESC LIMIT 100",
+          "SELECT o.id,o.order_number,COALESCE(u.name,o.guest_name,'Guest') customer,(SELECT body FROM kd_order_messages m WHERE m.order_id=o.id ORDER BY m.id DESC LIMIT 1) last_body,(SELECT sender FROM kd_order_messages m WHERE m.order_id=o.id ORDER BY m.id DESC LIMIT 1) last_sender,(SELECT MAX(created_at) FROM kd_order_messages m WHERE m.order_id=o.id) last_at,(SELECT COUNT(*) FROM kd_order_messages m WHERE m.order_id=o.id AND m.sender='customer' AND m.read_by_admin=0) unread FROM orders o LEFT JOIN users u ON u.id=o.user_id WHERE EXISTS (SELECT 1 FROM kd_order_messages m WHERE m.order_id=o.id) ORDER BY last_at DESC LIMIT 100",
         ).all()
       ).results,
     );
   if (path === "/api/admin/refunds" && method === "GET") {
     const log = (
       await env.DB.prepare(
-        "SELECT l.*,o.order_number,(SELECT GROUP_CONCAT(oi.product_name,', ') FROM order_items oi WHERE oi.order_id=o.id) products,u.name admin_name FROM refund_log l JOIN orders o ON o.id=l.order_id LEFT JOIN users u ON u.id=l.admin_user_id ORDER BY l.id DESC LIMIT 300",
+        "SELECT l.*,o.order_number,(SELECT GROUP_CONCAT(oi.product_name,', ') FROM order_items oi WHERE oi.order_id=o.id) products,u.name admin_name FROM kd_refund_log l JOIN orders o ON o.id=l.order_id LEFT JOIN users u ON u.id=l.admin_user_id ORDER BY l.id DESC LIMIT 300",
       ).all()
     ).results;
     const problem = (
       await env.DB.prepare(
-        "SELECT oi.product_name,COUNT(DISTINCT l.id) cases,SUM(CASE WHEN l.kind='refund' THEN 1 ELSE 0 END) refunds,(SELECT reason FROM refund_log x JOIN order_items y ON y.order_id=x.order_id WHERE y.product_name=oi.product_name GROUP BY x.reason ORDER BY COUNT(*) DESC LIMIT 1) top_reason FROM refund_log l JOIN order_items oi ON oi.order_id=l.order_id GROUP BY oi.product_name ORDER BY cases DESC LIMIT 15",
+        "SELECT oi.product_name,COUNT(DISTINCT l.id) cases,SUM(CASE WHEN l.kind='refund' THEN 1 ELSE 0 END) refunds,(SELECT reason FROM kd_refund_log x JOIN order_items y ON y.order_id=x.order_id WHERE y.product_name=oi.product_name GROUP BY x.reason ORDER BY COUNT(*) DESC LIMIT 1) top_reason FROM kd_refund_log l JOIN order_items oi ON oi.order_id=l.order_id GROUP BY oi.product_name ORDER BY cases DESC LIMIT 15",
       ).all()
     ).results;
     return json({ log, problem_products: problem });
@@ -3011,7 +2991,7 @@ async function api(req, env, url, ctx) {
     return json(
       (
         await env.DB.prepare(
-          "SELECT v.id,v.name,p.name target_name,GROUP_CONCAT(src.name, ', ') sources FROM product_variants v JOIN products p ON p.id=v.product_id JOIN variant_sources vs ON vs.variant_id=v.id JOIN products src ON src.id=vs.source_product_id GROUP BY v.id,v.name,p.name ORDER BY v.id DESC",
+          "SELECT v.id,v.name,v.price,v.product_id target_id,p.name target_name,GROUP_CONCAT(src.name, ', ') sources,MAX(CASE WHEN vs.source_product_id=v.product_id THEN 1 ELSE 0 END) is_self,(SELECT COUNT(*) FROM inventory i WHERE i.product_id=v.product_id AND i.variant_id=v.id AND i.status='available')+(SELECT COUNT(*) FROM inventory i JOIN variant_sources x ON x.source_product_id=i.product_id WHERE x.variant_id=v.id AND i.variant_id IS NULL AND i.status='available') stock,(SELECT COUNT(*) FROM order_items oi WHERE oi.variant_id=v.id) orders FROM product_variants v JOIN products p ON p.id=v.product_id JOIN variant_sources vs ON vs.variant_id=v.id JOIN products src ON src.id=vs.source_product_id GROUP BY v.id,v.name,v.price,v.product_id,p.name ORDER BY v.product_id DESC,v.sort_order,v.id",
         ).all()
       ).results,
     );
@@ -3030,6 +3010,8 @@ async function api(req, env, url, ctx) {
         sources.reduce((n, x) => n + Number(x.orders || 0), 0) +
         Number(target.orders || 0),
       target_option: selfVariant || !!plan.selfExisting,
+      new_target: !!target.isNew,
+      options: plan.links.map((l) => ({ source_id: l.source.id, name: l.name, price: l.price, stock: Number(l.source.stock || 0) })),
       warning:
         "This preview makes no changes. Execute only after reviewing the mapping.",
     });
@@ -3037,37 +3019,59 @@ async function api(req, env, url, ctx) {
   if (path === "/api/admin/product-merger/execute" && method === "POST") {
     const plan = await planMerge(env, await readJson(req));
     if (plan.error) return json({ error: plan.error }, plan.status);
-    const { target, links, selfVariant, selfExisting } = plan,
+    const { links, selfVariant, selfExisting } = plan,
       ops = [];
-    const addOption = (prod, existingId, sort) => {
+    let target = plan.target;
+    if (target.isNew) {
+      // New combined product: borrow category, image, platform and region from the first product.
+      const tpl = links[0].source,
+        base = slugify(target.name);
+      let slug = base,
+        n = 2;
+      while (await env.DB.prepare("SELECT id FROM products WHERE slug=?").bind(slug).first()) slug = `${base}-${n++}`;
+      const r = await env.DB.prepare(
+        "INSERT INTO products(name,slug,description,name_ar,description_ar,price,old_price,image_url,category_id,platform,region,delivery_type,active,featured) VALUES(?,?,?,?,?,?,NULL,?,?,?,?,'code',1,0)",
+      )
+        .bind(
+          target.name,
+          slug,
+          clean(tpl.description),
+          clean(tpl.name_ar),
+          clean(tpl.description_ar),
+          Math.min(...links.map((l) => l.price)),
+          clean(tpl.image_url),
+          tpl.category_id || null,
+          clean(tpl.platform),
+          clean(tpl.region),
+        )
+        .run();
+      target = { ...target, id: r.meta.last_row_id };
+    }
+    const addOption = (prod, existingId, sort, name, price, oldPrice) => {
       if (existingId)
         ops.push(
-          env.DB.prepare(
-            "INSERT OR IGNORE INTO variant_sources(variant_id,source_product_id) VALUES(?,?)",
-          ).bind(existingId, prod.id),
+          env.DB.prepare("INSERT OR IGNORE INTO variant_sources(variant_id,source_product_id) VALUES(?,?)").bind(existingId, prod.id),
         );
       else {
         ops.push(
           env.DB.prepare(
             "INSERT INTO product_variants(product_id,name,price,old_price,active,sort_order) VALUES(?,?,?,?,1,?)",
-          ).bind(target.id, prod.name, Number(prod.price), prod.old_price, sort),
+          ).bind(target.id, name, price, oldPrice ?? null, sort),
         );
         ops.push(
           env.DB.prepare(
             "INSERT INTO variant_sources(variant_id,source_product_id) SELECT id,? FROM product_variants WHERE product_id=? AND name=? ORDER BY id DESC LIMIT 1",
-          ).bind(prod.id, target.id, prod.name),
+          ).bind(prod.id, target.id, name),
         );
       }
     };
     // The target's own codes get their own option, otherwise they would stop being sellable.
     if (selfVariant || selfExisting)
-      addOption(target, selfExisting ? selfExisting.id : null, 0);
+      addOption(target, selfExisting ? selfExisting.id : null, 0, target.name, Number(target.price), target.old_price);
     links.forEach((l, i) => {
-      addOption(l.source, l.existingId, i + 1);
+      addOption(l.source, l.existingId, i + 1, l.name, l.price, l.old_price);
       ops.push(
-        env.DB.prepare(
-          "UPDATE products SET active=0,updated_at=CURRENT_TIMESTAMP WHERE id=?",
-        ).bind(l.source.id),
+        env.DB.prepare("UPDATE products SET active=0,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(l.source.id),
       );
     });
     await env.DB.batch(ops);
@@ -3077,7 +3081,7 @@ async function api(req, env, url, ctx) {
       "product_merge",
       "product",
       target.id,
-      `Merged source products: ${links.map((l) => l.source.id).join(",")}`,
+      `Combined products: ${links.map((l) => l.source.id).join(",")}`,
     );
     return json({
       ok: true,
@@ -3141,6 +3145,10 @@ async function api(req, env, url, ctx) {
         variantId,
       ),
       env.DB.prepare("DELETE FROM product_variants WHERE id=?").bind(variantId),
+      // A combined product left with no options, no codes and no orders is hidden again.
+      env.DB.prepare(
+        "UPDATE products SET active=0,updated_at=CURRENT_TIMESTAMP WHERE id=? AND NOT EXISTS (SELECT 1 FROM product_variants WHERE product_id=?) AND NOT EXISTS (SELECT 1 FROM inventory WHERE product_id=?) AND NOT EXISTS (SELECT 1 FROM order_items WHERE product_id=?)",
+      ).bind(v.product_id, v.product_id, v.product_id, v.product_id),
     ]);
     await audit(
       env,
@@ -3190,7 +3198,7 @@ async function api(req, env, url, ctx) {
       one("SELECT COUNT(*) n FROM orders WHERE created_at>=datetime('now',?)", since),
       one("SELECT COUNT(*) n,COALESCE(SUM(total),0) cash,COALESCE(SUM(discount),0) disc,COALESCE(SUM(credit_used),0) cred FROM orders WHERE payment_status='paid' AND created_at>=datetime('now',?)", since),
       all("SELECT COALESCE(oi.product_id,0) pid,oi.product_name name,SUM(oi.quantity) units,SUM(oi.unit_price*oi.quantity) revenue FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE o.payment_status='paid' AND o.created_at>=datetime('now',?) GROUP BY COALESCE(oi.product_id,0),oi.product_name ORDER BY revenue DESC LIMIT 20", since),
-      all("SELECT i.product_id pid,COUNT(*) n,SUM(COALESCE(b.unit_cost,0)) cost,SUM(CASE WHEN b.unit_cost IS NULL THEN 1 ELSE 0 END) unknown FROM inventory i JOIN orders o ON o.id=i.order_id LEFT JOIN supplier_batches b ON b.id=i.batch_id WHERE i.status='sold' AND o.payment_status='paid' AND o.created_at>=datetime('now',?) GROUP BY i.product_id", since),
+      all("SELECT i.product_id pid,COUNT(*) n,SUM(COALESCE(b.unit_cost,0)) cost,SUM(CASE WHEN b.unit_cost IS NULL THEN 1 ELSE 0 END) unknown FROM inventory i JOIN orders o ON o.id=i.order_id LEFT JOIN kd_supplier_batches b ON b.id=i.batch_id WHERE i.status='sold' AND o.payment_status='paid' AND o.created_at>=datetime('now',?) GROUP BY i.product_id", since),
       all("SELECT id,delivery_type,cost_price FROM products"),
       all("SELECT date(created_at) d,SUM(total) revenue,COUNT(*) orders FROM orders WHERE payment_status='paid' AND created_at>=datetime('now',?) GROUP BY date(created_at) ORDER BY d", since),
     ]);
@@ -3263,30 +3271,30 @@ async function api(req, env, url, ctx) {
     const b = await readJson(req),
       ep = clean(b.endpoint);
     if (!/^https:\/\//.test(ep) || ep.length > 1000) return json({ error: "Invalid subscription." }, 400);
-    await env.DB.prepare("INSERT INTO push_subscriptions(user_id,endpoint) VALUES(?,?) ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id").bind(me.id, ep).run();
+    await env.DB.prepare("INSERT INTO kd_push_subscriptions(user_id,endpoint) VALUES(?,?) ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id").bind(me.id, ep).run();
     return json({ ok: true }, 201);
   }
   if (path === "/api/admin/push/unsubscribe" && method === "POST") {
     const b = await readJson(req);
-    await env.DB.prepare("DELETE FROM push_subscriptions WHERE endpoint=?").bind(clean(b.endpoint)).run();
+    await env.DB.prepare("DELETE FROM kd_push_subscriptions WHERE endpoint=?").bind(clean(b.endpoint)).run();
     return json({ ok: true });
   }
   if (path === "/api/admin/push-latest" && method === "GET") {
-    const a = await env.DB.prepare("SELECT id,kind,title,body,url FROM admin_alerts ORDER BY id DESC LIMIT 1").first();
+    const a = await env.DB.prepare("SELECT id,kind,title,body,url FROM kd_admin_alerts ORDER BY id DESC LIMIT 1").first();
     return json(a || {});
   }
   if (path === "/api/admin/waitlist" && method === "GET")
     return json(
       (
         await env.DB.prepare(
-          "SELECT s.*,p.name product_name,p.name_ar product_name_ar,p.slug,COALESCE(v.name,'') variant_name FROM stock_subscriptions s JOIN products p ON p.id=s.product_id LEFT JOIN product_variants v ON v.id=s.variant_id WHERE s.status IN ('waiting','ready') ORDER BY CASE s.status WHEN 'ready' THEN 0 ELSE 1 END,s.id DESC LIMIT 500",
+          "SELECT s.*,p.name product_name,p.name_ar product_name_ar,p.slug,COALESCE(v.name,'') variant_name FROM kd_stock_subscriptions s JOIN products p ON p.id=s.product_id LEFT JOIN product_variants v ON v.id=s.variant_id WHERE s.status IN ('waiting','ready') ORDER BY CASE s.status WHEN 'ready' THEN 0 ELSE 1 END,s.id DESC LIMIT 500",
         ).all()
       ).results,
     );
   const waitMatch = path.match(/^\/api\/admin\/waitlist\/(\d+)$/);
   if (waitMatch && (method === "POST" || method === "DELETE")) {
-    if (method === "DELETE") await env.DB.prepare("DELETE FROM stock_subscriptions WHERE id=?").bind(Number(waitMatch[1])).run();
-    else await env.DB.prepare("UPDATE stock_subscriptions SET status='notified',notified_at=CURRENT_TIMESTAMP WHERE id=?").bind(Number(waitMatch[1])).run();
+    if (method === "DELETE") await env.DB.prepare("DELETE FROM kd_stock_subscriptions WHERE id=?").bind(Number(waitMatch[1])).run();
+    else await env.DB.prepare("UPDATE kd_stock_subscriptions SET status='notified',notified_at=CURRENT_TIMESTAMP WHERE id=?").bind(Number(waitMatch[1])).run();
     return json({ ok: true });
   }
   const revPhoto = path.match(/^\/api\/admin\/reviews\/(\d+)\/photo$/);

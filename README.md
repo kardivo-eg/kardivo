@@ -25,6 +25,8 @@ Everything is additive: existing orders, products, codes and settings are untouc
 - Duplicate-payment detection: same proof image (SHA-256) or same transfer reference.
 - Arabic-first SEO: Arabic titles/descriptions in link previews, sitemap with `hreflang` alternates, `?lang=en` for English, canonical URLs.
 
+- **Combine products** was rebuilt: tick the products, name each option and set its price, preview, combine into a new product or an existing one, and undo per option or all at once (not once an option has been ordered).
+
 ## Deploy
 1. Keep your own `[[d1_databases]]` block (binding `DB`) and any R2 binding. `wrangler.toml` here now has `run_worker_first = ["/*", "!/styles.css", ...]`, which fixes `/sitemap.xml`, `/robots.txt`, `/media/*` and product link previews being served the SPA page, and a `[triggers]` cron.
 2. `wrangler deploy`

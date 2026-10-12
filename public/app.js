@@ -2342,83 +2342,158 @@ async function adminMerge(main) {
     api("/api/admin/merged-products"),
   ]);
   const code = rows.filter((p) => p.delivery_type === "code" && p.active);
-  main.innerHTML = `<div class="admin-top"><h2>Combine products into variants</h2></div>
-  <div class="notice"><b>Safe by design.</b> Preview makes no changes. Execute keeps every existing inventory row and historical order intact, creates variants on the target product, links the old products as stock sources, and hides the old products. Nothing is permanently deleted.</div>
-  <div class="admin-panel" style="margin-top:12px"><div class="form-grid">
-    <div class="field"><label>Target product (keep this product)</label><select id="mergeTarget"><option value="">Choose target</option>${code.map((p) => `<option value="${p.id}">${escapeHTML(p.name)} — ${money(p.price)}</option>`).join("")}</select></div>
-    <div class="field"><label>Products to combine</label><select id="mergeSources" multiple size="8">${code.map((p) => `<option value="${p.id}">${escapeHTML(p.name)} — ${p.stock} available</option>`).join("")}</select><small>Ctrl/Cmd-click multiple products. The target is excluded automatically.</small></div>
-  </div><div id="mergePreview" class="modal-body"></div><div class="modal-actions"><button class="btn ghost" id="mergePreviewBtn">Preview</button><button class="btn primary" id="mergeExecuteBtn" disabled>Execute merge</button></div></div>
-  ${merged.length ? `<div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Previous merges</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Target</th><th>Variant</th><th>Source products</th><th></th></tr></thead><tbody>${merged.map((v) => `<tr><td>${escapeHTML(v.target_name)}</td><td>${escapeHTML(v.name)}</td><td>${escapeHTML(v.sources || "")}</td><td><button class="mini danger" data-undo-merge="${v.id}">Undo</button></td></tr>`).join("")}</tbody></table></div><small>Undo is available only when the merged variant has not been used by a new order.</small></div>` : ""}`;
-  let preview = null;
-  const selected = () =>
-    [...$("#mergeSources").selectedOptions]
-      .map((o) => Number(o.value))
-      .filter((x) => x !== Number($("#mergeTarget").value));
-  $("#mergePreviewBtn").onclick = async () => {
-    try {
-      preview = await api("/api/admin/product-merger/preview", {
-        method: "POST",
-        body: JSON.stringify({
-          target_id: $("#mergeTarget").value,
-          source_ids: selected(),
+  const groups = new Map();
+  for (const v of merged) {
+    if (!groups.has(v.target_id)) groups.set(v.target_id, { name: v.target_name, opts: [] });
+    groups.get(v.target_id).opts.push(v);
+  }
+  main.innerHTML = `<div class="admin-top"><h2>Combine products</h2></div>
+  <div class="notice"><b>What this does:</b> turns several separate products (e.g. "PSN 10", "PSN 20", "PSN 50") into one product with options. Your codes, orders and customers are untouched: the old products are only hidden, and you can undo it any time until an option is sold.</div>
+  <div class="admin-panel" style="margin-top:12px"><div class="modal-body">
+    <h3 style="margin:0 0 10px">1. Where should they go?</h3>
+    <label style="display:block;margin:6px 0"><input type="radio" name="mMode" value="new" checked> Create a new combined product</label>
+    <label style="display:block;margin:6px 0"><input type="radio" name="mMode" value="existing"> Add to a product I already have</label>
+    <div class="field" id="mNewBox" style="margin-top:10px"><label>Name of the new product</label><input id="mNewName" maxlength="120" placeholder="e.g. PlayStation Gift Card"></div>
+    <div class="field" id="mExistBox" style="margin-top:10px" hidden><label>Existing product</label><select id="mTarget"><option value="">Choose product</option>${code.map((p) => `<option value="${p.id}">${escapeHTML(p.name)} — ${money(p.price)}</option>`).join("")}</select><small>Its own codes stay sellable as their own option.</small></div>
+    <h3 style="margin:18px 0 10px">2. Which products become options?</h3>
+    <div class="field"><input id="mFilter" placeholder="Search products..."></div>
+    <div id="mList" style="max-height:340px;overflow:auto;border:1px solid #29222f;border-radius:12px"></div>
+    <small>Only simple digital-code products (no options of their own) can be added. For each ticked product you can rename the option and change its price.</small>
+    <div id="mPreview" style="margin-top:14px"></div>
+    <div class="modal-actions"><button class="btn ghost" id="mPreviewBtn">3. Preview</button><button class="btn primary" id="mExecBtn" disabled>Combine now</button></div>
+  </div></div>
+  <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Already combined</h3></div><div class="modal-body">${
+    [...groups.entries()]
+      .map(
+        ([tid, g]) =>
+          `<div style="margin-bottom:16px"><div class="line"><b>${escapeHTML(g.name)}</b><button class="mini danger" data-undo-all="${tid}">Undo all</button></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Option</th><th>Price</th><th>Made from</th><th>In stock</th><th>Orders</th><th></th></tr></thead><tbody>${g.opts
+            .map(
+              (v) =>
+                `<tr><td>${escapeHTML(v.name)}</td><td>${money(v.price)}</td><td>${escapeHTML(v.sources || "")}${v.is_self ? " <small>(its own codes)</small>" : ""}</td><td>${v.stock}</td><td>${v.orders}</td><td>${v.orders ? `<small>sold — can't undo</small>` : `<button class="mini danger" data-undo="${v.id}">Undo</button>`}</td></tr>`,
+            )
+            .join("")}</tbody></table></div></div>`,
+      )
+      .join("") || `<div class="empty small">Nothing combined yet.</div>`
+  }<small>Undo brings the old product back and removes that option. It isn't available once an option has been ordered.</small></div></div>`;
+
+  const picked = new Map(); // id -> {name, price}
+  let preview = false;
+  const mode = () => document.querySelector('input[name="mMode"]:checked').value;
+  const targetId = () => (mode() === "existing" ? Number($("#mTarget").value) || 0 : 0);
+  const reset = () => {
+    preview = false;
+    $("#mExecBtn").disabled = true;
+    $("#mPreview").innerHTML = "";
+  };
+  const drawList = () => {
+    const q = $("#mFilter").value.trim().toLowerCase(),
+      tid = targetId();
+    const list = code.filter(
+      (p) => p.id !== tid && !(p.variants || []).length && (!q || p.name.toLowerCase().includes(q) || picked.has(p.id)),
+    );
+    $("#mList").innerHTML =
+      list
+        .map((p) => {
+          const on = picked.get(p.id);
+          return `<div class="line" style="padding:10px 12px;border-bottom:1px solid #211d27;align-items:center;flex-wrap:wrap"><label style="flex:1;min-width:180px"><input type="checkbox" data-pick="${p.id}" ${on ? "checked" : ""}> ${escapeHTML(p.name)} <small>· ${money(p.price)} · ${p.stock} in stock</small></label>${on ? `<span style="display:flex;gap:6px"><input data-oname="${p.id}" value="${escapeHTML(on.name)}" placeholder="Option name" style="width:150px"><input data-oprice="${p.id}" type="number" step="0.01" min="0" value="${on.price}" style="width:90px"></span>` : ""}</div>`;
+        })
+        .join("") || `<div class="empty small">No products to show.</div>`;
+    $$("[data-pick]").forEach(
+      (c) =>
+        (c.onchange = () => {
+          const id = Number(c.dataset.pick),
+            p = code.find((x) => x.id === id);
+          if (c.checked) picked.set(id, { name: p.name, price: p.price });
+          else picked.delete(id);
+          reset();
+          drawList();
         }),
-      });
-      $("#mergePreview").innerHTML =
-        `<div class="line"><span>Target</span><b>${escapeHTML(preview.target.name)}</b></div>${preview.sources.map((x) => `<div class="line"><span>${escapeHTML(x.name)}</span><span>${x.stock} stock · ${x.orders} historical orders</span></div>`).join("")}<div class="notice" style="margin-top:10px"><b>Total stock represented:</b> ${preview.total_stock}<br>${preview.target_option ? "The target's own codes become their own option so they stay sellable.<br>" : ""}<b>Historical orders represented:</b> ${preview.historical_orders}<br><small>No changes have been made.</small></div>`;
-      $("#mergeExecuteBtn").disabled = false;
+    );
+    $$("[data-oname]").forEach((i) => (i.oninput = () => ((picked.get(Number(i.dataset.oname)).name = i.value), reset())));
+    $$("[data-oprice]").forEach((i) => (i.oninput = () => ((picked.get(Number(i.dataset.oprice)).price = i.value), reset())));
+  };
+  $$('input[name="mMode"]').forEach(
+    (r) =>
+      (r.onchange = () => {
+        $("#mNewBox").hidden = mode() !== "new";
+        $("#mExistBox").hidden = mode() !== "existing";
+        picked.delete(targetId());
+        reset();
+        drawList();
+      }),
+  );
+  $("#mTarget").onchange = () => {
+    picked.delete(targetId());
+    reset();
+    drawList();
+  };
+  $("#mNewName").oninput = reset;
+  $("#mFilter").oninput = drawList;
+  const body = () => ({
+    target_id: targetId() || "",
+    new_name: mode() === "new" ? $("#mNewName").value : "",
+    source_ids: [...picked.keys()],
+    options: Object.fromEntries([...picked.entries()].map(([id, o]) => [id, { name: o.name, price: o.price }])),
+  });
+  $("#mPreviewBtn").onclick = async () => {
+    try {
+      const p = await api("/api/admin/product-merger/preview", { method: "POST", body: JSON.stringify(body()) });
+      $("#mPreview").innerHTML = `<div class="notice"><b>${p.new_target ? `New product: ${escapeHTML(p.target.name)}` : `Into: ${escapeHTML(p.target.name)}`}</b>${p.target_option ? `<div class="line"><span>${escapeHTML(p.target.name)} (its own codes)</span><span>${p.target.stock} in stock</span></div>` : ""}${p.options.map((o) => `<div class="line"><span>${escapeHTML(o.name)} — ${money(o.price)}</span><span>${o.stock} in stock</span></div>`).join("")}<div style="margin-top:8px">Total stock: <b>${p.total_stock}</b> · Past orders kept: <b>${p.historical_orders}</b><br><small>Nothing has been changed yet.</small></div></div>`;
+      preview = true;
+      $("#mExecBtn").disabled = false;
     } catch (e) {
-      preview = null;
-      $("#mergeExecuteBtn").disabled = true;
+      reset();
       toast(e.message);
     }
   };
-  $("#mergeExecuteBtn").onclick = async () => {
-    if (
-      !preview ||
-      !confirm(
-        "Execute this merge? Existing inventory rows and historical orders will remain untouched. Selected source products will be hidden and their stock will be represented by new variants on the target.",
-      )
-    )
-      return;
+  $("#mExecBtn").onclick = async () => {
+    if (!preview || !confirm("Combine these products now? The old products will be hidden. You can undo it later.")) return;
+    $("#mExecBtn").disabled = true;
     try {
-      await api("/api/admin/product-merger/execute", {
-        method: "POST",
-        body: JSON.stringify({
-          target_id: $("#mergeTarget").value,
-          source_ids: selected(),
-        }),
-      });
-      toast("Products combined successfully.");
+      await api("/api/admin/product-merger/execute", { method: "POST", body: JSON.stringify(body()) });
+      toast("Products combined.");
       state.admin.tab = "merge";
       await refreshStore();
-      openAdmin();
+      renderAdminTab();
     } catch (e) {
       toast(e.message);
+      $("#mExecBtn").disabled = false;
     }
   };
-  $$("[data-undo-merge]").forEach(
+  const undo = async (id) => api("/api/admin/product-merger/undo", { method: "POST", body: JSON.stringify({ variant_id: String(id) }) });
+  $$("[data-undo]").forEach(
     (b) =>
       (b.onclick = async () => {
-        if (
-          !confirm(
-            "Undo this merge? The source products will become visible again and the generated variant will be removed.",
-          )
-        )
-          return;
+        if (!confirm("Undo this option? The old product comes back and this option is removed.")) return;
         try {
-          await api("/api/admin/product-merger/undo", {
-            method: "POST",
-            body: JSON.stringify({ variant_id: b.dataset.undoMerge }),
-          });
-          toast("Merge undone.");
-          state.admin.tab = "merge";
+          await undo(b.dataset.undo);
+          toast("Undone.");
           await refreshStore();
-          openAdmin();
+          renderAdminTab();
         } catch (e) {
           toast(e.message);
         }
       }),
   );
+  $$("[data-undo-all]").forEach(
+    (b) =>
+      (b.onclick = async () => {
+        const g = groups.get(Number(b.dataset.undoAll));
+        if (g.opts.some((v) => v.orders)) return toast("Some options were already ordered, so they can't be undone. Undo the others one by one.");
+        if (!confirm(`Undo everything combined into "${g.name}"?`)) return;
+        try {
+          for (const v of g.opts.filter((v) => !v.is_self)) await undo(v.id);
+          for (const v of g.opts.filter((v) => v.is_self)) await undo(v.id);
+          toast("Undone.");
+          await refreshStore();
+          renderAdminTab();
+        } catch (e) {
+          toast(e.message);
+          renderAdminTab();
+        }
+      }),
+  );
+  drawList();
 }
 async function adminAudit(main) {
   const rows = await api("/api/admin/audit");
