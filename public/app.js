@@ -186,9 +186,88 @@ const PAY_AR = {
   instapay: "إنستاباي",
   vodafone_cash: "فودافون كاش",
   telda: "تيلدا",
+  store_credit: "رصيد المتجر",
+  free: "مجاني",
+};
+const AR_V10 = {
+  "Forgot password?": "نسيت الباسورد؟",
+  "Reset your password": "إعادة تعيين الباسورد",
+  "Enter your account email and we'll send you a reset link.": "اكتب إيميل حسابك وهنبعتلك لينك لإعادة التعيين.",
+  "Send reset link": "ابعت اللينك",
+  "If that email has an account, a reset link is on its way. Check your inbox.": "لو الإيميل ده عليه حساب، لينك إعادة التعيين في طريقه ليك. بص على الإنبوكس.",
+  "Choose a new password": "اختار باسورد جديد",
+  "New password (8+ characters)": "الباسورد الجديد (8 حروف على الأقل)",
+  "Save password": "احفظ الباسورد",
+  "Password changed. Log in with your new password.": "الباسورد اتغير. سجّل دخول بالباسورد الجديد.",
+  "Use store credit": "استخدم رصيد المتجر",
+  "Transfer reference": "رقم مرجع التحويل",
+  "Transfer reference (optional)": "رقم مرجع التحويل (اختياري)",
+  "Reference number from the transfer receipt": "الرقم المكتوب في إيصال التحويل",
+  "Store credit": "رصيد المتجر",
+  "Automatic offer applied.": "العرض اتطبّق تلقائياً.",
+  "Nothing to pay. Your order is confirmed and will be delivered shortly.": "مفيش حاجة تدفعها. طلبك اتأكد وهيتسلّم قريب.",
+  "Proof received": "وصل إثبات الدفع",
+  Paid: "اتدفع",
+  Delivered: "اتسلّم",
+  Cancelled: "اتلغى",
+  "Payment failed": "الدفع فشل",
+  Refunded: "اتسترجع",
+  Support: "الدعم",
+  You: "إنت",
+  "No messages yet. Ask us anything about this order.": "لسه مفيش رسايل. اسألنا في أي حاجة عن الطلب ده.",
+  "Write a message...": "اكتب رسالة...",
+  Send: "ابعت",
+  "Messages with support": "المراسلة مع الدعم",
+  Review: "قيّم",
+  "Leave a review": "اكتب تقييم",
+  Rating: "التقييم",
+  "How was it?": "كان عامل إزاي؟",
+  Photo: "صورة",
+  Cancel: "إلغاء",
+  Submit: "ابعت",
+  "Review submitted for approval.": "التقييم اتبعت للمراجعة.",
+  "Invite friends, earn credit": "ادعو صحابك واكسب رصيد",
+  "Friends get {0}% off their first order. You get {1} store credit when their order is delivered.": "صحابك ياخدوا خصم {0}% على أول طلب. وإنت بتاخد {1} رصيد في المتجر لما طلبهم يتسلّم.",
+  "Copy link": "انسخ اللينك",
+  "Friends who ordered": "صحابك اللي طلبوا",
+  Notifications: "الإشعارات",
+  "Use my code {0} for {1}% off your first order: {2}": "استخدم الكود بتاعي {0} واخد خصم {1}% على أول طلب: {2}",
+  "Customer reviews": "تقييمات العملاء",
+  "Sold out right now": "الكمية خلصت دلوقتي",
+  "Leave your email or WhatsApp number and we'll tell you when it's back.": "سيب إيميلك أو رقم الواتساب وهنعرّفك أول ما يرجع.",
+  "Email or WhatsApp number": "الإيميل أو رقم الواتساب",
+  "Notify me": "عرّفني",
+  "Enter an email or WhatsApp number.": "اكتب إيميل أو رقم واتساب.",
+  "Done! We'll let you know when it's back.": "تمام! هنعرّفك أول ما يرجع.",
+  "You may also like": "ممكن يعجبك كمان",
+  "Recently viewed": "اللي شفته مؤخراً",
+  "Verified customer": "عميل موثّق",
+  CUSTOMERS: "العملاء",
+  "What customers say": "العملاء بيقولوا إيه",
+  "Install app": "ثبّت التطبيق",
+};
+const ERR_AR_V10 = {
+  "This code is only valid on your first order.": "الكود ده شغال على أول طلب بس.",
+  "You can't use your own referral code.": "مينفعش تستخدم كود الدعوة بتاعك.",
+  "Your store credit balance changed. Review the total and try again.": "رصيدك اتغيّر. راجع الإجمالي وجرّب تاني.",
+  "This order doesn't need a payment proof.": "الطلب ده مش محتاج إثبات دفع.",
+  "This reset link is invalid or has expired. Request a new one.": "لينك إعادة التعيين غلط أو منتهي. اطلب لينك جديد.",
+  "New password must be at least 8 characters.": "الباسورد الجديد لازم يكون 8 حروف على الأقل.",
+  "Password reset by email isn't set up yet. Contact support.": "إعادة التعيين بالإيميل مش متفعّلة لسه. كلّم الدعم.",
+  "Write a message first.": "اكتب رسالة الأول.",
+  "Order verification failed.": "فشل التحقق من الطلب.",
+  "Upload a JPG, PNG or WEBP photo.": "ارفع صورة JPG أو PNG أو WEBP.",
+  "Photo must be 5 MB or smaller.": "الصورة لازم تكون 5 ميجا أو أقل.",
+  "You can only review products you purchased and paid for.": "تقدر تقيّم المنتجات اللي اشتريتها ودفعت تمنها بس.",
+  "You already reviewed this purchase.": "إنت قيّمت الشراء ده قبل كده.",
+  "A verified order is required.": "لازم يكون عندك طلب موثّق.",
+  "Enter an email or WhatsApp number.": "اكتب إيميل أو رقم واتساب.",
+  "Upload a JPG, PNG, WEBP, or GIF image.": "ارفع صورة JPG أو PNG أو WEBP أو GIF.",
 };
 state.lang = (() => {
   try {
+    const q = new URLSearchParams(location.search).get("lang");
+    if (q === "en" || q === "ar") localStorage.setItem("kardivo_lang", q);
     return localStorage.getItem("kardivo_lang") === "en" ? "en" : "ar";
   } catch {
     return "ar";
@@ -273,12 +352,19 @@ function applyLang() {
   else {
     renderCategories();
     renderProducts();
+    renderTestimonials();
   }
 }
 function setLang(l) {
   state.lang = l === "en" ? "en" : "ar";
   try {
     localStorage.setItem("kardivo_lang", state.lang);
+  } catch {}
+  try {
+    const u = new URL(location.href);
+    if (state.lang === "en") u.searchParams.set("lang", "en");
+    else u.searchParams.delete("lang");
+    history.replaceState({}, "", u.pathname + u.search + u.hash);
   } catch {}
   applyLang();
 }
@@ -381,8 +467,8 @@ function toast(message) {
 async function api(path, options = {}) {
   const res = await fetch(path, {
     credentials: "same-origin",
-    headers: { "content-type": "application/json", ...(options.headers || {}) },
     ...options,
+    headers: { "content-type": "application/json", ...(options.headers || {}) },
   });
   let body = {};
   try {
@@ -395,6 +481,10 @@ async function api(path, options = {}) {
 async function boot() {
   homeHTML = $("main").innerHTML;
   $("#year").textContent = new Date().getFullYear();
+  const qs = new URLSearchParams(location.search);
+  try {
+    if (qs.get("ref")) localStorage.setItem("kardivo_ref", qs.get("ref").toUpperCase().slice(0, 20));
+  } catch {}
   try {
     const [products, categories, settings, me] = await Promise.all([
       api("/api/products"),
@@ -414,15 +504,17 @@ async function boot() {
     await route();
     state.ready = true;
     if (location.hash === "#account") openAccount();
-    if (
-      state.user?.role === "admin" &&
-      new URLSearchParams(location.search).has("admin_order")
-    ) {
-      const oid = Number(
-        new URLSearchParams(location.search).get("admin_order"),
-      );
-      await openAdmin();
-      if (oid) orderForm(oid);
+    if (qs.get("reset")) {
+      openReset(qs.get("reset"));
+      history.replaceState({}, "", location.pathname + location.hash);
+    } else if (qs.get("track")) openTrack(qs.get("track"));
+    if (state.user?.role === "admin") {
+      const oid = Number(qs.get("admin_order"));
+      if (oid || qs.get("admin_tab")) {
+        if (qs.get("admin_tab")) state.admin.tab = qs.get("admin_tab");
+        await openAdmin();
+        if (oid) orderForm(oid);
+      }
     }
   } catch (e) {
     console.error(e);
@@ -574,7 +666,6 @@ async function openProductPage(slug) {
         p.delivery_type === "code" &&
         (variants.length ? totalStock <= 0 : Number(p.stock) <= 0);
     document.title = `${name} | ${sn}`;
-    try { const viewed=JSON.parse(localStorage.getItem("kardivo_recently_viewed")||"[]").filter(x=>x.slug!==p.slug); viewed.unshift({id:p.id,slug:p.slug,name:p.name,name_ar:p.name_ar||"",image_url:p.image_url||"",price:p.price}); localStorage.setItem("kardivo_recently_viewed",JSON.stringify(viewed.slice(0,6))); } catch {}
     const first = variants[0],
       price = variants.length ? Number(first.price) : Number(p.price),
       old = variants.length
@@ -595,10 +686,13 @@ async function openProductPage(slug) {
       .map((x) => `<span>${escapeHTML(x)}</span>`)
       .join(
         "",
-      )}</div>${variants.length ? `<div class="field" style="margin:18px 0"><label>${t("Choose option")}</label><select id="productVariant">${variants.map((v, i) => `<option value="${v.id}" ${i === 0 ? "selected" : ""} data-price="${v.price}" data-old="${v.old_price || 0}" data-stock="${v.stock || 0}">${escapeHTML(v.name)}${p.delivery_type === "code" && state.settings.show_stock !== false ? ` — ${v.stock || 0} ${t("left")}` : ""}</option>`).join("")}</select></div>` : ""}<div class="product-description">${desc ? escapeHTML(desc).replace(/\n/g, "<br>") : t("No description has been added for this product yet.")}</div>${(p.reviews || []).length ? `<div class="admin-panel" style="margin-top:20px"><h3>Customer reviews</h3>${p.reviews.map((r) => `<div class="line" style="padding:10px 0"><span><b>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</b><br><small>${escapeHTML(r.user_name || "Verified customer")}</small></span><span style="max-width:55%">${escapeHTML(r.body || "")}</span></div>`).join("")}</div>` : ""}<div class="product-detail-actions"><button class="btn primary" id="productAdd" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Add to cart") : t("Add to cart")}</button><a class="btn ghost" href="/" data-home>${t("Back to store")}</a></div>${soldOut ? `<form id="stockWatchForm" class="notice" style="margin-top:14px"><b>${t("Get notified when back in stock")}</b><div class="field"><input type="email" id="stockWatchEmail" placeholder="${t("Email address")}" required value="${escapeHTML(state.user?.email||"")}"></div><button class="btn ghost">${t("Notify me")}</button></form>` : ""}</div></div><section class="container" style="margin:28px auto"><h3>${t("You may also like")}</h3><div class="product-grid">${state.products.filter(x=>x.id!==p.id && (x.category_id===p.category_id || x.platform===p.platform)).slice(0,4).map(x=>`<article class="product-card"><a class="product-card-anchor" href="/${encodeURIComponent(x.slug)}"><div class="product-image">${x.image_url?`<img src="${escapeHTML(x.image_url)}" alt="${escapeHTML(pName(x))}" loading="lazy">`:`<div class="no-image">K</div>`}</div><div class="product-body"><div class="product-name">${escapeHTML(pName(x))}</div></div></a><div class="price-row"><span class="price">${money(x.price)}</span><a class="mini" href="/${encodeURIComponent(x.slug)}">${t("View")}</a></div></article>`).join("")}</div></section></section>`;
+      )}</div>${variants.length ? `<div class="field" style="margin:18px 0"><label>${t("Choose option")}</label><select id="productVariant">${variants.map((v, i) => `<option value="${v.id}" ${i === 0 ? "selected" : ""} data-price="${v.price}" data-old="${v.old_price || 0}" data-stock="${v.stock || 0}">${escapeHTML(v.name)}${p.delivery_type === "code" && state.settings.show_stock !== false ? ` — ${v.stock || 0} ${t("left")}` : ""}</option>`).join("")}</select></div>` : ""}<div class="product-description">${desc ? escapeHTML(desc).replace(/\n/g, "<br>") : t("No description has been added for this product yet.")}</div>${(p.reviews || []).length ? `<div class="admin-panel" style="margin-top:20px"><h3>${t("Customer reviews")}</h3>${p.reviews.map((r) => `<div class="line" style="padding:10px 0"><span><b>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</b><br><small>${escapeHTML(r.user_name || "Verified customer")}</small></span><span style="max-width:55%">${escapeHTML(r.body || "")}${r.photo ? `<br><a href="${escapeHTML(r.photo)}" target="_blank" rel="noreferrer"><img class="review-photo" loading="lazy" src="${escapeHTML(r.photo)}" alt=""></a>` : ""}</span></div>`).join("")}</div>` : ""}<div class="notify-box" id="notifyBox" hidden><b>${t("Sold out right now")}</b><br><small>${t("Leave your email or WhatsApp number and we'll tell you when it's back.")}</small><div style="display:flex;gap:8px;margin-top:8px"><input id="notifyContact" placeholder="${t("Email or WhatsApp number")}" style="flex:1"><button class="btn ghost" id="notifyBtn" type="button">${t("Notify me")}</button></div></div><div class="product-detail-actions"><button class="btn primary" id="productAdd" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Add to cart") : t("Add to cart")}</button><a class="btn ghost" href="/" data-home>${t("Back to store")}</a></div></div></div></section>`;
     const updateVariant = () => {
       const sel = $("#productVariant");
-      if (!sel) return;
+      if (!sel) {
+        $("#notifyBox").hidden = !soldOut;
+        return;
+      }
       const o = sel.selectedOptions[0],
         pr = Number(o.dataset.price),
         ol = Number(o.dataset.old);
@@ -606,11 +700,30 @@ async function openProductPage(slug) {
         `${money(pr)} ${ol > pr ? `<del>${money(ol)}</del>` : ""}`;
       const st = p.delivery_type === "code" && Number(o.dataset.stock) <= 0;
       $("#productAdd").disabled = st;
+      $("#notifyBox").hidden = !st;
       $("#productAdd").textContent = st ? t("Sold out") : t("Add to cart");
     };
     $("#productVariant")?.addEventListener("change", updateVariant);
     updateVariant();
-    $("#stockWatchForm")?.addEventListener("submit", async e => { e.preventDefault(); try { await api("/api/stock-watch", {method:"POST",body:JSON.stringify({product_id:p.id,email:$("#stockWatchEmail").value})}); toast(t("We'll notify you when stock returns.")); $("#stockWatchForm").reset(); } catch(err) { toast(err.message); } });
+    $("#notifyBtn").onclick = async () => {
+      const contact = $("#notifyContact").value.trim();
+      if (contact.length < 5) return toast(t("Enter an email or WhatsApp number."));
+      try {
+        await api("/api/stock-subscribe", {
+          method: "POST",
+          body: JSON.stringify({
+            product_id: p.id,
+            variant_id: $("#productVariant")?.value ? Number($("#productVariant").value) : null,
+            contact,
+            lang: state.lang,
+          }),
+        });
+        $("#notifyBox").innerHTML = `<div class="success-text">${t("Done! We'll let you know when it's back.")}</div>`;
+      } catch (e) {
+        toast(e.message);
+      }
+    };
+    renderRecommendations(p);
     $("#productAdd").onclick = () =>
       addToCart(
         p.id,
@@ -620,6 +733,68 @@ async function openProductPage(slug) {
     document.title = t("Product not found");
     main.innerHTML = `<section class="product-page container"><div class="empty product-not-found"><span class="eyebrow">404</span><h1>${t("Product not found.")}</h1><p>${t("This product may have been removed or the link is outdated.")}</p><a class="btn primary" href="/" data-home>${t("Back to store")}</a></div></section>`;
   }
+}
+function recentList() {
+  try {
+    return JSON.parse(localStorage.getItem("kardivo_recent") || "[]");
+  } catch {
+    return [];
+  }
+}
+function miniCard(p) {
+  const vs = (p.variants || []).filter((v) => Number(v.active) !== 0),
+    price = vs.length ? Math.min(...vs.map((v) => Number(v.price))) : Number(p.price);
+  return `<a class="mini-card" href="/${encodeURIComponent(p.slug)}"><div class="mini-img">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span>K</span>`}</div><b>${escapeHTML(pName(p))}</b><small>${vs.length ? t("From") + " " : ""}${money(price)}</small></a>`;
+}
+// "Recently viewed" comes from this browser; "You may also like" scores category and platform matches among in-stock products.
+function renderRecommendations(cur) {
+  const recent = recentList().filter((x) => x !== cur.slug);
+  try {
+    localStorage.setItem("kardivo_recent", JSON.stringify([cur.slug, ...recent].slice(0, 12)));
+  } catch {}
+  const bySlug = new Map(state.products.map((p) => [p.slug, p])),
+    recentP = recent.map((x) => bySlug.get(x)).filter(Boolean).slice(0, 4),
+    taken = new Set([cur.id, ...recentP.map((p) => p.id)]),
+    inStock = (p) =>
+      p.delivery_type !== "code" ||
+      ((p.variants || []).length ? p.variants.some((v) => Number(v.stock) > 0) : Number(p.stock) > 0),
+    like = state.products
+      .filter((p) => !taken.has(p.id) && inStock(p))
+      .map((p) => ({
+        p,
+        score:
+          (cur.category_id && String(p.category_id) === String(cur.category_id) ? 2 : 0) +
+          (cur.platform && p.platform === cur.platform ? 1 : 0) +
+          (Number(p.featured) ? 0.5 : 0),
+      }))
+      .filter((x) => x.score >= 1)
+      .sort((a, b) => b.score - a.score || b.p.id - a.p.id)
+      .slice(0, 4)
+      .map((x) => x.p),
+    row = (title, list) =>
+      list.length ? `<div class="rec-row"><h3>${title}</h3><div class="rec-grid">${list.map(miniCard).join("")}</div></div>` : "";
+  const page = $(".product-page");
+  if (page) page.insertAdjacentHTML("beforeend", row(t("You may also like"), like) + row(t("Recently viewed"), recentP));
+}
+async function renderTestimonials() {
+  const sec = $("#testimonials");
+  if (!sec) return;
+  try {
+    if (!state.testi) state.testi = state.settings.testimonials_enabled === false ? [] : await api("/api/testimonials");
+  } catch {
+    state.testi = [];
+  }
+  if (!state.testi.length) {
+    sec.hidden = true;
+    return;
+  }
+  sec.hidden = false;
+  $("#testiGrid").innerHTML = state.testi
+    .map(
+      (r) =>
+        `<figure class="testi"><div class="stars">${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</div>${r.body ? `<blockquote>${escapeHTML(r.body)}</blockquote>` : ""}${r.photo ? `<img class="review-photo" loading="lazy" src="${escapeHTML(r.photo)}" alt="">` : ""}<figcaption>${escapeHTML(r.user_name || t("Verified customer"))} · <a href="/${encodeURIComponent(r.slug)}">${escapeHTML(state.lang === "ar" && r.product_name_ar ? r.product_name_ar : r.product_name)}</a></figcaption></figure>`,
+    )
+    .join("");
 }
 function addToCart(id, variant_id = null) {
   const p = state.products.find((x) => x.id === id);
@@ -760,8 +935,7 @@ function openCheckout() {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       event: "checkout_started",
-      session_key:
-        checkoutSession(),
+      session_key: checkoutSession(),
     }),
   }).catch(() => {});
   if (state.settings.orders_open === false) {
@@ -772,9 +946,14 @@ function openCheckout() {
     const v = i.p.variants?.find((x) => Number(x.id) === Number(i.variant_id));
     return a + Number(v?.price ?? i.p.price) * i.quantity;
   }, 0);
+  let savedRef = "";
+  try {
+    savedRef = localStorage.getItem("kardivo_ref") || "";
+  } catch {}
+  state.co = { total: subtotal };
   openModal(
     t("Checkout"),
-    `<div class="notice">${t("You can check out as a guest. To keep order history, log in or create an account before placing the order.")}</div><div class="form-grid" style="margin-top:14px"><div class="field"><label>${t("Name")}</label><input id="guestName" placeholder="${t("Your name")}"></div><div class="field"><label>${t("Contact (WhatsApp or phone)")}</label><input id="guestContact" placeholder="${t("WhatsApp or phone")}"></div></div><div class="field"><label>${t("Discount code")}</label><div style="display:flex;gap:8px"><input id="discountCode" placeholder="${t("Optional code")}" style="flex:1"><button type="button" class="btn ghost" id="applyDiscount">${t("Apply")}</button></div></div><div class="field"><label>${t("Referral code")} <small>(${t("optional")})</small></label><input id="referralCode" placeholder="${t("Friend's referral code")}"></div><div class="field"><label>${t("Payment proof")} <small>(${t("optional")})</small></label><input id="checkoutProof" type="file" accept="image/*"></div><div class="checkout-summary"><div class="line"><span>${t("Subtotal")}</span><span id="coSubtotal">${money(subtotal)}</span></div><div class="line"><span>${t("Discount")}</span><span id="coDiscount">${money(0)}</span></div><div class="line total"><span>${t("Total")}</span><span id="coTotal">${money(subtotal)}</span></div></div><div style="margin-top:18px"><b>${t("Payment method")}</b><div class="payment-grid" id="payments"></div></div><div class="modal-actions"><button class="btn ghost" id="backCart">${t("Back")}</button><button class="btn primary" id="placeOrder">${t("Place order")}</button></div>`,
+    `<div class="notice">${t("You can check out as a guest. To keep order history, log in or create an account before placing the order.")}</div><div class="form-grid" style="margin-top:14px"><div class="field"><label>${t("Name")}</label><input id="guestName" placeholder="${t("Your name")}"></div><div class="field"><label>${t("Contact (WhatsApp or phone)")}</label><input id="guestContact" placeholder="${t("WhatsApp or phone")}"></div></div><div class="field"><label>${t("Discount code")}</label><div style="display:flex;gap:8px"><input id="discountCode" value="${escapeHTML(savedRef)}" placeholder="${t("Optional code")}" style="flex:1"><button type="button" class="btn ghost" id="applyDiscount">${t("Apply")}</button></div><small id="coNote" class="success-text"></small></div><label class="switch-row" id="creditRow" hidden><span>${t("Use store credit")} <b id="creditBal"></b></span><input class="switch" id="useCredit" type="checkbox"></label><div class="form-grid"><div class="field"><label>${t("Transfer reference")} <small>(${t("optional")})</small></label><input id="payRef" placeholder="${t("Reference number from the transfer receipt")}"></div><div class="field"><label>${t("Payment proof")} <small>(${t("optional")})</small></label><input id="checkoutProof" type="file" accept="image/*"></div></div><div class="checkout-summary"><div class="line"><span>${t("Subtotal")}</span><span id="coSubtotal">${money(subtotal)}</span></div><div class="line"><span>${t("Discount")}</span><span id="coDiscount">${money(0)}</span></div><div class="line" id="coCreditLine" hidden><span>${t("Store credit")}</span><span id="coCredit">${money(0)}</span></div><div class="line total"><span>${t("Total")}</span><span id="coTotal">${money(subtotal)}</span></div></div><div id="payWrap" style="margin-top:18px"><b>${t("Payment method")}</b><div class="payment-grid" id="payments"></div></div><div class="modal-actions"><button class="btn ghost" id="backCart">${t("Back")}</button><button class="btn primary" id="placeOrder">${t("Place order")}</button></div>`,
   );
   $("#backCart").onclick = openCart;
   renderPaymentOptions();
@@ -783,31 +962,61 @@ function openCheckout() {
     $("#guestContact").value = state.user.email;
   }
   $("#applyDiscount").onclick = async () => {
-    try {
-      const r = await api("/api/discount/check", {
-        method: "POST",
-        body: JSON.stringify({
-          items: state.cart,
-          code: $("#discountCode").value,
-        }),
-      });
-      $("#coSubtotal").textContent = money(r.subtotal);
-      $("#coDiscount").textContent = "− " + money(r.discount);
-      $("#coTotal").textContent = money(r.total);
-      toast(r.discount ? t("Discount applied.") : t("Enter a code to apply."));
-    } catch (e) {
-      toast(e.message);
+    if (!$("#discountCode").value.trim()) {
+      toast(t("Enter a code to apply."));
+      return;
     }
+    await refreshTotals(true);
   };
+  $("#useCredit").onchange = () => refreshTotals(false);
+  $("#guestContact").onchange = () => refreshTotals(false);
+  refreshTotals(false);
 }
-async function uploadPaymentProof(orderId, file, contact = "", reference = "") {
+// Asks the server what the cart costs: coupon, automatic bundle offers, referral codes and store credit are all decided there.
+async function refreshTotals(announce, useCode = true) {
+  const code = useCode ? $("#discountCode")?.value || "" : "";
+  if (!$("#coTotal")) return;
+  try {
+    const r = await api("/api/discount/check", {
+      method: "POST",
+      body: JSON.stringify({
+        items: state.cart,
+        code,
+        contact: ($("#guestContact")?.value || "").trim(),
+        use_credit: !!$("#useCredit")?.checked,
+      }),
+    });
+    state.co = { total: r.total };
+    $("#coSubtotal").textContent = money(r.subtotal);
+    $("#coDiscount").textContent = r.discount ? "− " + money(r.discount) : money(0);
+    $("#coCredit").textContent = "− " + money(r.credit);
+    $("#coCreditLine").hidden = !(r.credit > 0);
+    $("#coTotal").textContent = money(r.total);
+    $("#payWrap").hidden = r.total <= 0;
+    const row = $("#creditRow");
+    row.hidden = !(state.user && r.credit_available > 0);
+    $("#creditBal").textContent = `(${money(r.credit_available)})`;
+    $("#coNote").textContent = r.discount
+      ? r.discount_source === "auto"
+        ? `${t("Automatic offer applied.")} (${r.discount_code})`
+        : t("Discount applied.")
+      : "";
+    if (announce) toast(r.discount ? t("Discount applied.") : t("Enter a code to apply."));
+  } catch (e) {
+    if (announce) toast(e.message);
+    else if (code) $("#coNote").textContent = "";
+    if (code && useCode) await refreshTotals(false, false);
+  }
+}
+async function uploadPaymentProof(orderId, file, contact = "", ref = "") {
   if (!file) return;
   const fd = new FormData();
   fd.append("file", file);
+  if (ref) fd.append("ref", ref);
   const res = await fetch(`/api/orders/${orderId}/payment-proof`, {
     method: "POST",
     credentials: "same-origin",
-    headers: { ...(contact ? { "X-Order-Contact": contact } : {}), ...(reference ? { "X-Payment-Reference": reference } : {}) },
+    headers: contact ? { "X-Order-Contact": contact } : {},
     body: fd,
   });
   let body = {};
@@ -847,8 +1056,10 @@ async function placeOrder() {
     })),
     guestName = $("#guestName").value.trim(),
     guestContact = $("#guestContact").value.trim(),
-    proof = $("#checkoutProof")?.files?.[0];
-  if (!state.selectedPayment) {
+    proof = $("#checkoutProof")?.files?.[0],
+    payRef = $("#payRef")?.value.trim() || "",
+    free = state.co && state.co.total <= 0;
+  if (!free && !state.selectedPayment) {
     toast(t("Choose a payment method."));
     return;
   }
@@ -866,18 +1077,18 @@ async function placeOrder() {
         guest_name: guestName,
         guest_contact: guestContact,
         discount_code: $("#discountCode").value,
-        referral_code: $("#referralCode")?.value || "",
-        payment_method: state.selectedPayment,
+        use_credit: !!$("#useCredit")?.checked,
+        payment_ref: payRef,
+        payment_method: free ? "" : state.selectedPayment,
       }),
     });
+    try {
+      localStorage.removeItem("kardivo_ref");
+    } catch {}
     let proofMsg = "";
-    if (proof)
+    if (proof && !r.paid)
       try {
-        await uploadPaymentProof(
-          r.order_id,
-          proof,
-          state.user ? "" : guestContact,
-        );
+        await uploadPaymentProof(r.order_id, proof, state.user ? "" : guestContact, payRef);
         proofMsg = t("Proof uploaded.");
       } catch (e) {
         proofMsg = e.message;
@@ -896,7 +1107,11 @@ async function placeOrder() {
     refreshStore().catch(() => {});
     openModal(
       t("Order placed"),
-      `<div class="notice success-text">${t("Order <b>{0}</b> created. Save this number.", escapeHTML(r.order_number))}</div><div class="checkout-summary" style="margin-top:14px"><div class="line"><span>${t("Total to pay")}</span><b>${money(r.total)}</b></div><div class="line"><span>${t("Payment")}</span><b>${escapeHTML(payName(r.payment_method))}</b></div><div class="destination"><b>${t("Send payment to")}</b><code>${escapeHTML(r.destination)}</code></div><p style="color:#aaa1b1;font-size:12px">${escapeHTML(r.support_text)}</p>${proofMsg ? `<p style="color:#aaa1b1;font-size:12px">${escapeHTML(proofMsg)}</p>` : ""}<p style="color:#aaa1b1;font-size:12px">${t('You can check this order any time with "Track order" using the order number and the contact you entered.')}</p></div><div class="modal-actions">${r.whatsapp ? `<a class="btn primary" href="${escapeHTML(r.whatsapp)}" target="_blank" rel="noreferrer">${t("Open WhatsApp Support")} ${arrow()}</a>` : ""}<button class="btn ghost" id="doneOrder">${t("Done")}</button></div>`,
+      `<div class="notice success-text">${t("Order <b>{0}</b> created. Save this number.", escapeHTML(r.order_number))}</div><div class="checkout-summary" style="margin-top:14px"><div class="line"><span>${t("Total to pay")}</span><b>${money(r.total)}</b></div>${r.credit_used > 0 ? `<div class="line"><span>${t("Store credit")}</span><b>− ${money(r.credit_used)}</b></div>` : ""}${
+        r.paid
+          ? `<div class="notice success-text" style="margin-top:10px">${t("Nothing to pay. Your order is confirmed and will be delivered shortly.")}</div>`
+          : `<div class="line"><span>${t("Payment")}</span><b>${escapeHTML(payName(r.payment_method))}</b></div><div class="destination"><b>${t("Send payment to")}</b><code>${escapeHTML(r.destination)}</code></div>`
+      }<p style="color:#aaa1b1;font-size:12px">${escapeHTML(r.support_text)}</p>${proofMsg ? `<p style="color:#aaa1b1;font-size:12px">${escapeHTML(proofMsg)}</p>` : ""}<p style="color:#aaa1b1;font-size:12px">${t('You can check this order any time with "Track order" using the order number and the contact you entered.')}</p></div><div class="modal-actions">${r.whatsapp ? `<a class="btn primary" href="${escapeHTML(r.whatsapp)}" target="_blank" rel="noreferrer">${t("Open WhatsApp Support")} ${arrow()}</a>` : ""}<button class="btn ghost" id="doneOrder">${t("Done")}</button></div>`,
     );
     $("#doneOrder").onclick = closeModal;
   } catch (e) {
@@ -923,9 +1138,9 @@ function openAuth() {
 }
 function showLogin() {
   $("#authForm").innerHTML =
-    `<form id="loginForm"><div class="field"><label>${t("Email")}</label><input id="email" type="email" required></div><div class="field"><label>${t("Password")}</label><input id="password" type="password" required></div><button class="btn primary" type="submit">${t("Log in")}</button><button type="button" class="mini" id="forgotPasswordBtn">${t("Forgot password?")}</button></form>`;
+    `<form id="loginForm"><div class="field"><label>${t("Email")}</label><input id="email" type="email" required></div><div class="field"><label>${t("Password")}</label><input id="password" type="password" required></div><button class="btn primary" type="submit">${t("Log in")}</button>${state.settings.email_ready ? ` <button class="mini" type="button" id="forgotLink" style="margin-inline-start:10px">${t("Forgot password?")}</button>` : ""}</form>`;
   authTabs("loginTab");
-  $("#forgotPasswordBtn").onclick = async () => { const email=$("#email").value.trim(); if(!email){toast(t("Enter your email first."));return;} try { const r=await api("/api/auth/password-reset/request",{method:"POST",body:JSON.stringify({email})}); toast(r.message||t("If the account exists, a reset link will be sent.")); } catch(err){toast(err.message);} };
+  $("#forgotLink")?.addEventListener("click", openForgot);
   $("#loginForm").onsubmit = async (e) => {
     e.preventDefault();
     try {
@@ -939,6 +1154,44 @@ function showLogin() {
       state.user = r.user;
       toast(t("Welcome back, {0}.", r.user.name));
       closeModal();
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+function openForgot() {
+  openModal(
+    t("Reset your password"),
+    `<form id="forgotForm"><p style="color:#aaa1b1;font-size:13px">${t("Enter your account email and we'll send you a reset link.")}</p><div class="field"><label>${t("Email")}</label><input id="fEmail" type="email" required></div><button class="btn primary">${t("Send reset link")}</button></form>`,
+  );
+  $("#forgotForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api("/api/auth/forgot", {
+        method: "POST",
+        body: JSON.stringify({ email: $("#fEmail").value, lang: state.lang }),
+      });
+      $("#forgotForm").innerHTML = `<div class="notice success-text">${t("If that email has an account, a reset link is on its way. Check your inbox.")}</div>`;
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+function openReset(token) {
+  openModal(
+    t("Choose a new password"),
+    `<form id="resetForm"><div class="field"><label>${t("New password (8+ characters)")}</label><input id="rPass" type="password" minlength="8" required></div><button class="btn primary">${t("Save password")}</button></form>`,
+  );
+  $("#resetForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api("/api/auth/reset", {
+        method: "POST",
+        body: JSON.stringify({ token, password: $("#rPass").value }),
+      });
+      toast(t("Password changed. Log in with your new password."));
+      state.user = null;
+      openAuth();
     } catch (err) {
       toast(err.message);
     }
@@ -972,25 +1225,148 @@ function authTabs(active) {
     $("#" + id)?.classList.toggle("active", id === active),
   );
 }
+const TL_LABEL = {
+  placed: "Order placed",
+  proof_received: "Proof received",
+  paid: "Paid",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+  failed: "Payment failed",
+  refunded: "Refunded",
+};
+function fmtTime(s) {
+  if (!s) return "";
+  const d = new Date(String(s).replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(s)) ? "" : "Z"));
+  if (isNaN(d)) return String(s);
+  return d.toLocaleString(state.lang === "ar" && !state.adminOpen ? "ar-EG" : "en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+function timelineHTML(o) {
+  return `<ol class="timeline">${(o.timeline || [])
+    .map(
+      (s) =>
+        `<li class="${s.done ? "done" : ""} ${["cancelled", "failed", "refunded"].includes(s.kind) ? "bad" : ""}"><i></i><b>${t(TL_LABEL[s.kind] || s.kind)}</b><small>${s.at ? escapeHTML(fmtTime(s.at)) : ""}</small></li>`,
+    )
+    .join("")}</ol>`;
+}
+async function loadThread(id, contact) {
+  const box = $("#thread-" + id);
+  if (!box) return;
+  try {
+    const msgs = await api(`/api/orders/${id}/messages`, {
+      headers: contact ? { "X-Order-Contact": contact } : {},
+    });
+    box.innerHTML =
+      (msgs
+        .map(
+          (m) =>
+            `<div class="msg ${m.sender}"><small>${m.sender === "admin" ? t("Support") : t("You")} · ${escapeHTML(fmtTime(m.created_at))}</small><div>${escapeHTML(m.body).replace(/\n/g, "<br>")}</div></div>`,
+        )
+        .join("") || `<div class="empty small">${t("No messages yet. Ask us anything about this order.")}</div>`) +
+      `<form class="thread-form"><textarea maxlength="1000" placeholder="${t("Write a message...")}" required></textarea><button class="mini primary">${t("Send")}</button></form>`;
+    box.querySelector("form").onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api(`/api/orders/${id}/messages`, {
+          method: "POST",
+          headers: contact ? { "X-Order-Contact": contact } : {},
+          body: JSON.stringify({ body: box.querySelector("textarea").value }),
+        });
+        loadThread(id, contact);
+      } catch (err) {
+        toast(err.message);
+      }
+    };
+  } catch (e) {
+    box.innerHTML = `<div class="notice danger-text">${escapeHTML(e.message)}</div>`;
+  }
+}
+function bindOrderExtras(contact) {
+  bindCopy();
+  $$("[data-thread]").forEach(
+    (d) => (d.ontoggle = () => d.open && loadThread(Number(d.dataset.thread), contact)),
+  );
+}
+function orderBlock(o) {
+  const st = (x) => escapeHTML(statusName(x));
+  const proof =
+    !o.payment_proof &&
+    o.payment_status === "awaiting_payment" &&
+    o.fulfillment_status !== "cancelled"
+    ? `<div class="field" style="margin-top:10px"><label>${t("Payment proof")}</label><input id="proof-${o.id}" type="file" accept="image/*"><input id="ref-${o.id}" placeholder="${t("Transfer reference (optional)")}" style="margin-top:6px"><button type="button" class="mini" data-upload-proof="${o.id}" style="margin-top:6px">${t("Upload screenshot")}</button></div>`
+    : "";
+  return `<div class="notice" style="margin-bottom:10px"><div class="line"><b>${escapeHTML(o.order_number)}</b><span>${money(o.total)}</span></div><small>${escapeHTML(o.item_summary || "")}</small><br><small>${t("Payment: {0} · Delivery: {1} · {2}", st(o.payment_status), st(o.fulfillment_status), escapeHTML(fmtTime(o.created_at)))}</small>${timelineHTML(o)}${o.delivery_message ? `<div class="notice success-text" style="margin-top:10px"><b>${t("Delivery message")}</b><br>${escapeHTML(o.delivery_message).replace(/\n/g, "<br>")}</div>` : ""}${(o.codes || []).length ? `<div style="margin-top:10px"><b>${t("Your codes")}</b>${o.codes.map((c) => `<div class="line"><span>${escapeHTML(c.product_name)}${c.variant_name ? ` — ${escapeHTML(c.variant_name)}` : ""}<br><code>${escapeHTML(c.code)}</code></span><span><button class="mini" data-copy="${escapeHTML(c.code)}">${t("Copy")}</button>${state.user ? ` <button class="mini" data-review-product="${c.product_id}" data-review-order="${o.id}">${t("Review")}</button>` : ""}</span></div>`).join("")}</div>` : ""}${proof}<details class="thread-box" data-thread="${o.id}"><summary>${t("Messages with support")}</summary><div class="thread-body" id="thread-${o.id}"></div></details></div>`;
+}
+function openTrack(prefill = "") {
+  openModal(
+    t("Track your order"),
+    `<form id="trackForm"><div class="field"><label>${t("Order number")}</label><input id="tNum" required placeholder="KDV-2026-XXXXXXXX" value="${escapeHTML(prefill)}"></div><div class="field"><label>${t("Contact you used (WhatsApp / phone / account email)")}</label><input id="tContact" required></div><button class="btn primary">${t("Find order")}</button></form><div id="trackResult" style="margin-top:16px"></div>`,
+  );
+  $("#trackForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const o = await api("/api/orders/lookup", {
+        method: "POST",
+        body: JSON.stringify({
+          order_number: $("#tNum").value,
+          contact: $("#tContact").value,
+        }),
+      });
+      $("#trackResult").innerHTML = orderBlock(o);
+      bindOrderExtras($("#tContact").value);
+      $$("[data-upload-proof]").forEach(
+        (b) =>
+          (b.onclick = async () => {
+            const f = $(`#proof-${b.dataset.uploadProof}`)?.files?.[0];
+            if (!f) {
+              toast(t("Choose a file first."));
+              return;
+            }
+            try {
+              await uploadPaymentProof(
+                Number(b.dataset.uploadProof),
+                f,
+                $("#tContact").value,
+                $(`#ref-${b.dataset.uploadProof}`)?.value.trim() || "",
+              );
+              toast(t("Proof uploaded."));
+              $("#trackForm").requestSubmit();
+            } catch (err) {
+              toast(err.message);
+            }
+          }),
+      );
+    } catch (err) {
+      $("#trackResult").innerHTML =
+        `<div class="notice danger-text">${escapeHTML(err.message)}</div>`;
+    }
+  };
+}
 function reviewForm(productId, orderId) {
   openModal(
-    "Leave a review",
-    `<form id="reviewForm"><div class="field"><label>Rating</label><select id="reviewRating"><option value="5">★★★★★</option><option value="4">★★★★☆</option><option value="3">★★★☆☆</option><option value="2">★★☆☆☆</option><option value="1">★☆☆☆☆</option></select></div><div class="field"><label>Review</label><textarea id="reviewBody" maxlength="1000" placeholder="How was it?"></textarea></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelReview">Cancel</button><button class="btn primary">Submit</button></div></form>`,
+    t("Leave a review"),
+    `<form id="reviewForm"><div class="field"><label>${t("Rating")}</label><select id="reviewRating"><option value="5">★★★★★</option><option value="4">★★★★☆</option><option value="3">★★★☆☆</option><option value="2">★★☆☆☆</option><option value="1">★☆☆☆☆</option></select></div><div class="field"><label>${t("Review")}</label><textarea id="reviewBody" maxlength="1000" placeholder="${t("How was it?")}"></textarea></div><div class="field"><label>${t("Photo")} <small>(${t("optional")})</small></label><input id="reviewPhoto" type="file" accept="image/jpeg,image/png,image/webp"></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelReview">${t("Cancel")}</button><button class="btn primary">${t("Submit")}</button></div></form>`,
   );
   $("#cancelReview").onclick = closeModal;
   $("#reviewForm").onsubmit = async (e) => {
     e.preventDefault();
     try {
-      await api("/api/reviews", {
-        method: "POST",
-        body: JSON.stringify({
-          product_id: productId,
-          order_id: orderId,
-          rating: $("#reviewRating").value,
-          body: $("#reviewBody").value,
-        }),
-      });
-      toast("Review submitted for approval.");
+      const fd = new FormData();
+      fd.append("product_id", productId);
+      fd.append("order_id", orderId);
+      fd.append("rating", $("#reviewRating").value);
+      fd.append("body", $("#reviewBody").value);
+      const ph = $("#reviewPhoto").files[0];
+      if (ph) fd.append("photo", ph);
+      const res = await fetch("/api/reviews", { method: "POST", credentials: "same-origin", body: fd });
+      let body = {};
+      try {
+        body = await res.json();
+      } catch {}
+      if (!res.ok) throw new Error(tr(body.error || `Request failed (${res.status})`));
+      toast(t("Review submitted for approval."));
       closeModal();
     } catch (err) {
       toast(err.message);
@@ -999,21 +1375,32 @@ function reviewForm(productId, orderId) {
 }
 async function openUserAccount() {
   let orders = [],
-    notifications = [], referral = null;
+    notifications = [],
+    ref = null;
   try {
-    [orders, notifications] = await Promise.all([
+    [orders, notifications, ref] = await Promise.all([
       api("/api/orders"),
       api("/api/notifications"),
+      api("/api/me/referral").catch(() => null),
     ]);
-    if (state.user.role !== "admin") referral = await api("/api/referrals").catch(()=>null);
   } catch (e) {
     toast(e.message);
   }
+  const link = ref?.code ? `${location.origin}/?ref=${ref.code}` : "";
+  const waShare = ref?.code
+    ? `https://wa.me/?text=${encodeURIComponent(t("Use my code {0} for {1}% off your first order: {2}", ref.code, ref.discount_percent, link))}`
+    : "";
   openModal(
     t("Hi, {0}", escapeHTML(state.user.name)),
-    `<div class="notice"><b>${escapeHTML(state.user.email)}</b><br>${state.user.role === "admin" ? t("Administrator account") : t("Customer account")}</div>${referral ? `<div class="notice" style="margin-top:10px"><b>${t("Your referral code")}: <code>${escapeHTML(referral.code)}</code></b><button class="mini" data-copy="${escapeHTML(referral.code)}">${t("Copy")}</button><br><small>${t("Referral credit earned")}: ${money(referral.balance)}</small></div>` : ""}${
+    `<div class="notice"><b>${escapeHTML(state.user.email)}</b><br>${state.user.role === "admin" ? t("Administrator account") : t("Customer account")}</div>${
+      ref?.enabled && ref.code
+        ? `<div class="notice referral-box" style="margin-top:12px"><b>${t("Invite friends, earn credit")}</b><br><small>${t("Friends get {0}% off their first order. You get {1} store credit when their order is delivered.", ref.discount_percent, money(ref.reward))}</small><div class="line"><code>${escapeHTML(ref.code)}</code><span><button class="mini" data-copy="${escapeHTML(ref.code)}">${t("Copy")}</button> <button class="mini" data-copy="${escapeHTML(link)}">${t("Copy link")}</button> <a class="mini" href="${escapeHTML(waShare)}" target="_blank" rel="noreferrer">WhatsApp</a></span></div><div>${t("Store credit")}: <b>${money(ref.credit)}</b> · ${t("Friends who ordered")}: <b>${ref.invited}</b></div></div>`
+        : ref && ref.credit > 0
+          ? `<div class="notice" style="margin-top:12px">${t("Store credit")}: <b>${money(ref.credit)}</b></div>`
+          : ""
+    }${
       notifications.length
-        ? `<h3 style="margin:18px 0 8px">Notifications</h3>${notifications
+        ? `<h3 style="margin:18px 0 8px">${t("Notifications")}</h3>${notifications
             .slice(0, 8)
             .map(
               (n) =>
@@ -1031,7 +1418,21 @@ async function openUserAccount() {
     toast(t("Logged out."));
   };
   $("#adminBtn")?.addEventListener("click", openAdmin);
-  bindCopy();
+  bindOrderExtras("");
+  $$("[data-upload-proof]").forEach(
+    (b) =>
+      (b.onclick = async () => {
+        const f = $(`#proof-${b.dataset.uploadProof}`)?.files?.[0];
+        if (!f) return toast(t("Choose a file first."));
+        try {
+          await uploadPaymentProof(Number(b.dataset.uploadProof), f, "", $(`#ref-${b.dataset.uploadProof}`)?.value.trim() || "");
+          toast(t("Proof uploaded."));
+          openUserAccount();
+        } catch (err) {
+          toast(err.message);
+        }
+      }),
+  );
   $$("[data-review-product]").forEach(
     (b) =>
       (b.onclick = () =>
@@ -1041,30 +1442,30 @@ async function openUserAccount() {
         )),
   );
 }
+const ADMIN_TABS = [
+  ["dashboard", "Dashboard"],
+  ["queue", "Needs review"],
+  ["inbox", "Messages"],
+  ["orders", "Orders"],
+  ["products", "Products"],
+  ["merge", "Combine products"],
+  ["categories", "Categories"],
+  ["inventory", "Digital codes"],
+  ["waitlist", "Back-in-stock"],
+  ["customers", "Customers"],
+  ["discounts", "Discounts"],
+  ["reviews", "Reviews"],
+  ["refunds", "Refunds & disputes"],
+  ["audit", "Audit log"],
+  ["settings", "Settings"],
+];
+const BADGE_OF = { queue: "review_queue", inbox: "unread_messages", waitlist: "waitlist_ready" };
 async function openAdmin() {
   closeModal();
   state.adminOpen = true;
   openModal(
     "Admin",
-    `<div class="admin-shell"><aside class="admin-side" id="adminSide">${[
-      ["dashboard", "Dashboard"],
-      ["products", "Products"],
-      ["categories", "Categories"],
-      ["inventory", "Digital codes"],
-      ["orders", "Orders"],
-      ["customers", "Customers"],
-      ["discounts", "Discounts"],
-      ["reviews", "Reviews"],
-      ["support", "Order support"],
-      ["suppliers", "Suppliers & profit"],
-      ["refunds", "Refund log"],
-      ["audit", "Audit log"],
-      ["settings", "Settings"],
-    ]
-      .map(([k, n]) => `<button data-tab="${k}">${n}</button>`)
-      .join(
-        "",
-      )}</aside><section class="admin-main" id="adminMain"></section></div>`,
+    `<div class="admin-shell"><aside class="admin-side" id="adminSide">${ADMIN_TABS.map(([k, n]) => `<button data-tab="${k}">${n}<span class="badge red" data-badge="${k}" hidden></span></button>`).join("")}</aside><section class="admin-main" id="adminMain"></section></div>`,
     true,
   );
   $$("#adminSide button").forEach(
@@ -1075,86 +1476,682 @@ async function openAdmin() {
       }),
   );
   await renderAdminTab();
+  if (state.admin.tab !== "dashboard") adminBadges();
+}
+async function adminBadges(d) {
+  try {
+    d = d || (await api("/api/admin/summary"));
+    for (const [tab, key] of Object.entries(BADGE_OF)) {
+      const el = document.querySelector(`[data-badge="${tab}"]`);
+      if (!el) continue;
+      el.textContent = d[key] || "";
+      el.hidden = !d[key];
+    }
+  } catch {}
 }
 async function renderAdminTab() {
   const main = $("#adminMain");
   if (!main) return;
-  main.innerHTML = `<div class="empty">Loading...</div>`;
   const tab = state.admin.tab;
+  $$("#adminSide button").forEach((b) =>
+    b.classList.toggle("active", b.dataset.tab === tab),
+  );
+  main.innerHTML = `<div class="empty">Loading...</div>`;
+  const pages = {
+    dashboard: adminDashboard,
+    queue: adminQueue,
+    inbox: adminInbox,
+    orders: adminOrders,
+    products: adminProducts,
+    merge: adminMerge,
+    categories: adminCategories,
+    inventory: adminInventory,
+    waitlist: adminWaitlist,
+    customers: adminCustomers,
+    discounts: adminDiscounts,
+    reviews: adminReviews,
+    refunds: adminRefunds,
+    audit: adminAudit,
+    settings: adminSettings,
+  };
   try {
-    if (tab === "dashboard") {
-      const d = await api("/api/admin/summary");
-      main.innerHTML = `<div class="admin-top"><h2>Dashboard</h2><span class="eyebrow">LIVE DATA</span></div><div class="stats"><div class="stat"><small>AWAITING PAYMENT</small><b>${d.awaiting_payment}</b></div><div class="stat"><small>ORDERS</small><b>${d.orders}</b></div><div class="stat"><small>ACTIVE PRODUCTS</small><b>${d.products}</b></div><div class="stat"><small>PAID REVENUE</small><b>${money(d.paid_revenue)}</b></div><div class="stat"><small>7-DAY REVENUE</small><b>${money(d.revenue_7d)}</b></div><div class="stat"><small>30-DAY REVENUE</small><b>${money(d.revenue_30d)}</b></div><div class="stat"><small>AVG ORDER</small><b>${money(d.avg_order)}</b></div><div class="stat"><small>CANCELLED</small><b>${d.cancelled}</b></div></div><div class="admin-panel"><div class="panel-head"><h3>Store health</h3></div><div class="modal-body"><div class="line"><span>Customers</span><b>${d.customers}</b></div><div class="line"><span>Categories</span><b>${d.categories}</b></div><div class="line"><span>Available digital codes</span><b>${d.available_codes}</b></div><div class="line"><span>Payment methods ready</span><b>${PAY.filter(([k]) => state.settings[k + "_ready"]).length}/3</b></div><div class="line"><span>Accepting orders</span><b>${state.settings.orders_open === false ? "Paused" : "Yes"}</b></div></div></div><div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Operations</h3></div><div class="modal-body"><div class="modal-actions"><button class="btn ghost" id="cleanupReservations">Release expired reservations</button><button class="btn ghost" id="sendLowStock">Send low-stock Discord alert</button><button class="btn ghost" id="createBackup">Create D1 backup in R2</button></div><small>These are manual tools. Nothing runs against your existing orders/inventory unless you click a button.</small></div></div>${d.low_stock.length ? `<div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Low stock</h3></div><div class="modal-body">${d.low_stock.map((x) => `<div class="line"><span>${escapeHTML(x.name)}</span><b>${x.stock} left</b></div>`).join("")}</div></div>` : ""}`;
-    }
-    if (tab === "dashboard") {
-      $("#cleanupReservations")?.addEventListener("click", async () => {
+    await (pages[tab] || adminDashboard)(main);
+  } catch (e) {
+    main.innerHTML = `<div class="notice danger-text">${escapeHTML(e.message)}</div>`;
+  }
+}
+const JOB_NAMES = {
+  expire_reservations: "Release expired reservations",
+  low_stock: "Low-stock alert",
+  backup: "Database backup",
+  cleanup: "Housekeeping",
+};
+function fmtBytes(n) {
+  n = Number(n) || 0;
+  return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+}
+async function adminDashboard(main) {
+  const days = state.admin.days || 30;
+  const [d, r, bk] = await Promise.all([
+    api("/api/admin/summary"),
+    api("/api/admin/reports?days=" + days),
+    api("/api/admin/backups").catch(() => ({ configured: false, backups: [] })),
+  ]);
+  adminBadges(d);
+  const f = r.funnel,
+    maxRev = Math.max(1, ...r.daily.map((x) => x.revenue));
+  main.innerHTML = `<div class="admin-top"><h2>Dashboard</h2><select id="repDays">${[7, 30, 90, 365].map((n) => `<option value="${n}" ${n === r.days ? "selected" : ""}>Last ${n} days</option>`).join("")}</select></div>
+  ${d.review_queue ? `<div class="notice" style="margin-bottom:12px"><b>${d.review_queue}</b> order(s) have a payment proof waiting. <button class="mini primary" id="goQueue">Review now</button></div>` : ""}
+  <div class="stats"><div class="stat"><small>AWAITING PAYMENT</small><b>${d.awaiting_payment}</b></div><div class="stat"><small>ORDERS</small><b>${d.orders}</b></div><div class="stat"><small>PAID REVENUE</small><b>${money(d.paid_revenue)}</b></div><div class="stat"><small>7-DAY REVENUE</small><b>${money(d.revenue_7d)}</b></div><div class="stat"><small>30-DAY REVENUE</small><b>${money(d.revenue_30d)}</b></div><div class="stat"><small>AVG ORDER</small><b>${money(d.avg_order)}</b></div><div class="stat"><small>AVAILABLE CODES</small><b>${d.available_codes}</b></div><div class="stat"><small>CUSTOMERS</small><b>${d.customers}</b></div></div>
+  <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Checkout funnel · last ${r.days} days</h3></div><div class="modal-body"><div class="funnel"><div class="stat"><small>CHECKOUT STARTED</small><b>${f.started}</b></div><div class="stat"><small>CHECKOUT COMPLETED</small><b>${f.completed}</b></div><div class="stat"><small>COMPLETION RATE</small><b>${f.rate}%</b></div><div class="stat"><small>PAID ORDERS</small><b>${f.paid_orders}</b></div></div><small>Counts unique browsing sessions. "Started" = opened checkout; "completed" = placed an order.</small></div></div>
+  <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Revenue · last ${r.days} days</h3></div><div class="modal-body"><div class="line"><span>Cash revenue (paid orders)</span><b>${money(r.cash_revenue)}</b></div><div class="line"><span>Discounts given</span><b>${money(r.discounts_given)}</b></div><div class="line"><span>Store credit used</span><b>${money(r.credit_used)}</b></div><div class="line"><span>Supplier cost</span><b>${money(r.total_cost)}</b></div><div class="line"><span>Estimated profit</span><b>${money(r.profit_estimate)}</b></div>${r.costs_incomplete ? `<small>Some products have no cost recorded, so profit is overstated. Add a supplier cost when importing codes, or a cost price on manual products.</small>` : ""}<div class="bars" title="Daily revenue">${r.daily.map((x) => `<span style="height:${Math.max(4, Math.round((x.revenue / maxRev) * 100))}%" title="${escapeHTML(x.date)}: ${money(x.revenue)} (${x.orders} orders)"></span>`).join("") || `<small>No paid orders in this period.</small>`}</div></div></div>
+  <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Top products & profit</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Units</th><th>Revenue</th><th>Cost</th><th>Profit</th></tr></thead><tbody>${r.products.map((p) => `<tr><td>${escapeHTML(p.name)}</td><td>${p.units}</td><td>${money(p.revenue)}</td><td>${p.cost == null ? "—" : money(p.cost)}</td><td>${p.profit == null ? "—" : money(p.profit)}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">No sales yet.</td></tr>`}</tbody></table></div></div>
+  ${d.low_stock.length ? `<div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Low stock</h3></div><div class="modal-body">${d.low_stock.map((x) => `<div class="line"><span>${escapeHTML(x.name)}${x.variant_name ? " — " + escapeHTML(x.variant_name) : ""}</span><b>${x.stock} left <small>(alert at ${x.threshold ?? "default"})</small></b></div>`).join("")}</div></div>` : ""}
+  <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Automatic jobs</h3></div><div class="modal-body">${(d.jobs || []).map((j) => `<div class="line"><span>${escapeHTML(JOB_NAMES[j.job] || j.job)}</span><span><span class="tag ${j.ok ? "green" : "red"}">${j.ok ? "OK" : "FAILED"}</span> <small>${escapeHTML(fmtTime(j.ran_at))} ${escapeHTML(j.detail || "")}</small></span></div>`).join("") || `<small>No scheduled run recorded yet. Jobs run from the Cloudflare cron trigger in wrangler.toml.</small>`}<div class="modal-actions"><button class="btn ghost" id="cleanupReservations">Release expired reservations now</button><button class="btn ghost" id="sendLowStock">Send low-stock alert now</button></div></div></div>
+  <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Database backups</h3></div><div class="modal-body">${bk.configured ? `<div class="modal-actions" style="margin:0 0 8px"><button class="btn ghost" id="runBackup">Back up now</button></div>${bk.backups.map((b) => `<div class="line"><span><code>${escapeHTML(b.key.slice(8))}</code> <small>${fmtBytes(b.size)}</small></span><a class="mini" href="/api/admin/backups/download?key=${encodeURIComponent(b.key)}">Download</a></div>`).join("") || `<small>No backups yet.</small>`}` : `<small>No R2 bucket is bound, so backups are unavailable.</small>`}</div></div>`;
+  $("#repDays").onchange = (e) => {
+    state.admin.days = Number(e.target.value);
+    renderAdminTab();
+  };
+  $("#goQueue")?.addEventListener("click", () => {
+    state.admin.tab = "queue";
+    renderAdminTab();
+  });
+  const act = (id, path, msg) =>
+    $(id)?.addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      try {
+        const x = await api(path, { method: "POST" });
+        toast(msg(x));
+        renderAdminTab();
+      } catch (err) {
+        toast(err.message);
+        e.target.disabled = false;
+      }
+    });
+  act("#cleanupReservations", "/api/admin/maintenance/cleanup", (x) => `Expired ${x.expired} reservation(s).`);
+  act("#sendLowStock", "/api/admin/low-stock/notify", (x) => `Low-stock alert sent for ${x.count} product(s).`);
+  act("#runBackup", "/api/admin/backups/run", (x) => `Backup saved (${x.rows} rows).`);
+}
+function waLink(contact, text) {
+  let d = String(contact || "").replace(/[^\d+]/g, "");
+  if (!/^\+?\d{8,15}$/.test(d)) return "";
+  d = d.replace(/^\+/, "").replace(/^00/, "");
+  if (/^01\d{9}$/.test(d)) d = "2" + d;
+  return `https://wa.me/${d}?text=${encodeURIComponent(text || "")}`;
+}
+function dupWarn(o) {
+  if (!o.dup_flag) return "";
+  const hits = String(o.dup_flag).split(";").filter(Boolean).map((x) => {
+    const [why, num] = x.split(":");
+    return `${why === "proof" ? "same proof image" : why === "ref" ? "same transfer reference" : "same proof and reference"} as ${num}`;
+  });
+  return `<div class="warn">⚠ Possible duplicate payment: ${escapeHTML(hits.join(", "))}. <button type="button" class="mini" data-clear-dup="${o.id}">Not a duplicate</button></div>`;
+}
+function bindClearDup(root, after) {
+  root.querySelectorAll("[data-clear-dup]").forEach(
+    (b) =>
+      (b.onclick = async () => {
         try {
-          const r = await api("/api/admin/maintenance/cleanup", {
+          await api(`/api/admin/orders/${b.dataset.clearDup}/clear-dup`, { method: "POST", body: "{}" });
+          after();
+        } catch (e) {
+          toast(e.message);
+        }
+      }),
+  );
+}
+async function adminQueue(main) {
+  const rows = await api("/api/admin/review-queue");
+  main.innerHTML = `<div class="admin-top"><h2>Needs review</h2><span class="eyebrow">${rows.length} WAITING</span></div><div class="notice" style="margin-bottom:12px">Orders where the customer uploaded a payment proof and the order is still unpaid. Check the proof against your wallet, then deliver in one click.</div><div class="queue-grid">${rows
+    .map((o) => {
+      const manual = o.items.some((i) => i.delivery_type !== "code");
+      return `<article class="queue-card" data-q="${o.id}"><div class="proof"><a href="/api/admin/orders/${o.id}/payment-proof" target="_blank" rel="noopener"><img loading="lazy" src="/api/admin/orders/${o.id}/payment-proof" alt="Payment proof" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'Open proof file'}))"></a></div><div class="body"><div class="line"><b>${escapeHTML(o.order_number)}</b><b>${money(o.total)}</b></div><div class="line"><span>${escapeHTML(o.user_name || o.guest_name || "Guest")}</span><small>${escapeHTML(o.user_email || o.guest_contact || "")}</small></div><div class="line"><span>${escapeHTML(payNameEN(o.payment_method))}</span><small>${o.payment_ref ? "ref " + escapeHTML(o.payment_ref) : "no reference"}</small></div>${o.items.map((i) => `<small>${escapeHTML(i.product_name)}${i.variant_name ? " — " + escapeHTML(i.variant_name) : ""} × ${i.quantity}${i.delivery_type === "code" ? " · code" : " · manual"}</small>`).join("")}${dupWarn(o)}${manual ? `<textarea data-dm="${o.id}" placeholder="Delivery message for the customer (optional) — e.g. account details"></textarea>` : ""}<div class="modal-actions" style="margin:0"><button class="mini primary" data-deliver="${o.id}">Mark paid & deliver</button><button class="mini danger" data-reject="${o.id}">Reject proof</button><button class="mini" data-open="${o.id}">Details</button></div></div></article>`;
+    })
+    .join("") || `<div class="empty">Nothing waiting. 🎉</div>`}</div>`;
+  const refresh = () => {
+    renderAdminTab();
+    adminBadges();
+  };
+  bindClearDup(main, refresh);
+  $$("[data-deliver]").forEach(
+    (b) =>
+      (b.onclick = async () => {
+        const id = b.dataset.deliver;
+        b.disabled = true;
+        try {
+          await api(`/api/admin/orders/${id}/mark-paid-deliver`, {
             method: "POST",
+            body: JSON.stringify({ delivery_message: $(`[data-dm="${id}"]`)?.value || "" }),
           });
-          toast(`Expired ${r.expired} reservation(s).`);
+          toast("Paid and delivered.");
+          refresh();
+        } catch (e) {
+          toast(e.message);
+          b.disabled = false;
+        }
+      }),
+  );
+  $$("[data-reject]").forEach(
+    (b) =>
+      (b.onclick = async () => {
+        const reason = prompt("Why is the proof rejected? (shown to the customer, optional)");
+        if (reason === null) return;
+        try {
+          await api(`/api/admin/orders/${b.dataset.reject}/reject-proof`, { method: "POST", body: JSON.stringify({ reason }) });
+          toast("Proof rejected. The customer was notified.");
+          refresh();
+        } catch (e) {
+          toast(e.message);
+        }
+      }),
+  );
+  $$("[data-open]").forEach((b) => (b.onclick = () => orderForm(Number(b.dataset.open))));
+}
+async function adminInbox(main) {
+  const rows = await api("/api/admin/inbox");
+  main.innerHTML = `<div class="admin-top"><h2>Messages</h2><span class="eyebrow">ORDER SUPPORT THREADS</span></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Order</th><th>Customer</th><th>Last message</th><th>When</th><th></th></tr></thead><tbody>${rows.map((r) => `<tr><td><b>${escapeHTML(r.order_number)}</b></td><td>${escapeHTML(r.customer)}</td><td>${r.last_sender === "customer" ? "" : "<small>You: </small>"}${escapeHTML((r.last_body || "").slice(0, 90))}</td><td><small>${escapeHTML(fmtTime(r.last_at))}</small></td><td>${r.unread ? `<span class="badge red">${r.unread} new</span>` : ""} <button class="mini" data-open="${r.id}">Open</button></td></tr>`).join("") || `<tr><td colspan="5" class="empty">No messages yet.</td></tr>`}</tbody></table></div></div>`;
+  $$("[data-open]").forEach((b) => (b.onclick = () => orderForm(Number(b.dataset.open))));
+}
+async function adminOrders(main) {
+  const rows = await api("/api/admin/orders");
+  main.innerHTML = `<div class="admin-top"><h2>Orders</h2><span class="eyebrow">${rows.length} TOTAL</span></div><div class="form-grid" style="margin-bottom:12px"><div class="field"><input id="oSearch" placeholder="Search order, name, contact, item, reference..."></div><div class="field"><select id="oFilter"><option value="">All statuses</option><option value="awaiting_payment">Awaiting payment</option><option value="paid">Paid</option><option value="pending">Pending delivery</option><option value="fulfilled">Fulfilled</option><option value="refunded">Refunded</option><option value="cancelled">Cancelled</option></select></div></div><div class="admin-panel" style="margin-bottom:12px"><div class="modal-body"><b>Export orders to CSV</b><div class="form-grid" style="margin-top:8px"><div class="field"><label>From</label><input id="xFrom" type="date"></div><div class="field"><label>To</label><input id="xTo" type="date"></div></div><div class="modal-actions" style="margin:0"><a class="btn ghost" id="xGo" href="#">Download CSV</a></div></div></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Order</th><th>Customer</th><th>Total</th><th>Payment</th><th>Fulfillment</th><th>Created</th><th></th></tr></thead><tbody id="oBody"></tbody></table></div></div>`;
+  const draw = () => {
+    const q = $("#oSearch").value.toLowerCase(),
+      f = $("#oFilter").value,
+      list = rows.filter(
+        (o) =>
+          (!f || o.payment_status === f || o.fulfillment_status === f) &&
+          (!q ||
+            `${o.order_number} ${o.user_name || ""} ${o.guest_name || ""} ${o.user_email || ""} ${o.guest_contact || ""} ${o.item_summary || ""} ${o.payment_ref || ""}`
+              .toLowerCase()
+              .includes(q)),
+      );
+    $("#oBody").innerHTML =
+      list
+        .map(
+          (o) =>
+            `<tr><td><b>${escapeHTML(o.order_number)}</b><br><small>${escapeHTML(o.item_summary || "")}</small></td><td>${escapeHTML(o.user_name || o.guest_name || "Guest")}<br><small>${escapeHTML(o.user_email || o.guest_contact || "")}</small></td><td>${money(o.total)}${o.discount_code ? `<br><small>code ${escapeHTML(o.discount_code)}</small>` : ""}</td><td>${escapeHTML(payNameEN(o.payment_method))}<br><small>${escapeHTML(o.payment_status)}</small>${o.payment_proof_key ? ` <span class="tag green">proof</span>` : ""}${o.dup_flag ? ` <span class="tag red">duplicate?</span>` : ""}</td><td>${escapeHTML(o.fulfillment_status)}</td><td>${escapeHTML(fmtTime(o.created_at))}</td><td><button class="mini" data-order="${o.id}">Manage</button>${o.unread ? ` <span class="badge red">${o.unread}</span>` : ""}</td></tr>`,
+        )
+        .join("") || `<tr><td colspan="7" class="empty">No orders.</td></tr>`;
+    $$("[data-order]").forEach(
+      (b) => (b.onclick = () => orderForm(Number(b.dataset.order))),
+    );
+  };
+  $("#oSearch").oninput = draw;
+  $("#oFilter").onchange = draw;
+  $("#xGo").onclick = (e) => {
+    const p = new URLSearchParams();
+    if ($("#xFrom").value) p.set("from", $("#xFrom").value);
+    if ($("#xTo").value) p.set("to", $("#xTo").value);
+    if ($("#oFilter").value) p.set("status", $("#oFilter").value);
+    e.target.href = "/api/admin/orders/export.csv?" + p;
+  };
+  draw();
+}
+const REASON_LABEL = {
+  wrong_code: "Wrong code delivered",
+  code_invalid: "Code invalid / already used",
+  duplicate_payment: "Duplicate payment",
+  out_of_stock: "Out of stock",
+  customer_changed_mind: "Customer changed mind",
+  fraud: "Fraud",
+  other: "Other",
+  payment_not_received: "Payment not received",
+  code_not_working: "Code not working",
+  wrong_product: "Wrong product",
+  delivery_delay: "Delivery delay",
+  chargeback_or_claim: "Chargeback / claim",
+};
+async function orderForm(id) {
+  const d = await api("/api/admin/orders/" + id),
+    { order, items, codes, messages, issues } = d;
+  const contact = order.user_email || order.guest_contact || "",
+    name = order.user_name || order.guest_name || "Guest";
+  const reasonOpts = (list) => list.map((r) => `<option value="${r}">${REASON_LABEL[r] || r}</option>`).join("");
+  openModal(
+    `Order ${escapeHTML(order.order_number)}`,
+    `<div class="checkout-summary"><div class="line"><span>Customer</span><b>${escapeHTML(name)}</b></div><div class="line"><span>Contact</span><span>${escapeHTML(contact)}</span></div><div class="line"><span>Payment method</span><span>${escapeHTML(payNameEN(order.payment_method))}</span></div>${order.discount ? `<div class="line"><span>Discount${order.discount_code ? " (" + escapeHTML(order.discount_code) + ")" : ""}</span><span>-${money(order.discount)}</span></div>` : ""}${order.credit_used ? `<div class="line"><span>Store credit used</span><span>-${money(order.credit_used)}</span></div>` : ""}<div class="line"><b>Total</b><b>${money(order.total)}</b></div></div>
+    ${timelineHTML(order)}
+    ${dupWarn(order)}
+    ${order.payment_proof ? `<div class="notice" style="margin-top:12px"><b>Payment proof</b><br><a href="/api/admin/orders/${id}/payment-proof" target="_blank" rel="noopener"><img src="/api/admin/orders/${id}/payment-proof" alt="" style="max-width:100%;max-height:260px;margin-top:8px;border-radius:10px" onerror="this.remove()"></a><br><a class="btn ghost" style="margin-top:8px" href="/api/admin/orders/${id}/payment-proof" target="_blank" rel="noopener">Open proof</a></div>` : ""}
+    <h3 style="margin:20px 0 8px">Items</h3>${items.map((i) => `<div class="line"><span>${escapeHTML(i.product_name)}${i.variant_name ? ` — ${escapeHTML(i.variant_name)}` : ""} × ${i.quantity}</span><span>${money(i.unit_price * i.quantity)}</span></div>`).join("")}
+    <form id="orderForm"><div class="form-grid"><div class="field"><label>Payment status</label><select id="oPayment">${["awaiting_payment", "paid", "failed", "refunded"].map((x) => `<option ${x === order.payment_status ? "selected" : ""}>${x}</option>`).join("")}</select></div><div class="field"><label>Fulfillment</label><select id="oFulfill">${["pending", "processing", "fulfilled", "cancelled"].map((x) => `<option ${x === order.fulfillment_status ? "selected" : ""}>${x}</option>`).join("")}</select></div></div>
+    <div class="field"><label>Customer's transfer reference</label><input id="oRef" value="${escapeHTML(order.payment_ref || "")}" placeholder="Reference / transaction number"></div>
+    <div id="refundBox" class="notice" hidden style="margin-bottom:12px"><b>Refund details</b><div class="form-grid" style="margin-top:8px"><div class="field"><label>Reason (required)</label><select id="rReason"><option value="">Choose…</option>${reasonOpts(d.refund_reasons)}</select></div><div class="field"><label>Amount refunded</label><input id="rAmount" type="number" step="0.01" value="${order.total}"></div></div><div class="field"><label>Note</label><input id="rNote" maxlength="500"></div></div>
+    <div class="field"><label>${t("Delivery message")}</label><textarea id="oDelivery">${escapeHTML(order.delivery_message || "")}</textarea></div><div class="field"><label>Notes (internal)</label><textarea id="oNotes">${escapeHTML(order.notes || "")}</textarea></div>${codes.length ? `<div class="notice">Assigned codes: ${codes.map((c) => `<code>${escapeHTML(c.code)}</code>`).join(", ")}</div>` : ""}
+    <div class="modal-actions"><button type="button" class="btn ghost" id="cancelOrder">Close</button>${order.payment_status !== "paid" || order.fulfillment_status !== "fulfilled" ? `<button type="button" class="btn primary" id="markPaidDeliver">${t("Mark paid & deliver")}</button>` : ""}<button class="btn primary">Save order</button></div></form>
+    <div id="waBox"></div>
+    <h3 style="margin:20px 0 8px">Support thread</h3><div class="thread" id="adminThread">${messages.map((m) => `<div class="msg ${m.sender === "customer" ? "customer" : ""}"><small>${m.sender === "customer" ? escapeHTML(name) : "You"} · ${escapeHTML(fmtTime(m.created_at))}</small>${escapeHTML(m.body)}</div>`).join("") || `<div class="empty small">No messages.</div>`}</div><form id="replyForm" class="thread-form"><textarea id="replyBody" maxlength="1000" placeholder="Reply to the customer (they also get an email if one is on file)"></textarea><button class="btn primary">Send</button></form>
+    <h3 style="margin:20px 0 8px">Refunds & disputes</h3>${issues.map((l) => `<div class="line"><span><span class="tag ${l.kind === "refund" ? "red" : ""}">${escapeHTML(l.kind)}</span> ${escapeHTML(REASON_LABEL[l.reason] || l.reason)}${l.note ? ` <small>— ${escapeHTML(l.note)}</small>` : ""}</span><small>${l.amount != null ? money(l.amount) + " · " : ""}${escapeHTML(fmtTime(l.created_at))}</small></div>`).join("") || `<small>None logged.</small>`}
+    <form id="disputeForm" class="form-grid" style="margin-top:10px"><div class="field"><label>Log a dispute / complaint</label><select id="dReason"><option value="">Reason…</option>${reasonOpts(d.dispute_reasons)}</select></div><div class="field"><label>Note</label><input id="dNote" maxlength="500"></div><div><button class="mini">Log dispute</button></div></form>`,
+    true,
+  );
+  const back = () => {
+    state.admin.tab = state.admin.tab || "orders";
+    openAdmin();
+  };
+  bindClearDup($("#modalRoot"), () => orderForm(id));
+  $("#cancelOrder").onclick = back;
+  const syncRefund = () => ($("#refundBox").hidden = !($("#oPayment").value === "refunded" && order.payment_status !== "refunded"));
+  $("#oPayment").onchange = syncRefund;
+  syncRefund();
+  const buildWA = () => {
+    const link = waLink(order.guest_contact || "", "");
+    if (!link) return ($("#waBox").innerHTML = "");
+    $("#waBox").innerHTML = `<div class="notice" style="margin-top:12px"><b>WhatsApp the customer</b><div class="field" style="margin:8px 0 0"><textarea id="waText"></textarea></div><label><input type="checkbox" id="waCodes"> Include delivered codes</label><div class="modal-actions" style="margin:8px 0 0"><a class="btn ghost" id="waGo" target="_blank" rel="noopener" href="#">Open WhatsApp</a></div></div>`;
+    const fill = () => {
+      const msg = [
+        `Hi ${name},`,
+        `Your order ${order.order_number} is ${order.fulfillment_status === "fulfilled" ? "delivered ✅" : "being processed"}.`,
+        $("#oDelivery").value,
+        $("#waCodes").checked && codes.length ? codes.map((c) => c.code).join("\n") : "",
+        `Thank you for shopping with ${state.settings.store_name || "us"}!`,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+      $("#waText").value = msg;
+    };
+    fill();
+    $("#waCodes").onchange = fill;
+    $("#waGo").onclick = (e) => (e.target.href = waLink(order.guest_contact || "", $("#waText").value));
+  };
+  buildWA();
+  const save = async (payment, fulfill) => {
+    await api("/api/admin/orders/" + id, {
+      method: "PUT",
+      body: JSON.stringify({
+        payment_status: payment,
+        fulfillment_status: fulfill,
+        notes: $("#oNotes").value,
+        delivery_message: $("#oDelivery").value,
+        payment_ref: $("#oRef").value,
+        refund_reason: $("#rReason").value,
+        refund_note: $("#rNote").value,
+        refund_amount: $("#rAmount").value,
+      }),
+    });
+    toast("Order updated.");
+    orderForm(id);
+    adminBadges();
+  };
+  $("#markPaidDeliver")?.addEventListener("click", async () => {
+    try {
+      await save("paid", "fulfilled");
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+  $("#orderForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await save($("#oPayment").value, $("#oFulfill").value);
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+  $("#replyForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const body = $("#replyBody").value.trim();
+    if (!body) return;
+    try {
+      await api(`/api/admin/orders/${id}/reply`, { method: "POST", body: JSON.stringify({ body }) });
+      orderForm(id);
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+  $("#disputeForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api(`/api/admin/orders/${id}/dispute`, {
+        method: "POST",
+        body: JSON.stringify({ reason: $("#dReason").value, note: $("#dNote").value }),
+      });
+      toast("Dispute logged.");
+      orderForm(id);
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+async function adminDiscounts(main) {
+  const rows = await api("/api/admin/discounts");
+  const scope = (d) =>
+    [
+      d.auto_apply ? "auto-applied" : "",
+      d.first_order_only ? "first order only" : "",
+      d.min_qty ? `buy ${d.min_qty}+` : "",
+      d.product_id ? `product #${d.product_id}` : "",
+      d.category_id ? `category #${d.category_id}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  main.innerHTML =
+    adminHeader("Discounts", "Add discount", "addDiscount") +
+    `<div class="notice" style="margin-bottom:12px">Offers can apply to one product or category, to first orders only, or automatically when the cart reaches a quantity (e.g. buy 3, get 10% off). Only the single best offer applies per order; offers never stack.</div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Code</th><th>Type</th><th>Amount</th><th>Rules</th><th>Used</th><th>Active</th><th>Expiry</th><th>Actions</th></tr></thead><tbody>${rows.map((d) => `<tr><td><b>${escapeHTML(d.code)}</b></td><td>${escapeHTML(d.type)}</td><td>${d.amount}${d.type === "percentage" ? "%" : ""}</td><td>${d.min_order ? "min " + money(d.min_order) + "<br>" : ""}<small>${escapeHTML(scope(d)) || "—"}</small></td><td>${d.used_count || 0}${d.max_uses != null ? ` / ${d.max_uses}` : ""}</td><td>${d.active ? "Yes" : "No"}</td><td>${escapeHTML(d.expires_at ? new Date(d.expires_at).toLocaleString() : "Never")}</td><td><button class="mini" data-edit-disc="${d.id}">Edit</button> <button class="mini danger" data-del-disc="${d.id}">Delete</button></td></tr>`).join("") || `<tr><td colspan="8" class="empty">No discounts.</td></tr>`}</tbody></table></div></div>`;
+  $("#addDiscount").onclick = () => discountForm();
+  $$("[data-edit-disc]").forEach(
+    (b) =>
+      (b.onclick = () =>
+        discountForm(rows.find((x) => x.id == b.dataset.editDisc))),
+  );
+  $$("[data-del-disc]").forEach(
+    (b) =>
+      (b.onclick = async () => {
+        if (!confirm("Delete discount?")) return;
+        try {
+          await api("/api/admin/discounts/" + b.dataset.delDisc, {
+            method: "DELETE",
+          });
+          toast("Discount deleted.");
           renderAdminTab();
         } catch (e) {
           toast(e.message);
         }
+      }),
+  );
+}
+async function discountForm(d = null) {
+  const prods = await api("/api/admin/products").catch(() => []);
+  openModal(
+    d ? "Edit discount" : "Add discount",
+    `<form id="discForm"><div class="form-grid"><div class="field"><label>Code</label><input id="dCode" value="${escapeHTML(d?.code || "")}" required></div><div class="field"><label>Type</label><select id="dType"><option value="percentage" ${d?.type !== "fixed" ? "selected" : ""}>Percentage</option><option value="fixed" ${d?.type === "fixed" ? "selected" : ""}>Fixed amount</option></select></div><div class="field"><label>Amount</label><input id="dAmount" type="number" step="0.01" value="${d?.amount ?? ""}" required></div><div class="field"><label>Minimum order</label><input id="dMin" type="number" step="0.01" value="${d?.min_order ?? 0}"></div><div class="field"><label>Max uses (empty = unlimited)</label><input id="dMax" type="number" min="0" value="${d?.max_uses ?? ""}"></div><div class="field"><label>Expires at</label><input id="dExpiry" type="datetime-local" value="${toLocalInput(d?.expires_at)}"></div></div>
+    <details open style="margin:8px 0"><summary><b>Rules</b></summary><div class="form-grid" style="margin-top:10px"><div class="field"><label>Only for product</label><select id="dProduct"><option value="">Any product</option>${prods.map((p) => `<option value="${p.id}" ${d?.product_id == p.id ? "selected" : ""}>${escapeHTML(p.name)}</option>`).join("")}</select></div><div class="field"><label>Only for category</label><select id="dCategory"><option value="">Any category</option>${state.categories.map((c) => `<option value="${c.id}" ${d?.category_id == c.id ? "selected" : ""}>${escapeHTML(c.name)}</option>`).join("")}</select></div><div class="field"><label>Minimum quantity in cart (0 = none)</label><input id="dMinQty" type="number" min="0" value="${d?.min_qty || 0}"></div></div><label style="display:block;margin:6px 0"><input id="dFirst" type="checkbox" ${d?.first_order_only ? "checked" : ""}> First order only</label><label style="display:block;margin:6px 0"><input id="dAuto" type="checkbox" ${d?.auto_apply ? "checked" : ""}> Apply automatically (no code needed) — for bundle offers like "buy 3, get 10% off"</label></details>
+    <label><input id="dActive" type="checkbox" ${d?.active !== 0 ? "checked" : ""}> Active</label><div class="modal-actions"><button type="button" class="btn ghost" id="cancelD">Cancel</button><button class="btn primary">Save discount</button></div></form>`,
+  );
+  $("#cancelD").onclick = () => {
+    closeModal();
+    openAdmin();
+  };
+  $("#discForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api("/api/admin/discounts" + (d ? "/" + d.id : ""), {
+        method: d ? "PUT" : "POST",
+        body: JSON.stringify({
+          code: $("#dCode").value,
+          type: $("#dType").value,
+          amount: $("#dAmount").value,
+          min_order: $("#dMin").value,
+          max_uses: $("#dMax").value,
+          expires_at: $("#dExpiry").value
+            ? new Date($("#dExpiry").value).toISOString()
+            : "",
+          product_id: $("#dProduct").value,
+          category_id: $("#dCategory").value,
+          min_qty: $("#dMinQty").value,
+          first_order_only: $("#dFirst").checked,
+          auto_apply: $("#dAuto").checked,
+          active: $("#dActive").checked,
+        }),
       });
-      $("#sendLowStock")?.addEventListener("click", async () => {
+      toast("Discount saved.");
+      state.admin.tab = "discounts";
+      openAdmin();
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+async function adminInventory(main) {
+  const [rows, products, batches] = await Promise.all([
+    api("/api/admin/inventory"),
+    api("/api/admin/products"),
+    api("/api/admin/batches"),
+  ]);
+  const shown = rows.slice(0, 300);
+  main.innerHTML = `<div class="admin-top"><h2>Digital codes</h2><div class="table-actions"><button class="btn ghost" id="importCodes">Import CSV</button><button class="btn primary" id="addCodes">Add codes</button></div></div><div class="notice">Paste codes, or import a CSV (columns: code, product, option — product/option are optional if you pick them in the form). Codes are kept server-side in D1 and can be removed while still available. Add a supplier and unit cost to see profit per product on the dashboard.</div>
+  <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Supplier batches</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Added</th><th>Product</th><th>Supplier</th><th>Unit cost</th><th>Qty</th><th>Left</th><th>Used</th><th>Note</th></tr></thead><tbody>${batches.map((b) => `<tr><td>${escapeHTML(fmtTime(b.created_at))}</td><td>${escapeHTML(b.product_name)}${b.variant_name ? " — " + escapeHTML(b.variant_name) : ""}</td><td>${escapeHTML(b.supplier || "—")}</td><td>${b.unit_cost == null ? "—" : money(b.unit_cost)}</td><td>${b.quantity}</td><td>${b.available}</td><td>${b.used}</td><td>${escapeHTML(b.note || "")}</td></tr>`).join("") || `<tr><td colspan="8" class="empty">No batches recorded yet.</td></tr>`}</tbody></table></div></div>
+  <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Codes${rows.length > shown.length ? ` (latest ${shown.length} of ${rows.length})` : ""}</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Code</th><th>Status</th><th>Actions</th></tr></thead><tbody>${shown.map((r) => `<tr><td>${escapeHTML(r.product_name)}${r.variant_name ? ` — ${escapeHTML(r.variant_name)}` : ""}</td><td><code>${escapeHTML(r.code)}</code></td><td>${escapeHTML(r.status)}</td><td>${r.status === "available" ? `<button class="mini danger" data-del-code="${r.id}">Remove</button>` : "Locked"}</td></tr>`).join("") || `<tr><td colspan="4" class="empty">No digital codes.</td></tr>`}</tbody></table></div></div>`;
+  $("#addCodes").onclick = () => inventoryForm(products, false);
+  $("#importCodes").onclick = () => inventoryForm(products, true);
+  $$("[data-del-code]").forEach(
+    (b) =>
+      (b.onclick = async () => {
+        if (!confirm("Remove this available code?")) return;
         try {
-          const r = await api("/api/admin/low-stock/notify", {
-            method: "POST",
+          await api("/api/admin/inventory/" + b.dataset.delCode, {
+            method: "DELETE",
           });
-          toast(`Low-stock alert sent for ${r.count} product(s).`);
+          toast("Code removed.");
+          renderAdminTab();
         } catch (e) {
           toast(e.message);
         }
-      });
-      $("#createBackup")?.addEventListener("click", async () => {
-        const button = $("#createBackup");
-        button.disabled = true;
-        button.textContent = "Creating backup…";
-        try {
-          const r = await api("/api/admin/backup", { method: "POST" });
-          toast(`Backup saved (${r.tables} tables). Keep the R2 bucket private.`);
-        } catch (e) { toast(e.message); }
-        finally { button.disabled = false; button.textContent = "Create D1 backup in R2"; }
-      });
-      try {
-        const report = await api("/api/admin/reports");
-        const card = document.createElement("div");
-        card.className = "admin-panel";
-        card.style.marginTop = "12px";
-        card.innerHTML = `<div class="panel-head"><h3>Checkout funnel · last 30 days</h3></div><div class="modal-body"><div class="line"><span>Checkout started</span><b>${report.checkout_started}</b></div><div class="line"><span>Checkout completed</span><b>${report.checkout_completed}</b></div><div class="line"><span>Completion rate</span><b>${report.checkout_started ? Math.round(report.checkout_completed / report.checkout_started * 100) : 0}%</b></div><h4 style="margin-top:14px">Top products by paid revenue</h4>${report.products.map(p => `<div class="line"><span>${escapeHTML(p.product_name)} <small>· ${p.units} units</small></span><b>${money(p.gross)}</b></div>`).join("") || '<p class="muted">No paid product sales in this period.</p>'}</div>`;
-        main.appendChild(card);
-      } catch (e) { console.warn("report unavailable", e); }
-    } else if (tab === "products") await adminProducts(main);
-    else if (tab === "merge") await adminMerge(main);
-    else if (tab === "categories") await adminCategories(main);
-    else if (tab === "inventory") await adminInventory(main);
-    else if (tab === "orders") await adminOrders(main);
-    else if (tab === "customers") await adminCustomers(main);
-    else if (tab === "discounts") await adminDiscounts(main);
-    else if (tab === "reviews") await adminReviews(main);
-    else if (tab === "support") {
-      const rows=await api("/api/admin/support"); main.innerHTML=`<div class="admin-top"><h2>Order support</h2><span class="eyebrow">${rows.length} MESSAGES</span></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Order</th><th>Author</th><th>Message</th><th>Time</th><th>Reply</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${escapeHTML(r.order_number)}</td><td>${escapeHTML(r.author_role)}</td><td>${escapeHTML(r.message)}</td><td>${escapeHTML(r.created_at)}</td><td><button class="mini" data-support-reply="${r.order_id}">Reply</button></td></tr>`).join("")||'<tr><td colspan="5">No support messages yet.</td></tr>'}</tbody></table></div></div>`; $$('[data-support-reply]').forEach(b=>b.onclick=async()=>{const message=prompt('Reply to order customer:');if(!message)return;try{await api('/api/admin/support/'+b.dataset.supportReply,{method:'POST',body:JSON.stringify({message})});toast('Reply sent.');renderAdminTab();}catch(e){toast(e.message);}});
-    }
-    else if (tab === "suppliers") {
-      const [suppliers,batches,profit,products]=await Promise.all([api('/api/admin/suppliers'),api('/api/admin/supplier-batches'),api('/api/admin/reports/profit'),api('/api/admin/products')]);
-      main.innerHTML=`<div class="admin-top"><h2>Suppliers & profit</h2></div><div class="admin-panel"><div class="modal-body"><h3>Add supplier</h3><form id="supplierForm" class="form-grid"><div class="field"><label>Name</label><input name="name" required></div><div class="field"><label>Contact</label><input name="contact"></div><div class="field"><label>Notes</label><input name="notes"></div><button class="btn primary">Save supplier</button></form><h3 style="margin-top:18px">Record purchased batch</h3><form id="batchForm" class="form-grid"><div class="field"><label>Supplier</label><select name="supplier_id"><option value="">Unspecified</option>${suppliers.map(x=>`<option value="${x.id}">${escapeHTML(x.name)}</option>`).join('')}</select></div><div class="field"><label>Product</label><select name="product_id" required>${products.map(x=>`<option value="${x.id}">${escapeHTML(x.name)}</option>`).join('')}</select></div><div class="field"><label>Quantity purchased</label><input name="quantity" type="number" min="1" required></div><div class="field"><label>Unit cost</label><input name="unit_cost" type="number" min="0" step="0.01" required></div><div class="field"><label>Invoice/reference</label><input name="reference"></div><button class="btn primary">Record batch</button></form></div></div><div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Profit by product (estimated)</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Revenue</th><th>Estimated cost</th><th>Gross profit</th><th>Stock threshold</th></tr></thead><tbody>${profit.map(x=>`<tr><td>${escapeHTML(x.name)}</td><td>${money(x.revenue)}</td><td>${money(x.cost)}</td><td>${money(x.gross_profit)}</td><td><input type="number" min="0" value="${products.find(p=>p.id===x.id)?.low_stock_threshold??''}" placeholder="Global" data-stock-threshold="${x.id}" style="width:90px"><button class="mini" data-save-threshold="${x.id}">Save</button></td></tr>`).join('')}</tbody></table></div></div><div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Supplier batches</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Date</th><th>Supplier</th><th>Product</th><th>Qty</th><th>Unit cost</th><th>Reference</th></tr></thead><tbody>${batches.map(x=>`<tr><td>${escapeHTML(x.created_at)}</td><td>${escapeHTML(x.supplier_name||'—')}</td><td>${escapeHTML(x.product_name)}</td><td>${x.quantity}</td><td>${money(x.unit_cost)}</td><td>${escapeHTML(x.reference||'')}</td></tr>`).join('')}</tbody></table></div></div>`;
-      $('#supplierForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);try{await api('/api/admin/suppliers',{method:'POST',body:JSON.stringify(Object.fromEntries(f))});toast('Supplier saved.');renderAdminTab();}catch(err){toast(err.message);}};
-      $('#batchForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),b=Object.fromEntries(f);b.quantity=Number(b.quantity);b.unit_cost=Number(b.unit_cost);try{await api('/api/admin/supplier-batches',{method:'POST',body:JSON.stringify(b)});toast('Batch recorded.');renderAdminTab();}catch(err){toast(err.message);}};
-      $$('[data-save-threshold]').forEach(b=>b.onclick=async()=>{const input=$(`[data-stock-threshold="${b.dataset.saveThreshold}"]`);try{await api('/api/admin/stock-threshold',{method:'PUT',body:JSON.stringify({product_id:Number(b.dataset.saveThreshold),threshold:input.value===''?null:Number(input.value)})});toast('Threshold saved.');}catch(err){toast(err.message);}});
-    }
-    else if (tab === "refunds") {
-      const rows=await api('/api/admin/refunds'); main.innerHTML=`<div class="admin-top"><h2>Refund & dispute log</h2></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Order</th><th>Reason</th><th>Notes</th><th>Admin</th><th>Time</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${escapeHTML(x.order_number)}</td><td>${escapeHTML(x.reason_code)}</td><td>${escapeHTML(x.notes||'')}</td><td>${escapeHTML(x.admin_name||'Admin')}</td><td>${escapeHTML(x.created_at)}</td></tr>`).join('')||'<tr><td colspan="5">No refunds logged yet.</td></tr>'}</tbody></table></div></div>`;
-    }
-    else if (tab === "audit") await adminAudit(main);
-    else if (tab === "settings") await adminSettings(main);
-    $$("#adminSide button").forEach((b) =>
-      b.classList.toggle("active", b.dataset.tab === tab),
-    );
-  } catch (e) {
-    main.innerHTML = `<div class="notice danger-text">${escapeHTML(e.message)}</div>`;
+      }),
+  );
+}
+// Small CSV reader: quotes, commas / semicolons / tabs, BOM.
+function parseCSV(text) {
+  text = String(text || "").replace(/^﻿/, "");
+  const first = text.split(/\r?\n/, 1)[0] || "";
+  const delim = [",", ";", "\t"].map((d) => [d, first.split(d).length]).sort((a, b) => b[1] - a[1])[0][0];
+  const out = [];
+  let row = [],
+    cell = "",
+    q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"' && text[i + 1] === '"') (cell += '"'), i++;
+      else if (c === '"') q = false;
+      else cell += c;
+    } else if (c === '"') q = true;
+    else if (c === delim) (row.push(cell), (cell = ""));
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(cell);
+      cell = "";
+      if (row.some((x) => x.trim())) out.push(row);
+      row = [];
+    } else cell += c;
   }
+  row.push(cell);
+  if (row.some((x) => x.trim())) out.push(row);
+  return out;
+}
+function csvToCodeRows(text) {
+  const grid = parseCSV(text);
+  if (!grid.length) return [];
+  const head = grid[0].map((x) => x.trim().toLowerCase());
+  const hasHead = head.includes("code");
+  const idx = (names, dflt) => {
+    const i = head.findIndex((h) => names.includes(h));
+    return hasHead ? i : dflt;
+  };
+  const ci = idx(["code"], 0),
+    pi = idx(["product", "product_id", "slug"], grid[0].length > 1 ? 1 : -1),
+    oi = idx(["option", "variant", "denomination"], grid[0].length > 2 ? 2 : -1);
+  return grid
+    .slice(hasHead ? 1 : 0)
+    .map((r) => ({
+      code: (r[ci] || "").trim(),
+      product: pi >= 0 ? (r[pi] || "").trim() : "",
+      option: oi >= 0 ? (r[oi] || "").trim() : "",
+    }))
+    .filter((r) => r.code);
+}
+function inventoryForm(products, csv = false) {
+  openModal(
+    csv ? "Import codes from CSV" : "Add digital codes",
+    `<form id="invForm"><div class="field"><label>Product ${csv ? "(used for rows without a product column)" : ""}</label><select id="invProduct" ${csv ? "" : "required"}><option value="">Choose product</option>${products.map((p) => `<option value="${p.id}">${escapeHTML(p.name)}</option>`).join("")}</select></div><div class="field"><label>Variant / denomination</label><select id="invVariant"><option value="">Base product stock</option></select></div>${csv ? `<div class="field"><label>CSV file</label><input id="invFile" type="file" accept=".csv,.txt,text/csv,text/plain" required><small id="invInfo"></small></div>` : `<div class="field"><label>Codes, one per line</label><textarea id="invCodes" placeholder="CODE-ONE\nCODE-TWO\nCODE-THREE" required></textarea></div>`}<div class="form-grid"><div class="field"><label>Supplier (optional)</label><input id="invSupplier" maxlength="120"></div><div class="field"><label>Unit cost per code (optional)</label><input id="invCost" type="number" step="0.01" min="0"></div></div><div class="field"><label>Batch note (optional)</label><input id="invNote" maxlength="300"></div><div id="invResult"></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelInv">Cancel</button><button class="btn primary" id="invGo">${csv ? "Import" : "Add codes"}</button></div></form>`,
+  );
+  $("#cancelInv").onclick = () => openAdmin();
+  $("#invProduct").onchange = () => {
+    const p = products.find((x) => String(x.id) === $("#invProduct").value);
+    $("#invVariant").innerHTML =
+      `<option value="">Base product stock</option>` +
+      (p?.variants || [])
+        .map(
+          (v) =>
+            `<option value="${v.id}">${escapeHTML(v.name)} — ${money(v.price)}</option>`,
+        )
+        .join("");
+  };
+  let parsed = [];
+  if (csv)
+    $("#invFile").onchange = async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      parsed = csvToCodeRows(await f.text());
+      $("#invInfo").textContent = `${parsed.length} code row(s) found.`;
+    };
+  const meta = () => ({
+    product_id: $("#invProduct").value,
+    variant_id: $("#invVariant").value,
+    supplier: $("#invSupplier").value,
+    unit_cost: $("#invCost").value,
+    note: $("#invNote").value,
+  });
+  $("#invForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const go = $("#invGo");
+    go.disabled = true;
+    try {
+      if (!csv) {
+        const r = await api("/api/admin/inventory", {
+          method: "POST",
+          body: JSON.stringify({ ...meta(), codes: $("#invCodes").value }),
+        });
+        toast(`${r.count} codes added${r.skipped ? `, ${r.skipped} duplicate(s) skipped` : ""}.`);
+        openAdmin();
+        refreshStore();
+        return;
+      }
+      if (!parsed.length) throw new Error("The file has no codes.");
+      let added = 0,
+        skipped = 0,
+        errCount = 0;
+      const errs = [];
+      for (let i = 0; i < parsed.length; i += 500) {
+        $("#invInfo").textContent = `Importing ${Math.min(i + 500, parsed.length)} / ${parsed.length}...`;
+        const r = await api("/api/admin/inventory/import", {
+          method: "POST",
+          body: JSON.stringify({ ...meta(), rows: parsed.slice(i, i + 500) }),
+        });
+        added += r.added;
+        skipped += r.skipped;
+        errCount += r.error_count;
+        for (const x of r.errors) if (errs.length < 15) errs.push(`Row ${i + x.line}: ${x.message}`);
+      }
+      $("#invResult").innerHTML = `<div class="notice"><b>${added}</b> added · <b>${skipped}</b> duplicates skipped · <b>${errCount}</b> rows with errors${errs.length ? `<br>${errs.map(escapeHTML).join("<br>")}` : ""}</div>`;
+      $("#invInfo").textContent = "";
+      go.textContent = "Done";
+      go.onclick = (ev) => {
+        ev.preventDefault();
+        state.admin.tab = "inventory";
+        openAdmin();
+        refreshStore();
+      };
+      go.disabled = false;
+      return;
+    } catch (err) {
+      toast(err.message);
+    }
+    go.disabled = false;
+  };
+}
+async function adminWaitlist(main) {
+  const rows = await api("/api/admin/waitlist");
+  main.innerHTML = `<div class="admin-top"><h2>Back-in-stock requests</h2><span class="eyebrow">${rows.length} OPEN</span></div><div class="notice" style="margin-bottom:12px">Customers who left an email are emailed automatically when codes are added. Phone / WhatsApp requests show as <b>ready</b> — tap WhatsApp to message them, then mark done.</div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Contact</th><th>Status</th><th>Requested</th><th></th></tr></thead><tbody>${rows
+    .map((r) => {
+      const wa = r.is_email ? "" : waLink(r.contact, `Hi! ${r.product_name}${r.variant_name ? " — " + r.variant_name : ""} is back in stock at ${state.settings.store_name || "our store"}: ${location.origin}/product/${r.slug}`);
+      return `<tr><td>${escapeHTML(r.product_name)}${r.variant_name ? " — " + escapeHTML(r.variant_name) : ""}</td><td>${escapeHTML(r.contact)}</td><td><span class="tag ${r.status === "ready" ? "green" : ""}">${escapeHTML(r.status)}</span></td><td><small>${escapeHTML(fmtTime(r.created_at))}</small></td><td>${wa ? `<a class="mini" href="${wa}" target="_blank" rel="noopener">WhatsApp</a> ` : ""}${r.status === "ready" ? `<button class="mini" data-wdone="${r.id}">Done</button> ` : ""}<button class="mini danger" data-wdel="${r.id}">Remove</button></td></tr>`;
+    })
+    .join("") || `<tr><td colspan="5" class="empty">No requests.</td></tr>`}</tbody></table></div></div>`;
+  const run = (sel, attr, method) =>
+    $$(sel).forEach(
+      (b) =>
+        (b.onclick = async () => {
+          try {
+            await api("/api/admin/waitlist/" + b.dataset[attr], { method });
+            renderAdminTab();
+            adminBadges();
+          } catch (e) {
+            toast(e.message);
+          }
+        }),
+    );
+  run("[data-wdone]", "wdone", "POST");
+  run("[data-wdel]", "wdel", "DELETE");
+}
+async function adminReviews(main) {
+  const rows = await api("/api/admin/reviews");
+  main.innerHTML = `<div class="admin-top"><h2>Reviews</h2><span class="eyebrow">${rows.length} TOTAL</span></div><div class="notice" style="margin-bottom:12px">Approved reviews show on product pages. <b>Feature</b> an approved review to put it in the testimonials strip on the home page.</div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Customer</th><th>Rating</th><th>Review</th><th>Status</th><th></th></tr></thead><tbody>${rows.map((r) => `<tr><td>${escapeHTML(r.product_name)}</td><td>${escapeHTML(r.user_name || "Customer")}</td><td>${"★".repeat(r.rating)}</td><td>${escapeHTML(r.body || "")}${r.has_photo ? `<br><a href="/api/admin/reviews/${r.id}/photo" target="_blank" rel="noopener"><img class="review-photo" src="/api/admin/reviews/${r.id}/photo" alt=""></a>` : ""}</td><td>${r.approved ? `<span class="tag green">approved</span>` : `<span class="tag">hidden</span>`}${r.featured ? ` <span class="tag green">featured</span>` : ""}</td><td><button class="mini" data-rev="${r.id}" data-ap="${r.approved ? 0 : 1}">${r.approved ? "Hide" : "Approve"}</button>${r.approved ? ` <button class="mini" data-feat="${r.id}" data-fv="${r.featured ? 0 : 1}">${r.featured ? "Unfeature" : "Feature"}</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="6" class="empty">No reviews.</td></tr>`}</tbody></table></div></div>`;
+  const put = (sel, key, val) =>
+    $$(sel).forEach(
+      (b) =>
+        (b.onclick = async () => {
+          try {
+            await api("/api/admin/reviews/" + b.dataset[key], {
+              method: "PUT",
+              body: JSON.stringify(val(b)),
+            });
+            renderAdminTab();
+          } catch (e) {
+            toast(e.message);
+          }
+        }),
+    );
+  put("[data-rev]", "rev", (b) => ({ approved: b.dataset.ap === "1" }));
+  put("[data-feat]", "feat", (b) => ({ featured: b.dataset.fv === "1" }));
+}
+async function adminRefunds(main) {
+  const d = await api("/api/admin/refunds");
+  main.innerHTML = `<div class="admin-top"><h2>Refunds & disputes</h2><span class="eyebrow">${d.log.length} LOGGED</span></div>
+  <div class="admin-panel"><div class="panel-head"><h3>Products with the most problems</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Cases</th><th>Refunds</th><th>Most common reason</th></tr></thead><tbody>${d.problem_products.map((p) => `<tr><td>${escapeHTML(p.product_name)}</td><td>${p.cases}</td><td>${p.refunds}</td><td>${escapeHTML(REASON_LABEL[p.top_reason] || p.top_reason || "—")}</td></tr>`).join("") || `<tr><td colspan="4" class="empty">Nothing logged yet.</td></tr>`}</tbody></table></div></div>
+  <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Log</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>When</th><th>Order</th><th>Type</th><th>Reason</th><th>Amount</th><th>Note</th><th>By</th></tr></thead><tbody>${d.log.map((l) => `<tr><td><small>${escapeHTML(fmtTime(l.created_at))}</small></td><td><button class="mini" data-open="${l.order_id}">${escapeHTML(l.order_number)}</button></td><td><span class="tag ${l.kind === "refund" ? "red" : ""}">${escapeHTML(l.kind)}</span></td><td>${escapeHTML(REASON_LABEL[l.reason] || l.reason)}</td><td>${l.amount != null ? money(l.amount) : "—"}</td><td>${escapeHTML(l.note || "")}</td><td>${escapeHTML(l.admin_name || "")}</td></tr>`).join("") || `<tr><td colspan="7" class="empty">No refunds or disputes logged.</td></tr>`}</tbody></table></div></div>`;
+  $$("[data-open]").forEach((b) => (b.onclick = () => orderForm(Number(b.dataset.open))));
+}
+const b64uToU8 = (s) => {
+  const p = "=".repeat((4 - (s.length % 4)) % 4),
+    raw = atob((s + p).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+};
+async function pushSub() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
+  const reg = await navigator.serviceWorker.getRegistration();
+  return reg ? reg.pushManager.getSubscription() : null;
+}
+async function enablePush() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window))
+    throw new Error("This browser does not support push notifications. On iPhone, install the app to your home screen first.");
+  if ((await Notification.requestPermission()) !== "granted")
+    throw new Error("Notifications were not allowed for this site.");
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub)
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: b64uToU8(state.settings.vapid_public_key),
+    });
+  await api("/api/admin/push/subscribe", { method: "POST", body: JSON.stringify({ endpoint: sub.endpoint }) });
+}
+async function disablePush() {
+  const sub = await pushSub();
+  if (!sub) return;
+  await api("/api/admin/push/unsubscribe", { method: "POST", body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => {});
+  await sub.unsubscribe();
+}
+async function opsPanelHTML() {
+  const sub = await pushSub().catch(() => null);
+  const st = state.settings;
+  return `<div class="admin-panel" style="margin-top:14px"><div class="modal-body"><b>Notifications & email</b><div class="line"><span>Customer email (Resend / Mailgun)</span><span class="tag ${st.email_ready ? "green" : "red"}">${st.email_ready ? "configured" : "not configured"}</span></div>${st.email_ready ? "" : `<small>Set RESEND_API_KEY (or MAILGUN_API_KEY + MAILGUN_DOMAIN) and EMAIL_FROM as Worker secrets/variables to enable password reset and delivery emails.</small>`}<div class="line"><span>Admin push notifications</span><span class="tag ${st.push_ready ? "green" : "red"}">${st.push_ready ? "keys set" : "VAPID keys missing"}</span></div>${st.push_ready ? `<div class="modal-actions" style="margin:6px 0 0"><button class="btn ghost" id="pushToggle">${sub ? "Turn off on this device" : "Turn on for this device"}</button></div><small>Get a notification on this phone/computer for every new order, proof upload, customer message and duplicate-payment warning.</small>` : `<small>Generate keys with <code>node scripts/generate-vapid.mjs</code>, then set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY secrets.</small>`}</div></div>`;
+}
+async function bindOps() {
+  $("#pushToggle")?.addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    try {
+      if (await pushSub()) await disablePush();
+      else await enablePush();
+      toast("Saved.");
+      renderAdminTab();
+    } catch (err) {
+      toast(err.message);
+      e.target.disabled = false;
+    }
+  });
 }
 function adminHeader(title, buttonText, id) {
   return `<div class="admin-top"><h2>${title}</h2><button class="btn primary" id="${id}">${buttonText}</button></div>`;
@@ -1229,7 +2226,7 @@ function productForm(p = null) {
   const vars = p?.variants || [];
   openModal(
     p ? "Edit product" : "Add product",
-    `<form id="productForm"><div class="form-grid"><div class="field"><label>Name</label><input id="pName" value="${escapeHTML(p?.name || "")}" required></div><div class="field"><label>${t("Name (Arabic)")}</label><input id="pNameAr" dir="rtl" value="${escapeHTML(p?.name_ar || "")}"></div><div class="field"><label>Slug</label><input id="pSlug" value="${escapeHTML(p?.slug || "")}"></div><div class="field"><label>Price (EGP)</label><input id="pPrice" type="number" step="0.01" value="${p?.price ?? ""}" required></div><div class="field"><label>Old price (EGP)</label><input id="pOld" type="number" step="0.01" value="${p?.old_price ?? ""}"></div><div class="field"><label>Category</label><select id="pCategory"><option value="">Uncategorized</option>${state.categories.map((c) => `<option value="${c.id}" ${p?.category_id == c.id ? "selected" : ""}>${escapeHTML(c.name)}</option>`).join("")}</select></div><div class="field"><label>Delivery</label><select id="pDelivery"><option value="manual" ${p?.delivery_type !== "code" ? "selected" : ""}>Manual</option><option value="code" ${p?.delivery_type === "code" ? "selected" : ""}>Digital code</option></select></div><div class="field"><label>Platform</label><input id="pPlatform" value="${escapeHTML(p?.platform || "")}" placeholder="PC, PlayStation..."></div><div class="field"><label>Region</label><input id="pRegion" value="${escapeHTML(p?.region || "")}" placeholder="EG, Global..."></div></div><div class="field"><label>Image URL</label><input id="pImage" value="${escapeHTML(p?.image_url || "")}" placeholder="https://..."></div><div class="field"><label>${t("Image upload")}</label><input id="pImageFile" type="file" accept="image/*"></div><div class="form-grid"><div class="field"><label>Description</label><textarea id="pDescription">${escapeHTML(p?.description || "")}</textarea></div><div class="field"><label>${t("Description (Arabic)")}</label><textarea id="pDescriptionAr" dir="rtl">${escapeHTML(p?.description_ar || "")}</textarea></div></div><details open style="margin-top:12px"><summary><b>${t("Variants / denominations")}</b></summary><div id="variantRows" style="margin-top:10px">${vars.map((v) => `<div class="form-grid variant-row" data-variant-id="${v.id}"><input class="vName" value="${escapeHTML(v.name)}" placeholder="${t("Option name")}"><input class="vPrice" type="number" step="0.01" value="${v.price}" placeholder="Price"><input class="vOld" type="number" step="0.01" value="${v.old_price ?? ""}" placeholder="Old price"><label><input class="vActive" type="checkbox" ${v.active ? "checked" : ""}> Active</label><button type="button" class="mini danger vRemove">Remove</button></div>`).join("")}</div><button type="button" class="mini" id="addVariantRow" style="margin-top:8px">${t("Add")}</button><small style="display:block;margin-top:6px">For digital products, add codes to each option from Digital codes.</small></details><div class="form-grid" style="margin-top:12px"><label><input id="pActive" type="checkbox" ${p?.active !== 0 ? "checked" : ""}> Active</label><label><input id="pFeatured" type="checkbox" ${p?.featured ? "checked" : ""}> Featured</label></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelP">Cancel</button><button class="btn primary">Save product</button></div></form>`,
+    `<form id="productForm"><div class="form-grid"><div class="field"><label>Name</label><input id="pName" value="${escapeHTML(p?.name || "")}" required></div><div class="field"><label>${t("Name (Arabic)")}</label><input id="pNameAr" dir="rtl" value="${escapeHTML(p?.name_ar || "")}"></div><div class="field"><label>Slug</label><input id="pSlug" value="${escapeHTML(p?.slug || "")}"></div><div class="field"><label>Price (EGP)</label><input id="pPrice" type="number" step="0.01" value="${p?.price ?? ""}" required></div><div class="field"><label>Old price (EGP)</label><input id="pOld" type="number" step="0.01" value="${p?.old_price ?? ""}"></div><div class="field"><label>Category</label><select id="pCategory"><option value="">Uncategorized</option>${state.categories.map((c) => `<option value="${c.id}" ${p?.category_id == c.id ? "selected" : ""}>${escapeHTML(c.name)}</option>`).join("")}</select></div><div class="field"><label>Delivery</label><select id="pDelivery"><option value="manual" ${p?.delivery_type !== "code" ? "selected" : ""}>Manual</option><option value="code" ${p?.delivery_type === "code" ? "selected" : ""}>Digital code</option></select></div><div class="field"><label>Platform</label><input id="pPlatform" value="${escapeHTML(p?.platform || "")}" placeholder="PC, PlayStation..."></div><div class="field"><label>Region</label><input id="pRegion" value="${escapeHTML(p?.region || "")}" placeholder="EG, Global..."></div><div class="field"><label>Low-stock alert at (codes left, empty = default)</label><input id="pLow" type="number" min="0" value="${p?.low_stock_threshold ?? ""}"></div><div class="field"><label>Cost price (manual products, for profit)</label><input id="pCost" type="number" step="0.01" min="0" value="${p?.cost_price ?? ""}"></div></div><div class="field"><label>Image URL</label><input id="pImage" value="${escapeHTML(p?.image_url || "")}" placeholder="https://..."></div><div class="field"><label>${t("Image upload")}</label><input id="pImageFile" type="file" accept="image/*"></div><div class="form-grid"><div class="field"><label>Description</label><textarea id="pDescription">${escapeHTML(p?.description || "")}</textarea></div><div class="field"><label>${t("Description (Arabic)")}</label><textarea id="pDescriptionAr" dir="rtl">${escapeHTML(p?.description_ar || "")}</textarea></div></div><details open style="margin-top:12px"><summary><b>${t("Variants / denominations")}</b></summary><div id="variantRows" style="margin-top:10px">${vars.map((v) => `<div class="form-grid variant-row" data-variant-id="${v.id}"><input class="vName" value="${escapeHTML(v.name)}" placeholder="${t("Option name")}"><input class="vPrice" type="number" step="0.01" value="${v.price}" placeholder="Price"><input class="vOld" type="number" step="0.01" value="${v.old_price ?? ""}" placeholder="Old price"><label><input class="vActive" type="checkbox" ${v.active ? "checked" : ""}> Active</label><button type="button" class="mini danger vRemove">Remove</button></div>`).join("")}</div><button type="button" class="mini" id="addVariantRow" style="margin-top:8px">${t("Add")}</button><small style="display:block;margin-top:6px">For digital products, add codes to each option from Digital codes.</small></details><div class="form-grid" style="margin-top:12px"><label><input id="pActive" type="checkbox" ${p?.active !== 0 ? "checked" : ""}> Active</label><label><input id="pFeatured" type="checkbox" ${p?.featured ? "checked" : ""}> Featured</label></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelP">Cancel</button><button class="btn primary">Save product</button></div></form>`,
   );
   $("#cancelP").onclick = () => openAdmin();
   const nameInput = $("#pName"),
@@ -1280,6 +2277,8 @@ function productForm(p = null) {
       delivery_type: $("#pDelivery").value,
       platform: $("#pPlatform").value,
       region: $("#pRegion").value,
+      low_stock_threshold: $("#pLow").value,
+      cost_price: $("#pCost").value,
       image_url: $("#pImage").value,
       description: $("#pDescription").value,
       description_ar: $("#pDescriptionAr").value,
@@ -1421,24 +2420,6 @@ async function adminMerge(main) {
       }),
   );
 }
-async function adminReviews(main) {
-  const rows = await api("/api/admin/reviews");
-  main.innerHTML = `<div class="admin-top"><h2>Reviews</h2><span class="eyebrow">${rows.length}</span></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Customer</th><th>Rating</th><th>Review</th><th>Status</th><th></th></tr></thead><tbody>${rows.map((r) => `<tr><td>${escapeHTML(r.product_name)}</td><td>${escapeHTML(r.user_name || "Customer")}</td><td>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</td><td>${escapeHTML(r.body || "")}</td><td>${r.approved ? "Approved" : "Pending"}</td><td><button class="mini" data-review="${r.id}" data-approved="${r.approved ? 0 : 1}">${r.approved ? "Hide" : "Approve"}</button></td></tr>`).join("") || '<tr><td colspan="6" class="empty">No reviews yet.</td></tr>'}</tbody></table></div></div>`;
-  $$("[data-review]").forEach(
-    (b) =>
-      (b.onclick = async () => {
-        try {
-          await api("/api/admin/reviews/" + b.dataset.review, {
-            method: "PUT",
-            body: JSON.stringify({ approved: b.dataset.approved === "1" }),
-          });
-          renderAdminTab();
-        } catch (e) {
-          toast(e.message);
-        }
-      }),
-  );
-}
 async function adminAudit(main) {
   const rows = await api("/api/admin/audit");
   main.innerHTML = `<div class="admin-top"><h2>Audit log</h2><span class="eyebrow">LAST 250 ACTIONS</span></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Details</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${escapeHTML(r.created_at)}</td><td>${escapeHTML(r.admin_name || r.admin_email || "System")}</td><td>${escapeHTML(r.action)}</td><td>${escapeHTML(`${r.target_type || ""} ${r.target_id || ""}`)}</td><td>${escapeHTML(r.details || "")}</td></tr>`).join("") || '<tr><td colspan="5" class="empty">No admin actions logged yet.</td></tr>'}</tbody></table></div></div>`;
@@ -1497,195 +2478,6 @@ function categoryForm(c = null) {
     }
   };
 }
-async function adminInventory(main) {
-  const [rows, products] = await Promise.all([
-    api("/api/admin/inventory"),
-    api("/api/admin/products"),
-  ]);
-  main.innerHTML =
-    adminHeader("Digital codes", "Add codes", "addCodes") +
-    `<div class="notice">Paste one code per line. Codes are kept server-side in D1 and can be removed while still available.</div><div class="admin-panel" style="margin-top:12px"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Code</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${escapeHTML(r.product_name)}${r.variant_name ? ` — ${escapeHTML(r.variant_name)}` : ""}</td><td><code>${escapeHTML(r.code)}</code></td><td>${escapeHTML(r.status)}</td><td>${r.status === "available" ? `<button class="mini danger" data-del-code="${r.id}">Remove</button>` : "Locked"}</td></tr>`).join("") || `<tr><td colspan="4" class="empty">No digital codes.</td></tr>`}</tbody></table></div></div>`;
-  $("#addCodes").onclick = () => inventoryForm(products);
-  $$("[data-del-code]").forEach(
-    (b) =>
-      (b.onclick = async () => {
-        if (!confirm("Remove this available code?")) return;
-        try {
-          await api("/api/admin/inventory/" + b.dataset.delCode, {
-            method: "DELETE",
-          });
-          toast("Code removed.");
-          renderAdminTab();
-        } catch (e) {
-          toast(e.message);
-        }
-      }),
-  );
-}
-function inventoryForm(products) {
-  openModal(
-    "Add digital codes",
-    `<form id="invForm"><div class="field"><label>Product</label><select id="invProduct" required><option value="">Choose product</option>${products.map((p) => `<option value="${p.id}">${escapeHTML(p.name)}</option>`).join("")}</select></div><div class="field"><label>Variant / denomination</label><select id="invVariant"><option value="">Base product stock</option></select></div><div class="field"><label>Codes (one per line or CSV)</label><textarea id="invCodes" placeholder="CODE-ONE\nCODE-TWO\nCODE-THREE\n—or CSV with a code column" required></textarea></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelInv">Cancel</button><button class="btn primary">Add codes</button></div></form>`,
-  );
-  $("#cancelInv").onclick = () => openAdmin();
-  $("#invProduct").onchange = () => {
-    const p = products.find((x) => String(x.id) === $("#invProduct").value);
-    $("#invVariant").innerHTML =
-      `<option value="">Base product stock</option>` +
-      (p?.variants || [])
-        .map(
-          (v) =>
-            `<option value="${v.id}">${escapeHTML(v.name)} — ${money(v.price)}</option>`,
-        )
-        .join("");
-  };
-  $("#invForm").onsubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const r = await api("/api/admin/inventory", {
-        method: "POST",
-        body: JSON.stringify({
-          product_id: $("#invProduct").value,
-          variant_id: $("#invVariant").value,
-          codes: $("#invCodes").value,
-        }),
-      });
-      toast(`${r.count} codes added.`);
-      openAdmin();
-      refreshStore();
-    } catch (err) {
-      toast(err.message);
-    }
-  };
-}
-async function adminOrders(main) {
-  const rows = await api("/api/admin/orders");
-  main.innerHTML = `<div class="admin-top"><h2>Orders</h2><span class="eyebrow">${rows.length} TOTAL</span></div><div class="modal-actions" style="margin-bottom:12px"><button class="btn ghost" id="needsReviewBtn">Needs review (${rows.filter(o => o.payment_status === "awaiting_payment" && !!o.payment_proof_key).length})</button><a class="btn ghost" href="/api/admin/orders.csv" target="_blank" rel="noopener">Export CSV</a></div><div class="form-grid" style="margin-bottom:12px"><div class="field"><input id="oSearch" placeholder="Search order, name, contact, item..."></div><div class="field"><select id="oFilter"><option value="">All statuses</option><option value="awaiting_payment">Awaiting payment</option><option value="proof_review">Needs review: proof uploaded</option><option value="paid">Paid</option><option value="pending">Pending delivery</option><option value="fulfilled">Fulfilled</option><option value="cancelled">Cancelled</option></select></div></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Order</th><th>Customer</th><th>Total</th><th>Payment</th><th>Fulfillment</th><th>Created</th><th></th></tr></thead><tbody id="oBody"></tbody></table></div></div>`;
-  const draw = () => {
-    const q = $("#oSearch").value.toLowerCase(),
-      f = $("#oFilter").value,
-      list = rows.filter(
-        (o) =>
-          (!f || (f === "proof_review" ? o.payment_status === "awaiting_payment" && !!o.payment_proof_key : o.payment_status === f || o.fulfillment_status === f)) &&
-          (!q ||
-            `${o.order_number} ${o.user_name || ""} ${o.guest_name || ""} ${o.user_email || ""} ${o.guest_contact || ""} ${o.item_summary || ""}`
-              .toLowerCase()
-              .includes(q)),
-      );
-    $("#oBody").innerHTML =
-      list
-        .map(
-          (o) =>
-            `<tr><td><b>${escapeHTML(o.order_number)}</b>${o.payment_proof_key ? '<br><a href="/api/admin/orders/' + o.id + '/payment-proof" target="_blank" rel="noopener">View proof</a>' : ''}${o.payment_reference ? '<br><small>Transfer ref: ' + escapeHTML(o.payment_reference) + '</small>' : ''}${(o.proof_sha256 && rows.some(x=>x.id!==o.id && x.proof_sha256===o.proof_sha256) || o.payment_reference && rows.some(x=>x.id!==o.id && String(x.payment_reference||'').toLowerCase()===String(o.payment_reference).toLowerCase())) ? '<br><b class="danger-text">Possible duplicate payment</b>' : ''}<br><small>${escapeHTML(o.item_summary || "")}</small></td><td>${escapeHTML(o.user_name || o.guest_name || "Guest")}<br><small>${escapeHTML(o.user_email || o.guest_contact || "")}</small></td><td>${money(o.total)}${o.discount_code ? `<br><small>code ${escapeHTML(o.discount_code)}</small>` : ""}</td><td>${escapeHTML(payNameEN(o.payment_method))}<br><small>${escapeHTML(o.payment_status)}</small></td><td>${escapeHTML(o.fulfillment_status)}</td><td>${escapeHTML(o.created_at)}</td><td><button class="mini" data-order="${o.id}">Manage</button></td></tr>`,
-        )
-        .join("") || `<tr><td colspan="7" class="empty">No orders.</td></tr>`;
-    $$("[data-order]").forEach(
-      (b) => (b.onclick = () => orderForm(Number(b.dataset.order))),
-    );
-  };
-  $("#oSearch").oninput = draw;
-  $("#oFilter").onchange = draw;
-  $("#needsReviewBtn").onclick = () => { $("#oFilter").value = "proof_review"; draw(); };
-  draw();
-}
-async function orderForm(id) {
-  const { order, items, codes } = await api("/api/admin/orders/" + id);
-  openModal(
-    `Order ${escapeHTML(order.order_number)}`,
-    `<div class="checkout-summary"><div class="line"><span>Customer</span><b>${escapeHTML(order.user_name || order.guest_name || "Guest")}</b></div><div class="line"><span>Contact</span><span>${escapeHTML(order.user_email || order.guest_contact || "")}</span></div><div class="line"><span>Total</span><b>${money(order.total)}</b></div></div>${order.payment_proof ? `<div class="notice" style="margin-top:12px"><b>Payment proof</b><br><a class="btn ghost" href="/api/admin/orders/${id}/payment-proof" target="_blank">View proof</a></div>` : ""}<h3 style="margin:20px 0 8px">Items</h3>${items.map((i) => `<div class="line"><span>${escapeHTML(i.product_name)}${i.variant_name ? ` — ${escapeHTML(i.variant_name)}` : ""} × ${i.quantity}</span><span>${money(i.unit_price * i.quantity)}</span></div>`).join("")}<form id="orderForm"><div class="form-grid"><div class="field"><label>Payment status</label><select id="oPayment">${["awaiting_payment", "paid", "failed", "refunded"].map((x) => `<option ${x === order.payment_status ? "selected" : ""}>${x}</option>`).join("")}</select></div><div class="field"><label>Fulfillment</label><select id="oFulfill">${["pending", "processing", "fulfilled", "cancelled"].map((x) => `<option ${x === order.fulfillment_status ? "selected" : ""}>${x}</option>`).join("")}</select></div></div><div class="field"><label>${t("Delivery message")}</label><textarea id="oDelivery">${escapeHTML(order.delivery_message || "")}</textarea></div><div class="field"><label>Notes</label><textarea id="oNotes">${escapeHTML(order.notes || "")}</textarea></div><div class="field"><label>Refund reason (used if marking refunded)</label><select id="oRefundReason"><option value="other">Other</option><option value="duplicate_payment">Duplicate payment</option><option value="out_of_stock">Out of stock</option><option value="customer_request">Customer request</option><option value="fraud">Fraud / dispute</option><option value="delivery_failure">Delivery failure</option></select></div>${codes.length ? `<div class="notice">Assigned codes: ${codes.map((c) => `<code>${escapeHTML(c.code)}</code>`).join(", ")}</div>` : ""}<div class="modal-actions"><button type="button" class="btn ghost" id="cancelOrder">Close</button><button type="button" class="btn primary" id="markPaidDeliver">${t("Mark paid & deliver")}</button><button class="btn primary">Save order</button></div></form>`,
-  );
-  $("#cancelOrder").onclick = () => openAdmin();
-  const save = async (payment, fulfill) => {
-    await api("/api/admin/orders/" + id, {
-      method: "PUT",
-      body: JSON.stringify({
-        payment_status: payment,
-        fulfillment_status: fulfill,
-        notes: $("#oNotes").value,
-        delivery_message: $("#oDelivery").value,
-        refund_reason_code: $("#oRefundReason")?.value || "other",
-        refund_notes: $("#oNotes").value,
-      }),
-    });
-    toast("Order updated.");
-    openAdmin();
-  };
-  $("#markPaidDeliver").onclick = () => save("paid", "fulfilled");
-  $("#orderForm").onsubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await save($("#oPayment").value, $("#oFulfill").value);
-    } catch (err) {
-      toast(err.message);
-    }
-  };
-}
-async function adminDiscounts(main) {
-  const rows = await api("/api/admin/discounts");
-  main.innerHTML =
-    adminHeader("Discounts", "Add discount", "addDiscount") +
-    `<div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Code</th><th>Type</th><th>Amount</th><th>Minimum</th><th>Used</th><th>Active</th><th>Expiry</th><th>Actions</th></tr></thead><tbody>${rows.map((d) => `<tr><td><b>${escapeHTML(d.code)}</b></td><td>${escapeHTML(d.type)}</td><td>${d.amount}${d.type === "percentage" ? "%" : ""}</td><td>${money(d.min_order)}</td><td>${d.used_count || 0}${d.max_uses != null ? ` / ${d.max_uses}` : ""}</td><td>${d.active ? "Yes" : "No"}</td><td>${escapeHTML(d.expires_at ? new Date(d.expires_at).toLocaleString() : "Never")}</td><td><button class="mini" data-edit-disc="${d.id}">Edit</button> <button class="mini danger" data-del-disc="${d.id}">Delete</button></td></tr>`).join("") || `<tr><td colspan="8" class="empty">No discounts.</td></tr>`}</tbody></table></div></div>`;
-  $("#addDiscount").onclick = () => discountForm();
-  $$("[data-edit-disc]").forEach(
-    (b) =>
-      (b.onclick = () =>
-        discountForm(rows.find((x) => x.id == b.dataset.editDisc))),
-  );
-  $$("[data-del-disc]").forEach(
-    (b) =>
-      (b.onclick = async () => {
-        if (!confirm("Delete discount?")) return;
-        try {
-          await api("/api/admin/discounts/" + b.dataset.delDisc, {
-            method: "DELETE",
-          });
-          toast("Discount deleted.");
-          renderAdminTab();
-        } catch (e) {
-          toast(e.message);
-        }
-      }),
-  );
-}
-function discountForm(d = null) {
-  openModal(
-    d ? "Edit discount" : "Add discount",
-    `<form id="discForm"><div class="form-grid"><div class="field"><label>Code</label><input id="dCode" value="${escapeHTML(d?.code || "")}" required></div><div class="field"><label>Type</label><select id="dType"><option value="percentage" ${d?.type !== "fixed" ? "selected" : ""}>Percentage</option><option value="fixed" ${d?.type === "fixed" ? "selected" : ""}>Fixed amount</option></select></div><div class="field"><label>Amount</label><input id="dAmount" type="number" step="0.01" value="${d?.amount ?? ""}" required></div><div class="field"><label>Minimum order</label><input id="dMin" type="number" step="0.01" value="${d?.min_order ?? 0}"></div><div class="field"><label>Max uses (empty = unlimited)</label><input id="dMax" type="number" min="0" value="${d?.max_uses ?? ""}"></div><div class="field"><label>Expires at</label><input id="dExpiry" type="datetime-local" value="${toLocalInput(d?.expires_at)}"></div><div class="field"><label>Product ID (optional)</label><input id="dProduct" type="number" min="1" value="${d?.product_id ?? ""}" placeholder="Restrict to product ID"></div><div class="field"><label>Category ID (optional)</label><input id="dCategory" type="number" min="1" value="${d?.category_id ?? ""}" placeholder="Restrict to category ID"></div><div class="field"><label>Bundle quantity (optional)</label><input id="dBundleQty" type="number" min="1" value="${d?.bundle_quantity ?? ""}" placeholder="Buy N eligible items"></div><div class="field"><label>Bundle discount %</label><input id="dBundlePct" type="number" min="1" max="100" value="${d?.bundle_percent ?? ""}"></div></div><label><input id="dFirstOrder" type="checkbox" ${d?.first_order_only ? "checked" : ""}> First paid order only</label><br><label><input id="dActive" type="checkbox" ${d?.active !== 0 ? "checked" : ""}> Active</label><div class="modal-actions"><button type="button" class="btn ghost" id="cancelD">Cancel</button><button class="btn primary">Save discount</button></div></form>`,
-  );
-  $("#cancelD").onclick = () => {
-    closeModal();
-    openAdmin();
-  };
-  $("#discForm").onsubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await api("/api/admin/discounts" + (d ? "/" + d.id : ""), {
-        method: d ? "PUT" : "POST",
-        body: JSON.stringify({
-          code: $("#dCode").value,
-          type: $("#dType").value,
-          amount: $("#dAmount").value,
-          min_order: $("#dMin").value,
-          max_uses: $("#dMax").value,
-          expires_at: $("#dExpiry").value
-            ? new Date($("#dExpiry").value).toISOString()
-            : "",
-          active: $("#dActive").checked,
-          first_order_only: $("#dFirstOrder").checked,
-          product_id: $("#dProduct").value,
-          category_id: $("#dCategory").value,
-          bundle_quantity: $("#dBundleQty").value,
-          bundle_percent: $("#dBundlePct").value,
-        }),
-      });
-      toast("Discount saved.");
-      state.admin.tab = "discounts";
-      openAdmin();
-    } catch (err) {
-      toast(err.message);
-    }
-  };
-}
 async function adminSettings(main) {
   const s = await api("/api/admin/settings");
   const field = ([k, label, type]) =>
@@ -1695,6 +2487,8 @@ async function adminSettings(main) {
   const pay = `<details open><summary><b>Payment methods</b></summary>${PAY.map(([k, n]) => `<div class="switch-row"><div><b>${n}</b><div class="field" style="margin:7px 0 0"><input id="s_${k}" value="${escapeHTML(s[k] || "")}" placeholder="Destination / number"></div></div><input class="switch" id="s_${k}_enabled" type="checkbox" ${s[k + "_enabled"] !== "0" ? "checked" : ""}></div>`).join("")}</details>`;
   main.innerHTML = `<div class="admin-top"><h2>Settings</h2><span class="eyebrow">EVERYTHING EDITABLE</span></div><form id="settingsForm" class="admin-panel"><div class="modal-body">${pay}${SETTINGS_SCHEMA.map(([t, f]) => `<details style="margin-top:14px"><summary><b>${t}</b></summary>${f.map(field).join("")}</details>`).join("")}<div class="modal-actions"><button class="btn primary">Save settings</button></div></div></form>
   <form id="pwForm" class="admin-panel" style="margin-top:14px"><div class="modal-body"><b>Change admin password</b><div class="form-grid"><div class="field"><label>Current password</label><input id="pwCur" type="password" required></div><div class="field"><label>New password (8+ characters)</label><input id="pwNew" type="password" minlength="8" required></div></div><div class="modal-actions"><button class="btn ghost">Change password</button></div></div></form>`;
+  main.insertAdjacentHTML("beforeend", await opsPanelHTML());
+  bindOps();
   $$('[id^="s_"][id$="_ar"]').forEach((e) => (e.dir = "rtl"));
   $("#settingsForm").onsubmit = async (e) => {
     e.preventDefault();
@@ -1759,7 +2553,7 @@ const PAY = [
   ["vodafone_cash", "Vodafone Cash"],
   ["telda", "Telda"],
 ];
-const payNameEN = (k) => (PAY.find((x) => x[0] === k) || [k, k])[1];
+const payNameEN = (k) => (PAY.find((x) => x[0] === k) || [k, { store_credit: "Store credit", free: "Free" }[k] || k])[1];
 const payName = (k) =>
   state.lang === "ar" && PAY_AR[k] ? PAY_AR[k] : payNameEN(k);
 let homeHTML = "";
@@ -1829,6 +2623,17 @@ const SETTINGS_SCHEMA = [
       ["tiktok", "TikTok URL"],
       ["footer_tagline", "Footer tagline"],
       ["footer_credit", "Footer credit line"],
+    ],
+  ],
+  [
+    "Growth & email",
+    [
+      ["referral_enabled", "Referral codes (friend gets first-order discount, referrer gets store credit)", "toggle"],
+      ["referral_discount_percent", "Friend's first-order discount (%)", "number"],
+      ["referral_reward", "Store credit for the referrer (EGP)", "number"],
+      ["email_codes", "Include the delivered codes in the delivery email", "toggle"],
+      ["testimonials_enabled", "Show testimonials strip on the home page", "toggle"],
+      ["backup_keep", "Keep this many database backups", "number"],
     ],
   ],
 ];
@@ -1939,12 +2744,9 @@ function showHome() {
   applySettings();
   renderCategories();
   renderProducts();
-  try {
-    const viewed=JSON.parse(localStorage.getItem("kardivo_recently_viewed")||"[]").filter(x=>x.slug).slice(0,4);
-    if(viewed.length){const section=document.createElement("section");section.className="container";section.style.margin="24px auto";section.innerHTML=`<h3>${t("Recently viewed")}</h3><div class="product-grid">${viewed.map(x=>`<article class="product-card"><a class="product-card-anchor" href="/${encodeURIComponent(x.slug)}"><div class="product-image">${x.image_url?`<img src="${escapeHTML(x.image_url)}" alt="${escapeHTML(x.name)}" loading="lazy">`:`<div class="no-image">K</div>`}</div><div class="product-body"><div class="product-name">${escapeHTML(state.lang==="ar"&&x.name_ar?x.name_ar:x.name)}</div></div></a><div class="price-row"><span class="price">${money(x.price)}</span><a class="mini" href="/${encodeURIComponent(x.slug)}">${t("View")}</a></div></article>`).join("")}</div>`;$("#store")?.after(section);}
-  } catch {}
   $("#sort").value = state.sort;
   $("#search").value = state.query;
+  renderTestimonials();
 }
 async function route() {
   if (isProductRoute())
@@ -1968,61 +2770,6 @@ function bindCopy() {
         toast(t("Copied."));
       }),
   );
-}
-function orderBlock(o) {
-  const st = (x) => escapeHTML(statusName(x));
-  const proof =
-    !o.payment_proof &&
-    o.payment_status === "awaiting_payment" &&
-    o.fulfillment_status !== "cancelled"
-    ? `<div class="field" style="margin-top:10px"><label>${t("Payment proof")}</label><input id="proof-${o.id}" type="file" accept="image/*"><button type="button" class="mini" data-upload-proof="${o.id}" style="margin-top:6px">${t("Upload screenshot")}</button></div>`
-    : "";
-  return `<div class="notice" style="margin-bottom:10px"><div class="line"><b>${escapeHTML(o.order_number)}</b><span>${money(o.total)}</span></div><small>${escapeHTML(o.item_summary || "")}</small><br><small>${t("Payment: {0} · Delivery: {1} · {2}", st(o.payment_status), st(o.fulfillment_status), escapeHTML(o.created_at))}</small>${o.delivery_message ? `<div class="notice success-text" style="margin-top:10px"><b>${t("Delivery message")}</b><br>${escapeHTML(o.delivery_message).replace(/\n/g, "<br>")}${o.fulfillment_status === "fulfilled" && state.settings.whatsapp ? `<p><a class="mini" target="_blank" rel="noopener" href="https://wa.me/${String(state.settings.whatsapp).replace(/\D/g,"")}?text=${encodeURIComponent(`Order ${o.order_number} delivery: ${o.delivery_message}`)}">${t("Ask about delivery on WhatsApp")}</a></p>` : ""}</div>` : ""}${o.timeline?.length ? `<h4 style="margin-top:12px">${t("Order timeline")}</h4>${o.timeline.map(ev=>`<div class="line"><span>${escapeHTML(ev.event.replaceAll("_"," "))}<br><small>${escapeHTML(ev.details||"")}</small></span><small>${escapeHTML(ev.created_at)}</small></div>`).join("")}` : ""}${o.support_messages ? `<div class="notice" style="margin-top:12px"><b>${t("Order support")}</b>${o.support_messages.map(m=>`<div class="line"><span><b>${escapeHTML(m.author_role==="admin"?"Kardivo Support":"You")}</b><br>${escapeHTML(m.message)}</span><small>${escapeHTML(m.created_at)}</small></div>`).join("")}<form data-support-form="${o.id}" data-contact="${escapeHTML(o.guest_contact||"")}"><div class="field"><textarea name="message" required maxlength="2000" placeholder="${t("Message support about this order")}"></textarea></div><button class="mini">${t("Send message")}</button></form></div>` : ""}${(o.codes || []).length ? `<div style="margin-top:10px"><b>${t("Your codes")}</b>${o.codes.map((c) => `<div class="line"><span>${escapeHTML(c.product_name)}${c.variant_name ? ` — ${escapeHTML(c.variant_name)}` : ""}<br><code>${escapeHTML(c.code)}</code></span><span><button class="mini" data-copy="${escapeHTML(c.code)}">${t("Copy")}</button>${state.user ? ` <button class="mini" data-review-product="${c.product_id}" data-review-order="${o.id}">Review</button>` : ""}</span></div>`).join("")}</div>` : ""}${proof}</div>`;
-}
-function bindOrderSupport() { $$('[data-support-form]').forEach(form => form.onsubmit=async e=>{e.preventDefault(); const id=Number(form.dataset.supportForm), message=form.elements.message.value; try { await api("/api/orders/support",{method:"POST",body:JSON.stringify({order_id:id,message,contact:form.dataset.contact||$("#tContact")?.value||""})}); toast(t("Message sent.")); $("#trackForm")?.requestSubmit(); } catch(err){toast(err.message);} }); }
-function openTrack() {
-  openModal(
-    t("Track your order"),
-    `<form id="trackForm"><div class="field"><label>${t("Order number")}</label><input id="tNum" required placeholder="KDV-2026-XXXXXXXX"></div><div class="field"><label>${t("Contact you used (WhatsApp / phone / account email)")}</label><input id="tContact" required></div><button class="btn primary">${t("Find order")}</button></form><div id="trackResult" style="margin-top:16px"></div>`,
-  );
-  $("#trackForm").onsubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const o = await api("/api/orders/lookup", {
-        method: "POST",
-        body: JSON.stringify({
-          order_number: $("#tNum").value,
-          contact: $("#tContact").value,
-        }),
-      });
-      $("#trackResult").innerHTML = orderBlock(o);
-      bindCopy();
-      $$("[data-upload-proof]").forEach(
-        (b) =>
-          (b.onclick = async () => {
-            const f = $(`#proof-${b.dataset.uploadProof}`)?.files?.[0];
-            if (!f) {
-              toast(t("Choose a file first."));
-              return;
-            }
-            try {
-              const uploadResult = await uploadPaymentProof(
-                Number(b.dataset.uploadProof),
-                f,
-                $("#tContact").value,
-              );
-              toast(uploadResult.possible_duplicate ? t("Proof uploaded, but it may duplicate another order. Support will review it.") : t("Proof uploaded."));
-              $("#trackForm").requestSubmit();
-            } catch (err) {
-              toast(err.message);
-            }
-          }),
-      );
-    } catch (err) {
-      $("#trackResult").innerHTML =
-        `<div class="notice danger-text">${escapeHTML(err.message)}</div>`;
-    }
-  };
 }
 async function adminCustomers(main) {
   const rows = await api("/api/admin/customers");
@@ -2108,8 +2855,23 @@ document.addEventListener("click", (e) => {
   }
 });
 window.addEventListener("popstate", () => route());
+if ("serviceWorker" in navigator)
+  addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+let deferredInstall = null;
+addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstall = e;
+  const b = $("#installBtn");
+  if (b) b.hidden = false;
+});
+$("#installBtn")?.addEventListener("click", async () => {
+  if (!deferredInstall) return;
+  deferredInstall.prompt();
+  deferredInstall = null;
+  $("#installBtn").hidden = true;
+});
+Object.assign(AR, AR_V10);
+Object.assign(ERR_AR, ERR_AR_V10);
 setDir();
 translateStatic();
 boot();
-if ("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));
-try { const resetToken=new URLSearchParams(location.search).get("reset_token"); if(resetToken){ openModal(t("Reset password"),`<form id="resetPasswordForm"><div class="field"><label>${t("New password")}</label><input id="resetPassword" type="password" minlength="8" required></div><button class="btn primary">${t("Set new password")}</button></form>`); $("#resetPasswordForm").onsubmit=async e=>{e.preventDefault();try{await api("/api/auth/password-reset/complete",{method:"POST",body:JSON.stringify({token:resetToken,password:$("#resetPassword").value})});history.replaceState({},"",location.pathname);toast(t("Password updated. Please log in."));closeModal();openAuth();}catch(err){toast(err.message);}}; } } catch {}

@@ -1,44 +1,47 @@
-# Kardivo V9.3 — operations and customer-care build
+# Kardivo V10
 
-This build continues from the uploaded V9.1/V9.2 project and keeps the existing storefront, product IDs, order IDs, customers, discounts, inventory codes and D1 data. Runtime schema changes are additive only; no database reset or destructive data migration is included. The risky Combine products tab and its API operations are disabled in this build; existing variant/source mappings are left untouched.
+Everything is additive: existing orders, products, codes and settings are untouched. New tables/columns are created automatically on the first request (versioned, so it costs almost nothing afterwards).
 
-## Added in this build
+## What's new
+**Admin**
+- **Needs review** tab: unpaid orders with an uploaded proof, proof shown inline, one-click *Mark paid & deliver* (codes are assigned automatically; for manual products type the delivery message first), *Reject proof* (customer is told to re-send), duplicate warnings. Badge counts show on the tabs.
+- **Dashboard**: checkout funnel (started vs completed, from `checkout_events`), revenue chart, top products with revenue / cost / profit, low-stock list, automatic-job status, backups.
+- **Orders**: CSV export (date/status filters), status timeline (placed / proof received / paid / delivered with times), support thread with the customer, WhatsApp button with a pre-filled delivery message (optionally with codes), refund with required reason code, dispute log, **Refunds & disputes** tab showing which products cause the most problems.
+- **Digital codes**: CSV import (columns `code,product,option`; product may be id, slug or exact name), supplier and unit cost per batch, per-product low-stock threshold and cost price on the product form.
+- **Discounts**: percentage or fixed, limited to one product or category, first-order-only, minimum quantity, and automatic offers (e.g. buy 3, get 10% off). Only the single best offer applies; offers never stack.
+- **Back-in-stock** list, review **Feature** toggle (testimonials strip), review photos.
+- **Settings > Growth & email**: referral program, email-codes toggle, testimonials toggle, backup retention.
 
-- **Needs review + order CSV:** filter orders with uploaded payment proofs and export orders.
-- **Checkout report:** checkout starts/completions and top products by paid revenue over 30 days.
-- **Scheduled maintenance:** daily Cloudflare Cron releases eligible expired reservations and sends low-stock Discord alerts. Per-product thresholds override the global threshold.
-- **Payment-proof duplicate flagging:** identical proof images are SHA-256 fingerprinted, optional transfer references are compared case-insensitively, and the customer upload response warns when the same proof/reference appears on another active/paid order. Admin order lists flag matching proof hashes or transfer references.
-- **Password recovery and delivery email:** customer password-reset links and delivery emails use Resend. Email sends are disabled unless `RESEND_API_KEY` is configured.
-- **Scheduled D1 backups:** a daily JSON snapshot of all D1 tables is written to a dedicated `BACKUPS` R2 binding, with old snapshots pruned after 30 days. An admin-only manual backup button is also available. The backup bucket must be private and must not be the public product-media bucket.
-- **Order timeline and support thread:** order events are timestamped; customers can message support from Track order, and admins can reply from the Order support tab.
-- **Refund/dispute log:** changing an order to refunded records an admin-only reason and notes.
-- **Supplier and estimated profit tools:** suppliers and purchased batches can be recorded; the dashboard estimates gross profit using the product's currently recorded unit cost. Historical batch costs are recorded but the estimate is not a full weighted-average accounting system.
-- **Stock watchers:** sold-out product pages can collect an email; the daily Cron emails a restock alert when stock is available, using Resend.
-- **Coupon rules:** percentage/fixed coupons, first-order-only restriction for logged-in customers, optional product/category restriction by ID, and bundle quantity/percentage rules.
-- **Referral codes:** registered customers receive a personal referral code; eligible first-time logged-in buyers can receive a 5% referral discount, and the referrer earns a 2% credit after the referred order is marked paid. The account shows the code and earned balance. Credit redemption against a later order is not yet enabled.
-- **Store discovery:** product pages include related products and a recently-viewed row is shown on the homepage.
-- **Installable PWA basics:** manifest, local app icon and service worker cache static assets. Browser push notifications are not configured.
-- **SEO routing:** Worker-first routing includes dynamic metadata, sitemap, robots and media routes. Product metadata uses Arabic text when the request prefers Arabic and Arabic product fields exist.
+**Customers**
+- Password reset by email, delivery email, back-in-stock email.
+- "Notify me when back in stock", recently viewed and "you may also like" rows, testimonials strip, review photos.
+- Referral codes: a friend gets a first-order discount, the referrer gets store credit after the friend's order is delivered. Store credit can be spent at checkout.
+- Order timeline and a support thread per order on the Track order page.
+- Installable app (PWA).
 
-## Cloudflare setup
+**Operations**
+- Cron (hourly): releases expired reservations, low-stock alert; daily at 03:00 UTC: database backup to R2 (gzip SQL dump, rotated).
+- Admin push notification on new order, proof upload, customer message, duplicate payment.
+- Duplicate-payment detection: same proof image (SHA-256) or same transfer reference.
+- Arabic-first SEO: Arabic titles/descriptions in link previews, sitemap with `hreflang` alternates, `?lang=en` for English, canonical URLs.
 
-1. Keep your real `[[d1_databases]]` binding named `DB` and existing R2 bindings. Do not replace the production database ID with the placeholder in the example config. For backups, create a separate private R2 bucket and add a binding named `BACKUPS`; never bind this to the bucket that serves `/media/product/*`.
-2. Keep existing admin secrets and `DISCORD_WEBHOOK_URL`. The daily Cron is configured in `wrangler.toml` at `17 3 * * *` UTC.
-3. For password reset, delivery emails and restock alerts, set `RESEND_API_KEY` as a Worker secret. Set `EMAIL_FROM` to a sender verified in Resend, and set `PUBLIC_URL` to the public store origin so reset/restock links use your actual domain. Without these, those email flows do not send.
-4. Deploy to a staging Worker first and verify the product catalogue, guest checkout, login, proof upload, and admin order fulfilment before updating production.
+## Deploy
+1. Keep your own `[[d1_databases]]` block (binding `DB`) and any R2 binding. `wrangler.toml` here now has `run_worker_first = ["/*", "!/styles.css", ...]`, which fixes `/sitemap.xml`, `/robots.txt`, `/media/*` and product link previews being served the SPA page, and a `[triggers]` cron.
+2. `wrangler deploy`
+3. Optional secrets (features simply stay off without them):
+   - Email: `wrangler secret put RESEND_API_KEY` (or `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_REGION`) and set `EMAIL_FROM` in `[vars]`.
+   - Push: `node scripts/generate-vapid.mjs`, then `wrangler secret put VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`, set `VAPID_SUBJECT`. Open Admin > Settings on your phone and press *Turn on for this device* (on iPhone, install the app to the home screen first).
+4. Backups need an R2 bucket binding. To restore: download a backup from Dashboard > Database backups, `gunzip` it, and run it with `wrangler d1 execute <db> --file backup.sql` against an empty database.
 
-## Still requiring dedicated setup/implementation
+## Security note
+`/media/product/` used to serve any R2 key. It now serves only `products/` images, so payment proofs and backups can't be fetched through it.
 
-- **Browser push notifications:** PWA install works, but Web Push subscriptions/VAPID delivery are not included.
-- **Photo reviews:** existing text reviews/moderation remain; photo attachment and moderation are not included.
-- **Referral-credit redemption:** credits are recorded/displayed, but not yet applied to checkout totals.
-- **Backup restore drill:** snapshots are written as JSON; validate a restore procedure on a staging database before relying on them for disaster recovery.
-
-## Safety notes
-
-- Do not reset D1, delete product rows, or replace your production database binding.
-- This code cannot verify your production D1 contents or live Cloudflare secrets. The ZIP must be tested in staging before deployment.
-- The stock alert and revenue/profit reports are operational aids; verify the numbers against D1 before using them for accounting decisions.
+## Limits worth knowing
+- First-order checks are weaker for guests (matched by contact details).
+- Duplicate detection only catches identical files or identical references, not re-screenshots.
+- Revenue figures are before order-level discounts; profit is an estimate and needs costs entered.
+- On the free D1 plan, keep an eye on query limits: the dashboard runs about 20 queries per load.
+- Push notifications carry no text (the service worker fetches the latest alert), by design.
 
 # Kardivo V9.1
 
