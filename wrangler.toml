@@ -4,6 +4,14 @@ compatibility_date = "2026-10-08"
 
 [assets]
 directory = "./public"
+# ...
+[[d1_databases]]
+binding = "DB"
+database_id = "3c955451-b6fe-459e-95dd-b90bad198625"
+# ...
+
+[assets]
+directory = "./public"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 # Everything goes through the Worker (so /sitemap.xml, /robots.txt, /media/* and product
