@@ -501,6 +501,7 @@ async function boot() {
     state.cart = state.cart.filter((i) => cartRowValid(i, products));
     saveCart();
     applySettings();
+    renderCampaign();
     renderFooter();
     renderCartCount();
     await route();
@@ -556,6 +557,35 @@ function categoryArtworkMap() {
     const parsed = JSON.parse(value);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch { return {}; }
+}
+function renderCampaign() {
+  const section = $("#campaignSection");
+  if (!section) return;
+  const enabled = String(state.settings.campaign_enabled || "0") === "1";
+  const title = String(S("campaign_title") || "").trim();
+  const image = String(state.settings.campaign_image || "").trim();
+  const link = String(state.settings.campaign_link || "/#store").trim();
+  section.hidden = !enabled || !title;
+  const cta = $("#campaignCta");
+  if (cta) cta.href = /^(https?:\/\/|\/#|\/product\/|\/)/i.test(link) ? link : "/#store";
+  const art = $("#campaignArt");
+  if (art) {
+    art.style.backgroundImage = image && /^https?:\/\//i.test(image)
+      ? `linear-gradient(90deg,#100b1be8,#100b1b35),url("${image.replace(/["\\]/g, "")}")`
+      : "radial-gradient(circle at 65% 35%,#a477ff66,transparent 28%),radial-gradient(circle at 80% 75%,#5b21b666,transparent 38%),linear-gradient(135deg,#1b1230,#0b0912)";
+  }
+}
+function renderSearchSuggestions() {
+  const box = $("#searchSuggestions"), input = $("#search");
+  if (!box || !input) return;
+  const q = input.value.trim().toLowerCase();
+  if (q.length < 2) { box.hidden = true; box.innerHTML = ""; return; }
+  const matches = state.products.filter((p) => {
+    const hay = `${pName(p)} ${pDesc(p)} ${p.platform || ""} ${p.region || ""} ${cName({name:p.category_name,name_ar:p.category_name_ar})}`.toLowerCase();
+    return hay.includes(q);
+  }).slice(0, 5);
+  box.innerHTML = matches.map((p) => `<a class="search-suggestion" href="/${encodeURIComponent(p.slug || p.id)}" data-suggestion-product="${p.id}">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span class="suggestion-placeholder">K</span>`}<span class="suggestion-copy"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</small></span><strong>${money(Number(p.price || 0))}</strong></a>`).join("") || `<div class="search-suggestion-empty">${state.lang === "ar" ? "مفيش نتائج مطابقة. جرّب اسم تاني." : "No matching products. Try another search."}</div>`;
+  box.hidden = false;
 }
 function renderCategoryCards() {
   const el = $("#categoryCards");
@@ -2643,6 +2673,7 @@ async function adminSettings(main) {
       });
       state.settings = await api("/api/settings/public");
       applySettings();
+      renderCampaign();
       renderFooter();
       renderCategoryCards();
       renderPopularProducts();
@@ -2680,6 +2711,7 @@ async function refreshStore() {
   state.categories = c;
   state.settings = s;
   applySettings();
+  renderCampaign();
   renderCategories();
   renderProducts();
   renderFooter();
@@ -2745,6 +2777,18 @@ const SETTINGS_SCHEMA = [
     ],
   ],
   [
+    "Promotional campaign",
+    [
+      ["campaign_enabled", "Show homepage campaign banner", "toggle"],
+      ["campaign_eyebrow", "Campaign eyebrow"],
+      ["campaign_title", "Campaign headline", "textarea"],
+      ["campaign_text", "Campaign description", "textarea"],
+      ["campaign_cta", "Campaign button text"],
+      ["campaign_link", "Campaign destination (internal path or https URL)"],
+      ["campaign_image", "Campaign artwork image URL (optional)"],
+    ],
+  ],
+  [
     "Orders & stock",
     [
       ["orders_open", "Accept new orders", "toggle"],
@@ -2804,6 +2848,10 @@ SETTINGS_SCHEMA.push([
     "popular_title",
     "popular_text",
     "popular_link",
+    "campaign_eyebrow",
+    "campaign_title",
+    "campaign_text",
+    "campaign_cta",
     "catalog_eyebrow",
     "catalog_title",
     "search_placeholder",
@@ -2900,6 +2948,7 @@ function showHome() {
   renderProducts();
   $("#sort").value = state.sort;
   $("#search").value = state.query;
+  renderSearchSuggestions();
   renderTestimonials();
 }
 async function route() {
@@ -2954,7 +3003,13 @@ document.addEventListener("input", (e) => {
   if (e.target.id === "search") {
     state.query = e.target.value;
     renderProducts();
+    renderSearchSuggestions();
   }
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".search-wrap")) { const box = $("#searchSuggestions"); if (box) box.hidden = true; }
+  const suggestion = e.target.closest("[data-suggestion-product]");
+  if (suggestion) { e.preventDefault(); const p = state.products.find((x) => Number(x.id) === Number(suggestion.dataset.suggestionProduct)); if (p) navigate("/" + encodeURIComponent(p.slug || p.id)); const box = $("#searchSuggestions"); if (box) box.hidden = true; }
 });
 document.addEventListener("change", (e) => {
   if (e.target.id === "sort") {

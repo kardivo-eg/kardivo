@@ -1,3 +1,20 @@
+# Kardivo V12
+
+## V12 phase additions (on top of V11)
+- Editable homepage campaign banner: show/hide, English and Egyptian Arabic eyebrow/headline/description/button text, destination link, and optional artwork URL, all managed from Admin → Settings.
+- Search suggestions show matching existing products with artwork, category, and current price while typing. Existing search/filter/sort behavior remains in place.
+- Existing variation manager, review queue, customer delivery messages, payment-proof uploads, audit log, rate limits, and reservation cleanup were retained rather than reimplemented.
+- No schema.sql edits or destructive data migrations were introduced in this phase. Campaign settings are additive key/value settings seeded with `INSERT OR IGNORE` by the existing settings bootstrap.
+
+## Verification performed
+- `node --check public/app.js`
+- `node --check worker.js`
+- ZIP integrity and file inventory checked after packaging.
+
+These checks do not replace a live Cloudflare Worker/D1/R2 deployment test. Test the new campaign in both languages and verify checkout and admin actions in staging before deploying to production.
+
+---
+
 # Kardivo V10
 
 Everything is additive: existing orders, products, codes and settings are untouched. New tables/columns are created automatically on the first request (versioned, so it costs almost nothing afterwards).

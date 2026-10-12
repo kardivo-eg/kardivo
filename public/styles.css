@@ -394,3 +394,20 @@ html[dir="rtl"] #email,html[dir="rtl"] #password,html[dir="rtl"] #guestContact,h
 @media(max-width:950px){.category-cards{grid-template-columns:repeat(3,minmax(0,1fr))}.popular-products{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:700px){.category-discovery,.popular-section{padding:25px 0 15px}.category-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.category-card{min-height:145px;border-radius:17px}.category-card-content{inset:auto 12px 12px}.category-card h3{font-size:14px}.category-card p{font-size:10px}.category-card .cat-arrow{width:28px;height:28px;flex-basis:28px}.popular-products{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.popular-product{border-radius:16px}.popular-product-copy{padding:11px}.section-link{font-size:11px;padding:9px 10px}}
 @media(max-width:430px){.category-card{min-height:130px}.category-card h3{font-size:13px}.popular-product-name{font-size:12px}}
+
+/* V12 · editable campaign and search discovery, retaining Kardivo's titanium-glass palette */
+.campaign-section{padding:8px 0 28px}
+.campaign-card{position:relative;isolation:isolate;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(240px,.95fr);min-height:250px;overflow:hidden;border:1px solid #ffffff16;border-radius:26px;background:linear-gradient(120deg,#15101fef,#100d17e8);box-shadow:inset 0 1px #ffffff10,0 26px 70px #0006;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.campaign-card:before{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(ellipse at 15% 20%,#8b5cf629,transparent 45%)}
+.campaign-copy{padding:clamp(24px,4vw,46px);align-self:center;max-width:680px}
+.campaign-copy h2{font-size:clamp(28px,4vw,46px);line-height:1.08;letter-spacing:-.045em;margin:10px 0 12px}
+.campaign-copy p{max-width:540px;color:var(--muted);margin:0 0 22px;font-size:14px}
+.campaign-art{min-height:220px;background-position:center;background-size:cover;opacity:.95;mask-image:linear-gradient(90deg,transparent 0%,#000 30%);-webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 30%)}
+.search-wrap{position:relative;min-width:0}
+.search-suggestions{position:absolute;z-index:40;top:calc(100% + 8px);inset-inline:0;min-width:min(390px,calc(100vw - 32px));overflow:hidden;border:1px solid #ffffff19;border-radius:16px;background:#100d17f5;box-shadow:0 22px 65px #000b;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.search-suggestion{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #ffffff0b;transition:background .16s}
+.search-suggestion:last-child{border-bottom:0}.search-suggestion:hover{background:#8b5cf620}
+.search-suggestion img,.suggestion-placeholder{width:42px;height:42px;flex:0 0 42px;object-fit:cover;border-radius:10px;background:#21172f;display:grid;place-items:center;color:#c6aaff}
+.suggestion-copy{display:grid;gap:2px;min-width:0;flex:1}.suggestion-copy b{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.suggestion-copy small{font-size:10px;color:var(--muted)}.search-suggestion strong{font-size:11px;white-space:nowrap;color:#d9c9ff}.search-suggestion-empty{padding:14px;color:var(--muted);font-size:12px}
+[dir="rtl"] .campaign-art{mask-image:linear-gradient(270deg,transparent 0%,#000 30%);-webkit-mask-image:linear-gradient(270deg,transparent 0%,#000 30%)}
+@media(max-width:700px){.campaign-section{padding:8px 0 20px}.campaign-card{grid-template-columns:1fr;min-height:0}.campaign-copy{padding:24px}.campaign-art{grid-row:1;min-height:150px;mask-image:linear-gradient(180deg,#000 0%,transparent 100%);-webkit-mask-image:linear-gradient(180deg,#000 0%,transparent 100%)}[dir="rtl"] .campaign-art{mask-image:linear-gradient(180deg,#000 0%,transparent 100%);-webkit-mask-image:linear-gradient(180deg,#000 0%,transparent 100%)}.search-wrap{flex:1;width:100%}.search-suggestions{min-width:100%}}
