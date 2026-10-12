@@ -1,5 +1,5 @@
 // Kardivo service worker: installable shell, offline fallback, and admin push notifications.
-const CACHE = "kardivo-shell-v17";
+const CACHE = "kardivo-shell-v18";
 const SHELL = ["/offline.html", "/icons/icon-192.png"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -21,17 +21,19 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(fetch(req).catch(() => caches.match("/offline.html")));
     return;
   }
-  if (/\.(css|js|png|webmanifest)$/.test(url.pathname)) {
+  if (/\.(css|js|png|svg|webmanifest)$/.test(url.pathname)) {
+    // Network-first so a deploy shows up immediately; the cache is only an offline fallback.
     e.respondWith(
       caches.open(CACHE).then(async (c) => {
-        const hit = await c.match(req);
-        const net = fetch(req)
-          .then((r) => {
-            if (r.ok) c.put(req, r.clone());
-            return r;
-          })
-          .catch(() => hit);
-        return hit || net;
+        try {
+          const r = await fetch(req);
+          if (r.ok) c.put(req, r.clone());
+          return r;
+        } catch (err) {
+          const hit = await c.match(req);
+          if (hit) return hit;
+          throw err;
+        }
       }),
     );
   }
