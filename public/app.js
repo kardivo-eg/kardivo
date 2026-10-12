@@ -351,6 +351,8 @@ function applyLang() {
     );
   else {
     renderCategories();
+    renderCategoryCards();
+    renderPopularProducts();
     renderProducts();
     renderTestimonials();
   }
@@ -547,6 +549,51 @@ function renderFooter() {
         `<a href="${escapeHTML(s[k])}" target="_blank" rel="noreferrer">${n}</a>`,
     )
     .join(" · ");
+}
+function categoryArtworkMap() {
+  try {
+    const value = state.settings.category_artwork || "{}";
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch { return {}; }
+}
+function renderCategoryCards() {
+  const el = $("#categoryCards");
+  if (!el) return;
+  const map = categoryArtworkMap();
+  const categories = state.categories.filter((c) => state.products.some((p) => String(p.category_id) === String(c.id)));
+  el.innerHTML = categories.map((c) => {
+    const product = state.products.find((p) => String(p.category_id) === String(c.id) && p.image_url);
+    const art = String(map[c.id] || (product && product.image_url) || "");
+    const name = cName(c);
+    const count = state.products.filter((p) => String(p.category_id) === String(c.id)).length;
+    const subtitle = state.lang === "ar" ? `${count} منتج` : `${count} ${count === 1 ? "product" : "products"}`;
+    return `<button class="category-card" type="button" data-category-card="${escapeHTML(c.id)}" aria-label="${escapeHTML(name)}"><div class="category-art">${art ? `<img src="${escapeHTML(art)}" alt="" loading="lazy" onerror="this.parentElement.remove()">` : ""}</div><div class="category-card-content"><div><h3>${escapeHTML(name)}</h3><p>${subtitle}</p></div><span class="cat-arrow" aria-hidden="true">${arrow()}</span></div></button>`;
+  }).join("");
+  el.querySelectorAll("[data-category-card]").forEach((b) => b.addEventListener("click", () => {
+    state.category = String(b.dataset.categoryCard);
+    renderCategories();
+    renderProducts();
+    $("#store")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
+  const section = $("#categoryDiscovery");
+  if (section) section.hidden = categories.length === 0;
+}
+function renderPopularProducts() {
+  const el = $("#popularProducts");
+  if (!el) return;
+  const chosen = state.products.filter((p) => Number(p.featured)).slice(0, 4);
+  el.innerHTML = chosen.map((p) => {
+    const variants = (p.variants || []).filter((v) => Number(v.active) !== 0);
+    const price = variants.length ? Math.min(...variants.map((v) => Number(v.price))) : Number(p.price || 0);
+    const old = Number(p.old_price || 0);
+    const name = pName(p);
+    const cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
+    const img = p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(name)}" loading="lazy">` : `<span class="popular-placeholder">K</span>`;
+    return `<a class="popular-product" href="/${encodeURIComponent(p.slug || p.id)}"><div class="popular-product-image">${img}</div><div class="popular-product-copy"><span class="popular-product-category">${escapeHTML(cat || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</span><span class="popular-product-name">${escapeHTML(name)}</span><span class="popular-product-price">${money(price)}${old > price ? `<del>${money(old)}</del>` : ""}</span></div></a>`;
+  }).join("");
+  const section = $("#popularSection");
+  if (section) section.hidden = chosen.length === 0;
 }
 function renderCategories() {
   const el = $("#categories");
@@ -2529,15 +2576,20 @@ async function adminCategories(main) {
   );
 }
 function categoryForm(c = null) {
+  let artwork = {};
+  try { artwork = JSON.parse(state.settings.category_artwork || "{}"); } catch {}
+  const currentArt = artwork[c?.id] || "";
   openModal(
     c ? "Edit category" : "Add category",
-    `<form id="catForm"><div class="field"><label>Name</label><input id="catName" value="${escapeHTML(c?.name || "")}" required></div><div class="field"><label>${t("Category name (Arabic)")}</label><input id="catNameAr" dir="rtl" value="${escapeHTML(c?.name_ar || "")}"></div><div class="field"><label>Slug</label><input id="catSlug" value="${escapeHTML(c?.slug || "")}"></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelCat">Cancel</button><button class="btn primary">Save</button></div></form>`,
+    `<form id="catForm"><div class="field"><label>Name</label><input id="catName" value="${escapeHTML(c?.name || "")}" required></div><div class="field"><label>${t("Category name (Arabic)")}</label><input id="catNameAr" dir="rtl" value="${escapeHTML(c?.name_ar || "")}"></div><div class="field"><label>Slug</label><input id="catSlug" value="${escapeHTML(c?.slug || "")}"></div><div class="field"><label>Category artwork image URL (optional)</label><input id="catImage" type="url" placeholder="https://…" value="${escapeHTML(currentArt)}"><small>Used on the visual category card. If empty, Kardivo uses an image from one of this category’s products.</small></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelCat">Cancel</button><button class="btn primary">Save</button></div></form>`,
   );
   $("#cancelCat").onclick = () => openAdmin();
   $("#catForm").onsubmit = async (e) => {
     e.preventDefault();
     try {
-      await api("/api/admin/categories" + (c ? "/" + c.id : ""), {
+      const imageUrl = $("#catImage").value.trim();
+      if (imageUrl && !/^https?:\/\//i.test(imageUrl)) throw new Error("Use a valid http(s) image URL.");
+      const saved = await api("/api/admin/categories" + (c ? "/" + c.id : ""), {
         method: c ? "PUT" : "POST",
         body: JSON.stringify({
           name: $("#catName").value,
@@ -2545,6 +2597,13 @@ function categoryForm(c = null) {
           slug: $("#catSlug").value,
         }),
       });
+      const categoryId = c ? c.id : saved.id;
+      if (categoryId) {
+        if (imageUrl) artwork[categoryId] = imageUrl;
+        else delete artwork[categoryId];
+        await api("/api/admin/settings", { method: "PUT", body: JSON.stringify({ category_artwork: JSON.stringify(artwork) }) });
+        state.settings.category_artwork = JSON.stringify(artwork);
+      }
       toast("Category saved.");
       openAdmin();
       refreshStore();
@@ -2585,6 +2644,8 @@ async function adminSettings(main) {
       state.settings = await api("/api/settings/public");
       applySettings();
       renderFooter();
+      renderCategoryCards();
+      renderPopularProducts();
       renderProducts();
       toast("Settings saved.");
     } catch (err) {
@@ -2656,6 +2717,14 @@ const SETTINGS_SCHEMA = [
       ["trust_1", "Trust point 1"],
       ["trust_2", "Trust point 2"],
       ["trust_3", "Trust point 3"],
+      ["category_eyebrow", "Category section eyebrow"],
+      ["category_title", "Category section title"],
+      ["category_text", "Category section description", "textarea"],
+      ["category_link", "Category section link text"],
+      ["popular_eyebrow", "Featured products eyebrow"],
+      ["popular_title", "Featured products title"],
+      ["popular_text", "Featured products description", "textarea"],
+      ["popular_link", "Featured products link text"],
       ["catalog_eyebrow", "Catalog small label"],
       ["catalog_title", "Catalog heading"],
       ["search_placeholder", "Search box placeholder"],
@@ -2727,6 +2796,14 @@ SETTINGS_SCHEMA.push([
     "trust_1",
     "trust_2",
     "trust_3",
+    "category_eyebrow",
+    "category_title",
+    "category_text",
+    "category_link",
+    "popular_eyebrow",
+    "popular_title",
+    "popular_text",
+    "popular_link",
     "catalog_eyebrow",
     "catalog_title",
     "search_placeholder",
@@ -2818,6 +2895,8 @@ function showHome() {
   translateStatic();
   applySettings();
   renderCategories();
+  renderCategoryCards();
+  renderPopularProducts();
   renderProducts();
   $("#sort").value = state.sort;
   $("#search").value = state.query;
