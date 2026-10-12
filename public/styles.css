@@ -484,3 +484,18 @@ html[dir="rtl"] #email,html[dir="rtl"] #password,html[dir="rtl"] #guestContact,h
 .currency-btn{min-width:52px;font-size:11px;font-weight:850;letter-spacing:.02em;}
 @media(max-width:700px){.hero-frame{width:min(100%,390px);min-height:280px;aspect-ratio:1.08/1}.hero-logo{width:70%;max-height:70%}.campaign-section{padding-top:0;padding-bottom:26px}.campaign-card{min-height:0}.campaign-art{min-height:130px}.campaign-copy h2{font-size:32px}.currency-btn{min-width:48px;padding-inline:9px}}
 @media(max-width:430px){.brand{width:72px}.nav{gap:6px}.nav-actions{gap:4px}.icon-btn{width:36px;height:36px}.currency-btn{min-width:38px;padding:0 5px;font-size:9px}.cart-btn{padding:8px 9px;font-size:11px}}
+
+/* V15: currency switch deliberately shares the exact EN/AR control treatment. */
+#currencyBtn.lang-btn{width:auto;min-width:42px;height:42px;padding:0 12px;font-family:Inter,system-ui,sans-serif;font-size:12px;font-weight:800;letter-spacing:.04em;border-radius:12px;background:#ffffff06;border:1px solid var(--line);color:var(--text)}
+#currencyBtn.lang-btn:hover{background:#ffffff0d;border-color:#443653}
+.campaign-card{position:relative;min-height:310px;background:#100d17;overflow:hidden}
+.campaign-art{background-position:center 45%;background-size:cover;min-height:310px;opacity:1}
+.campaign-copy{position:relative;z-index:2}
+.product-image img,.popular-product-image img,.search-suggestion img,.category-art img,.product-detail-media img{display:block;width:100%;height:100%;object-fit:cover}
+.product-image img,.popular-product-image img,.search-suggestion img,.category-art img{transition:transform .3s ease}
+.product-card:hover .product-image img,.category-card:hover .category-art img{transform:scale(1.035)}
+.product-image{background:linear-gradient(135deg,#20152f,#0c0912)}
+.popular-product-image{background:linear-gradient(135deg,#20152f,#0c0912)}
+.search-suggestion img{width:46px;height:46px;flex:0 0 46px;object-fit:cover;border-radius:8px}
+.category-art{background:linear-gradient(135deg,#20152f,#0c0912)}
+@media(max-width:700px){.campaign-card{min-height:0}.campaign-art{min-height:190px}.campaign-copy{grid-row:2}.campaign-art{grid-row:1}}

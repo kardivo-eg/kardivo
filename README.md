@@ -1,3 +1,17 @@
+# Kardivo V15 — Currency, imagery and campaign correction
+
+- Fixed the currency control to use the exact same button class and font styling as the EN/AR control. Currency preference is remembered, and product prices refresh when switching. Order totals and payment instructions remain EGP.
+- Campaign banner is visible by default unless an administrator explicitly disables it. Added a real gaming image fallback when no campaign artwork URL is configured.
+- Added generic, web-sourced gaming artwork fallbacks for products/categories/search suggestions when product images are missing or old image URLs fail. Existing product image URLs are still preferred; no product database records are changed. These generic images are visual fallbacks and are not represented as official product cover art.
+- Bumped the service-worker cache version so deployed browsers request the updated frontend.
+- No database schema or migration changes.
+
+Image references: Pexels gaming-controller photo (Pavel Danilyuk, Pexels) and Unsplash gaming-controller photos (Taylor R / Javier Martínez). Unsplash images are available under the Unsplash License; see https://unsplash.com/license.
+
+Validation: JavaScript syntax and archive integrity checks are run for this package. A real Cloudflare/D1/R2 deployment and browser checkout still require staging verification.
+
+---
+
 # Kardivo V14 — Hero, Checkout & Currency Correction
 
 - Removed the floating product cards from the hero; the original logo asset remains intact and fully opaque.

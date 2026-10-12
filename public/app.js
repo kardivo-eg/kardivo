@@ -393,6 +393,25 @@ const $ = (s) => document.querySelector(s),
   $$ = (s) => [...document.querySelectorAll(s)];
 const logo =
   "https://i.ibb.co/rRqtGKkw/0db84367-e795-4617-835e-5e0a2bf2ff45.jpg";
+// Stock fallback artwork keeps the storefront visual even when a product has no uploaded image
+// or an older third-party image URL has gone offline. These are generic gaming visuals, not product claims.
+const STOCK_ART = [
+  "https://images.pexels.com/photos/7776883/pexels-photo-7776883.jpeg?cs=srgb&dl=pexels-pavel-danilyuk-7776883.jpg&fm=jpg",
+  "https://images.unsplash.com/photo-1610561212775-b191f21b6998?auto=format&fit=crop&fm=jpg&q=80&w=1200",
+  "https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&fm=jpg&q=80&w=1200",
+];
+const stockArtFor = (item) => {
+  const id = Math.abs(Number(item?.id) || 0);
+  const label = `${item?.name || ""} ${item?.category_name || ""} ${item?.category_name_ar || ""} ${item?.platform || ""}`.toLowerCase();
+  if (/gift|card|رصيد|كارت|بطاقة/.test(label)) return STOCK_ART[1];
+  if (/subscription|اشتراك|plus|pass|membership/.test(label)) return STOCK_ART[2];
+  return STOCK_ART[id % STOCK_ART.length];
+};
+const stockImg = (url, alt, fallback = STOCK_ART[0], className = "") => {
+  const src = String(url || fallback).trim();
+  const safeFallback = escapeHTML(fallback);
+  return `<img${className ? ` class="${escapeHTML(className)}"` : ""} src="${escapeHTML(src)}" alt="${escapeHTML(alt || "")}" loading="lazy" data-stock-fallback="${safeFallback}" onerror="if(this.dataset.stockFallback&&this.src!==this.dataset.stockFallback){this.src=this.dataset.stockFallback;this.dataset.stockFallback=''}else{this.remove()}">`;
+};
 function loadCart() {
   try {
     return JSON.parse(localStorage.getItem("kardivo_cart") || "[]");
@@ -467,6 +486,7 @@ function updateCurrencyButton() {
 function toggleCurrency() {
   state.currencyView = state.currencyView === "EGP" ? "USD" : "EGP";
   updateCurrencyButton();
+  // A click before API boot completes is still honored; boot will render using this state.
   if (!state.ready) return;
   if (isProductRoute()) {
     openProductPage(decodeURIComponent(location.pathname.slice(1)).replace(/\/$/, ""));
@@ -553,6 +573,7 @@ async function boot() {
     renderCartCount();
     await route();
     state.ready = true;
+    updateCurrencyButton();
     if (location.hash === "#account") openAccount();
     if (qs.get("reset")) {
       openReset(qs.get("reset"));
@@ -644,18 +665,29 @@ function searchScore(p, query) {
 function renderCampaign() {
   const section = $("#campaignSection");
   if (!section) return;
-  const enabled = String(state.settings.campaign_enabled || "0") === "1";
-  const title = String(S("campaign_title") || "").trim();
+  const enabledValue = state.settings.campaign_enabled;
+  // Missing legacy settings should not silently hide the banner; only an explicit admin "off" hides it.
+  const enabled = enabledValue == null ? true : String(enabledValue) === "1";
+  const fallbackTitle = state.lang === "ar" ? "عروض وأساسيات الجيمينج في مكان واحد" : "Your next gaming upgrade starts here.";
+  const fallbackText = state.lang === "ar" ? "اكتشف المنتجات الرقمية والعروض المتاحة دلوقتي." : "Discover digital gaming essentials and current offers.";
+  const title = String(S("campaign_title") || fallbackTitle).trim();
   const image = String(state.settings.campaign_image || "").trim();
   const link = String(state.settings.campaign_link || "/#store").trim();
   section.hidden = !enabled || !title;
+  const titleEl = section.querySelector('[data-s="campaign_title"]');
+  const textEl = section.querySelector('[data-s="campaign_text"]');
+  const eyebrowEl = section.querySelector('[data-s="campaign_eyebrow"]');
+  const ctaEl = section.querySelector('[data-s="campaign_cta"]');
+  if (titleEl && !String(S("campaign_title") || "").trim()) titleEl.textContent = fallbackTitle;
+  if (textEl && !String(S("campaign_text") || "").trim()) textEl.textContent = fallbackText;
+  if (eyebrowEl && !String(S("campaign_eyebrow") || "").trim()) eyebrowEl.textContent = state.lang === "ar" ? "عروض كارديفو" : "THE KARDIVO DROP";
+  if (ctaEl && !String(S("campaign_cta") || "").trim()) ctaEl.textContent = state.lang === "ar" ? "اكتشف المنتجات" : "Explore the store";
   const cta = $("#campaignCta");
   if (cta) cta.href = /^(https?:\/\/|\/#|\/product\/|\/)/i.test(link) ? link : "/#store";
   const art = $("#campaignArt");
   if (art) {
-    art.style.backgroundImage = image && /^https?:\/\//i.test(image)
-      ? `linear-gradient(90deg,#100b1be8,#100b1b35),url("${image.replace(/["\\]/g, "")}")`
-      : "radial-gradient(circle at 65% 35%,#a477ff66,transparent 28%),radial-gradient(circle at 80% 75%,#5b21b666,transparent 38%),linear-gradient(135deg,#1b1230,#0b0912)";
+    const artwork = image && /^https?:\/\//i.test(image) ? image : STOCK_ART[0];
+    art.style.backgroundImage = `linear-gradient(90deg,#100b1bf0 0%,#100b1b9c 45%,#100b1b20 100%),url("${artwork.replace(/["\\]/g, "")}")`;
   }
 }
 function renderSearchSuggestions() {
@@ -664,7 +696,7 @@ function renderSearchSuggestions() {
   const q = input.value.trim().toLowerCase();
   if (q.length < 2) { box.hidden = true; box.innerHTML = ""; return; }
   const matches = state.products.map(p => ({ p, score: searchScore(p, q) })).filter(x => x.score >= 0).sort((a, b) => b.score - a.score || Number(b.p.featured || 0) - Number(a.p.featured || 0)).slice(0, 5).map(x => x.p);
-  box.innerHTML = matches.map((p) => `<a class="search-suggestion" href="/${encodeURIComponent(p.slug || p.id)}" data-suggestion-product="${p.id}">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span class="suggestion-placeholder">K</span>`}<span class="suggestion-copy"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</small></span><strong>${money(Number(p.price || 0))}</strong></a>`).join("") || `<div class="search-suggestion-empty">${state.lang === "ar" ? "مفيش نتائج مطابقة. جرّب اسم تاني." : "No matching products. Try another search."}</div>`;
+  box.innerHTML = matches.map((p) => `<a class="search-suggestion" href="/${encodeURIComponent(p.slug || p.id)}" data-suggestion-product="${p.id}">${stockImg(p.image_url, "", stockArtFor(p))}<span class="suggestion-copy"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</small></span><strong>${money(Number(p.price || 0))}</strong></a>`).join("") || `<div class="search-suggestion-empty">${state.lang === "ar" ? "مفيش نتائج مطابقة. جرّب اسم تاني." : "No matching products. Try another search."}</div>`;
   box.hidden = false;
 }
 function renderCategoryCards() {
@@ -674,11 +706,12 @@ function renderCategoryCards() {
   const categories = state.categories.filter((c) => state.products.some((p) => String(p.category_id) === String(c.id)));
   el.innerHTML = categories.map((c) => {
     const product = state.products.find((p) => String(p.category_id) === String(c.id) && p.image_url);
-    const art = String(map[c.id] || (product && product.image_url) || "");
+    const fallbackProduct = state.products.find((p) => String(p.category_id) === String(c.id));
+    const art = String(map[c.id] || (product && product.image_url) || stockArtFor({ ...c, id: c.id, name: c.name, category_name: c.name }));
     const name = cName(c);
     const count = state.products.filter((p) => String(p.category_id) === String(c.id)).length;
     const subtitle = state.lang === "ar" ? `${count} منتج` : `${count} ${count === 1 ? "product" : "products"}`;
-    return `<button class="category-card" type="button" data-category-card="${escapeHTML(c.id)}" aria-label="${escapeHTML(name)}"><div class="category-art">${art ? `<img src="${escapeHTML(art)}" alt="" loading="lazy" onerror="this.parentElement.remove()">` : ""}</div><div class="category-card-content"><div><h3>${escapeHTML(name)}</h3><p>${subtitle}</p></div><span class="cat-arrow" aria-hidden="true">${arrow()}</span></div></button>`;
+    return `<button class="category-card" type="button" data-category-card="${escapeHTML(c.id)}" aria-label="${escapeHTML(name)}"><div class="category-art">${stockImg(art, "", stockArtFor(fallbackProduct || c))}</div><div class="category-card-content"><div><h3>${escapeHTML(name)}</h3><p>${subtitle}</p></div><span class="cat-arrow" aria-hidden="true">${arrow()}</span></div></button>`;
   }).join("");
   el.querySelectorAll("[data-category-card]").forEach((b) => b.addEventListener("click", () => {
     state.category = String(b.dataset.categoryCard);
@@ -699,7 +732,7 @@ function renderPopularProducts() {
     const old = Number(p.old_price || 0);
     const name = pName(p);
     const cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
-    const img = p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(name)}" loading="lazy">` : `<span class="popular-placeholder">K</span>`;
+    const img = stockImg(p.image_url, name, stockArtFor(p));
     return `<a class="popular-product" href="/${encodeURIComponent(p.slug || p.id)}"><div class="popular-product-image">${img}</div><div class="popular-product-copy"><span class="popular-product-category">${escapeHTML(cat || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</span><span class="popular-product-name">${escapeHTML(name)}</span><span class="popular-product-price">${money(price)}${old > price ? `<del>${money(old)}</del>` : ""}</span></div></a>`;
   }).join("");
   const section = $("#popularSection");
@@ -794,7 +827,7 @@ function renderProducts() {
         href = "/" + encodeURIComponent(p.slug),
         name = pName(p),
         cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
-      return `<article class="product-card product-card-link"><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-image">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(name)}" loading="lazy">` : `<div class="no-image">K</div>`}${sale ? `<span class="sale">${t("SALE")}</span>` : ""}<span class="stock">${badge}</span></div><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span>` : ""}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
+      return `<article class="product-card product-card-link"><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-image">${stockImg(p.image_url, name, stockArtFor(p))}${sale ? `<span class="sale">${t("SALE")}</span>` : ""}<span class="stock">${badge}</span></div><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span>` : ""}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
     })
     .join("");
   $$("[data-add]").forEach(
@@ -829,7 +862,7 @@ async function openProductPage(slug) {
       old = variants.length
         ? Number(first.old_price || 0)
         : Number(p.old_price || 0);
-    main.innerHTML = `<section class="product-page container"><div class="product-breadcrumb"><a href="/" data-home>${t("Store")}</a><span>/</span><span>${escapeHTML(name)}</span></div><div class="product-detail"><div class="product-detail-media">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(name)}">` : `<div class="product-detail-placeholder">K</div>`}</div><div class="product-detail-copy"><span class="eyebrow">${escapeHTML(cName({ name: p.category_name, name_ar: p.category_name_ar }) || t("DIGITAL PRODUCT"))}</span><h1>${escapeHTML(name)}</h1><div class="product-detail-price" id="productPrice">${money(price)} ${old > price ? `<del>${money(old)}</del>` : ""}</div><div class="product-detail-meta">${[
+    main.innerHTML = `<section class="product-page container"><div class="product-breadcrumb"><a href="/" data-home>${t("Store")}</a><span>/</span><span>${escapeHTML(name)}</span></div><div class="product-detail"><div class="product-detail-media">${stockImg(p.image_url, name, stockArtFor(p))}</div><div class="product-detail-copy"><span class="eyebrow">${escapeHTML(cName({ name: p.category_name, name_ar: p.category_name_ar }) || t("DIGITAL PRODUCT"))}</span><h1>${escapeHTML(name)}</h1><div class="product-detail-price" id="productPrice">${money(price)} ${old > price ? `<del>${money(old)}</del>` : ""}</div><div class="product-detail-meta">${[
       p.platform,
       p.region,
       p.delivery_type === "code"
@@ -3066,7 +3099,7 @@ async function adminCustomers(main) {
   main.innerHTML = `<div class="admin-top"><h2>Customers</h2><span class="eyebrow">${rows.length} ACCOUNTS</span></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Orders</th><th>Paid total</th><th>Joined</th></tr></thead><tbody>${rows.map((u) => `<tr><td>${escapeHTML(u.name)}</td><td>${escapeHTML(u.email)}</td><td>${escapeHTML(u.role)}</td><td>${u.orders}</td><td>${money(u.spent)}</td><td>${escapeHTML(u.created_at)}</td></tr>`).join("")}</tbody></table></div></div>`;
 }
 $("#langBtn").onclick = () => setLang(state.lang === "ar" ? "en" : "ar");
-$("#currencyBtn").onclick = toggleCurrency;
+$("#currencyBtn").addEventListener("click", (event) => { event.preventDefault(); toggleCurrency(); });
 $("#footerTrack").onclick = (e) => {
   e.preventDefault();
   openTrack();
