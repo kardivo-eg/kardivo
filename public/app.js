@@ -7,6 +7,7 @@ const state = {
   category: "all",
   query: "",
   sort: "featured",
+  discovery: "all",
   admin: { tab: "dashboard", data: {} },
 };
 const AR = {
@@ -21,6 +22,13 @@ const AR = {
   STORE: "المتجر",
   "Search...": "دوّر...",
   Featured: "المميّز",
+  "QUICK FILTERS": "فلاتر سريعة",
+  "All products": "كل المنتجات",
+  "Available now": "متاح دلوقتي",
+  "On sale": "عليه خصم",
+  "Manual delivery": "تسليم يدوي",
+  "Showing {0} of {1} products": "عرض {0} من {1} منتج",
+  "No products match these filters.": "مفيش منتجات مطابقة للفلاتر دي.",
   Newest: "الأحدث",
   "Price: low to high": "السعر: من الأقل للأعلى",
   "Price: high to low": "السعر: من الأعلى للأقل",
@@ -558,6 +566,54 @@ function categoryArtworkMap() {
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch { return {}; }
 }
+function renderHeroShowcase() {
+  const el = $("#heroShowcase");
+  if (!el) return;
+  const ranked = [...state.products].sort((a, b) => Number(b.featured || 0) - Number(a.featured || 0) || Number(b.id || 0) - Number(a.id || 0));
+  const picks = ranked.slice(0, 3);
+  el.innerHTML = picks.map((p, i) => {
+    const name = pName(p);
+    const activeVariants = (p.variants || []).filter(v => Number(v.active) !== 0);
+    const price = activeVariants.length ? Math.min(...activeVariants.map(v => Number(v.price || 0))) : Number(p.price || 0);
+    const img = p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span class="hero-tile-letter">${escapeHTML(name.slice(0, 1).toUpperCase() || "K")}</span>`;
+    return `<a class="hero-product-tile hero-product-tile-${i + 1}" href="/${encodeURIComponent(p.slug || p.id)}" aria-label="View ${escapeHTML(name)}"><div class="hero-tile-art">${img}</div><span class="hero-tile-name">${escapeHTML(name)}</span><b>${money(price)}</b></a>`;
+  }).join("");
+  el.hidden = !picks.length;
+}
+function productAvailable(p) {
+  if (p.delivery_type !== "code") return true;
+  const active = (p.variants || []).filter(v => Number(v.active) !== 0);
+  return active.length ? active.some(v => Number(v.stock || 0) > 0) : Number(p.stock || 0) > 0;
+}
+function productOnSale(p) {
+  if (Number(p.old_price || 0) > Number(p.price || 0)) return true;
+  return (p.variants || []).some(v => Number(v.active) !== 0 && Number(v.old_price || 0) > Number(v.price || 0));
+}
+function renderSmartFilters() {
+  const el = $("#smartFilters");
+  if (!el) return;
+  const options = [
+    ["all", t("All products")],
+    ["available", t("Available now")],
+    ["sale", t("On sale")],
+    ["manual", t("Manual delivery")],
+  ];
+  el.innerHTML = options.map(([key, label]) => `<button type="button" class="smart-filter ${state.discovery === key ? "active" : ""}" data-discovery="${key}">${escapeHTML(label)}${key === "sale" ? `<span class="filter-spark">✦</span>` : ""}</button>`).join("");
+  el.querySelectorAll("[data-discovery]").forEach(b => b.addEventListener("click", () => {
+    state.discovery = b.dataset.discovery;
+    renderSmartFilters();
+    renderProducts();
+  }));
+}
+function searchScore(p, query) {
+  const normalize = value => String(value || "").toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const name = normalize(pName(p));
+  const hay = normalize(`${pName(p)} ${pDesc(p)} ${p.platform || ""} ${p.region || ""} ${cName({name:p.category_name,name_ar:p.category_name_ar})}`);
+  const tokens = normalize(query).split(/\s+/).filter(Boolean);
+  if (!tokens.length) return 0;
+  if (tokens.every(token => hay.includes(token))) return tokens.reduce((score, token) => score + (name.startsWith(token) ? 8 : name.includes(token) ? 5 : 2), 0);
+  return -1;
+}
 function renderCampaign() {
   const section = $("#campaignSection");
   if (!section) return;
@@ -580,10 +636,7 @@ function renderSearchSuggestions() {
   if (!box || !input) return;
   const q = input.value.trim().toLowerCase();
   if (q.length < 2) { box.hidden = true; box.innerHTML = ""; return; }
-  const matches = state.products.filter((p) => {
-    const hay = `${pName(p)} ${pDesc(p)} ${p.platform || ""} ${p.region || ""} ${cName({name:p.category_name,name_ar:p.category_name_ar})}`.toLowerCase();
-    return hay.includes(q);
-  }).slice(0, 5);
+  const matches = state.products.map(p => ({ p, score: searchScore(p, q) })).filter(x => x.score >= 0).sort((a, b) => b.score - a.score || Number(b.p.featured || 0) - Number(a.p.featured || 0)).slice(0, 5).map(x => x.p);
   box.innerHTML = matches.map((p) => `<a class="search-suggestion" href="/${encodeURIComponent(p.slug || p.id)}" data-suggestion-product="${p.id}">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span class="suggestion-placeholder">K</span>`}<span class="suggestion-copy"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</small></span><strong>${money(Number(p.price || 0))}</strong></a>`).join("") || `<div class="search-suggestion-empty">${state.lang === "ar" ? "مفيش نتائج مطابقة. جرّب اسم تاني." : "No matching products. Try another search."}</div>`;
   box.hidden = false;
 }
@@ -650,17 +703,16 @@ function renderCategories() {
 }
 function filtered() {
   let arr = [...state.products];
+  if (state.discovery === "available") arr = arr.filter(productAvailable);
+  else if (state.discovery === "sale") arr = arr.filter(productOnSale);
+  else if (state.discovery === "manual") arr = arr.filter(p => p.delivery_type === "manual");
   if (state.category === "featured")
     arr = arr.filter((p) => Number(p.featured));
   else if (state.category !== "all")
     arr = arr.filter((p) => String(p.category_id) === String(state.category));
   const q = state.query.toLowerCase();
   if (q)
-    arr = arr.filter((p) =>
-      `${pName(p)} ${pDesc(p)} ${p.platform} ${p.region} ${cName({ name: p.category_name, name_ar: p.category_name_ar })}`
-        .toLowerCase()
-        .includes(q),
-    );
+    arr = arr.map(p => ({ p, score: searchScore(p, q) })).filter(x => x.score >= 0).sort((a, b) => b.score - a.score).map(x => x.p);
   switch (state.sort) {
     case "newest":
       arr.sort((a, b) => b.id - a.id);
@@ -675,7 +727,7 @@ function filtered() {
       arr.sort((a, b) => a.name.localeCompare(b.name));
       break;
     default:
-      arr.sort((a, b) => b.featured - a.featured || b.id - a.id);
+      if (!q) arr.sort((a, b) => Number(b.featured || 0) - Number(a.featured || 0) || Number(b.id || 0) - Number(a.id || 0));
   }
   return arr;
 }
@@ -683,8 +735,10 @@ function renderProducts() {
   const el = $("#productGrid");
   if (!el) return;
   const arr = filtered();
+  const summary = $("#discoverySummary");
+  if (summary) summary.textContent = t("Showing {0} of {1} products", arr.length, state.products.length);
   if (!arr.length) {
-    el.innerHTML = `<div class="loading-card">${state.products.length ? t("No products match that search.") : t("No products yet.")}</div>`;
+    el.innerHTML = `<div class="loading-card">${state.products.length ? (state.discovery !== "all" ? t("No products match these filters.") : t("No products match that search.")) : t("No products yet.")}</div>`;
     return;
   }
   const showStock = state.settings.show_stock !== false;
@@ -1620,6 +1674,7 @@ async function adminDashboard(main) {
   main.innerHTML = `<div class="admin-top"><h2>Dashboard</h2><select id="repDays">${[7, 30, 90, 365].map((n) => `<option value="${n}" ${n === r.days ? "selected" : ""}>Last ${n} days</option>`).join("")}</select></div>
   ${d.review_queue ? `<div class="notice" style="margin-bottom:12px"><b>${d.review_queue}</b> order(s) have a payment proof waiting. <button class="mini primary" id="goQueue">Review now</button></div>` : ""}
   <div class="stats"><div class="stat"><small>AWAITING PAYMENT</small><b>${d.awaiting_payment}</b></div><div class="stat"><small>ORDERS</small><b>${d.orders}</b></div><div class="stat"><small>PAID REVENUE</small><b>${money(d.paid_revenue)}</b></div><div class="stat"><small>7-DAY REVENUE</small><b>${money(d.revenue_7d)}</b></div><div class="stat"><small>30-DAY REVENUE</small><b>${money(d.revenue_30d)}</b></div><div class="stat"><small>AVG ORDER</small><b>${money(d.avg_order)}</b></div><div class="stat"><small>AVAILABLE CODES</small><b>${d.available_codes}</b></div><div class="stat"><small>CUSTOMERS</small><b>${d.customers}</b></div></div>
+  <div class="admin-panel admin-quick-actions"><div class="panel-head"><div><h3>Quick actions</h3><small>Jump straight to the jobs you do most</small></div></div><div class="admin-quick-grid"><button type="button" data-admin-jump="queue"><span>01</span><b>Review payments</b><small>${d.review_queue || 0} awaiting proof review</small></button><button type="button" data-admin-jump="products"><span>02</span><b>Manage products</b><small>Prices, images, stock and delivery</small></button><button type="button" data-admin-jump="merge"><span>03</span><b>Manage variations</b><small>Combine safely with preview and undo</small></button><button type="button" data-admin-jump="settings"><span>04</span><b>Storefront & campaigns</b><small>Edit bilingual homepage content</small></button></div></div>
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Checkout funnel · last ${r.days} days</h3></div><div class="modal-body"><div class="funnel"><div class="stat"><small>CHECKOUT STARTED</small><b>${f.started}</b></div><div class="stat"><small>CHECKOUT COMPLETED</small><b>${f.completed}</b></div><div class="stat"><small>COMPLETION RATE</small><b>${f.rate}%</b></div><div class="stat"><small>PAID ORDERS</small><b>${f.paid_orders}</b></div></div><small>Counts unique browsing sessions. "Started" = opened checkout; "completed" = placed an order.</small></div></div>
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Revenue · last ${r.days} days</h3></div><div class="modal-body"><div class="line"><span>Cash revenue (paid orders)</span><b>${money(r.cash_revenue)}</b></div><div class="line"><span>Discounts given</span><b>${money(r.discounts_given)}</b></div><div class="line"><span>Store credit used</span><b>${money(r.credit_used)}</b></div><div class="line"><span>Supplier cost</span><b>${money(r.total_cost)}</b></div><div class="line"><span>Estimated profit</span><b>${money(r.profit_estimate)}</b></div>${r.costs_incomplete ? `<small>Some products have no cost recorded, so profit is overstated. Add a supplier cost when importing codes, or a cost price on manual products.</small>` : ""}<div class="bars" title="Daily revenue">${r.daily.map((x) => `<span style="height:${Math.max(4, Math.round((x.revenue / maxRev) * 100))}%" title="${escapeHTML(x.date)}: ${money(x.revenue)} (${x.orders} orders)"></span>`).join("") || `<small>No paid orders in this period.</small>`}</div></div></div>
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Top products & profit</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Units</th><th>Revenue</th><th>Cost</th><th>Profit</th></tr></thead><tbody>${r.products.map((p) => `<tr><td>${escapeHTML(p.name)}</td><td>${p.units}</td><td>${money(p.revenue)}</td><td>${p.cost == null ? "—" : money(p.cost)}</td><td>${p.profit == null ? "—" : money(p.profit)}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">No sales yet.</td></tr>`}</tbody></table></div></div>
@@ -1634,6 +1689,10 @@ async function adminDashboard(main) {
     state.admin.tab = "queue";
     renderAdminTab();
   });
+  $$("[data-admin-jump]").forEach(b => b.addEventListener("click", () => {
+    state.admin.tab = b.dataset.adminJump;
+    renderAdminTab();
+  }));
   const act = (id, path, msg) =>
     $(id)?.addEventListener("click", async (e) => {
       e.target.disabled = true;
@@ -2713,6 +2772,8 @@ async function refreshStore() {
   applySettings();
   renderCampaign();
   renderCategories();
+  renderSmartFilters();
+  renderHeroShowcase();
   renderProducts();
   renderFooter();
 }
@@ -2942,7 +3003,10 @@ function showHome() {
   $("main").innerHTML = homeHTML;
   translateStatic();
   applySettings();
+  renderCampaign();
   renderCategories();
+  renderSmartFilters();
+  renderHeroShowcase();
   renderCategoryCards();
   renderPopularProducts();
   renderProducts();

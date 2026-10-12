@@ -1,3 +1,21 @@
+# Kardivo V13 — Storefront & Admin Upgrade
+
+## What is materially new in V13
+- **Cinematic, product-led hero:** the homepage now features up to three real products from the existing catalog in floating glass tiles. No hardcoded product IDs or placeholder `Test` product are used; cards are rendered from the live products API and link to the actual product pages.
+- **New product discovery controls:** filter the catalog to available products, products with an actual old-price discount, or manual-delivery products. A live result count explains how many products match.
+- **Relevance-ranked search:** multi-word searches score product-name matches above description/category matches, while the chosen explicit sort order remains respected. Suggestions use the same match logic.
+- **Admin quick actions:** dashboard shortcuts jump to payment review, product management, variation management, and storefront/campaign settings. Existing review queue, safe variation preview/undo, audit trail, delivery messaging, proof uploads, stock jobs, and rate limiting are retained.
+- **Updated service-worker cache version** so returning installations can fetch the new CSS and JavaScript instead of staying on the old cached shell.
+- **No schema or migration changes:** `schema.sql` and `migration-v4.sql` are unchanged; this build does not delete, rewrite, or re-key existing products, customers, orders, inventory, or settings.
+
+## Checks performed
+- JavaScript syntax check for `public/app.js` and `worker.js`.
+- Static checks for new discovery controls, hero rendering, admin jump actions, and service-worker cache version.
+- Compared schema and migration files against V12 and verified ZIP integrity.
+- Not tested against a live Cloudflare deployment, real D1/R2, or browser checkout; deploy to staging and verify product listing, Arabic/English switching, product links, and admin actions before production.
+
+---
+
 # Kardivo V12
 
 ## V12 phase additions (on top of V11)
