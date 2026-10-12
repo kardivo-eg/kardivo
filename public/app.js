@@ -2979,13 +2979,21 @@ function applySettings() {
   $$("[data-store-name]").forEach(
     (el) => (el.textContent = s.store_name || "Kardivo"),
   );
-  const lu = s.logo_url || logo;
-  $$("[data-logo]").forEach((i) => {
-    i.src = lu;
-    i.alt = s.store_name || "Kardivo";
+  // The built-in logo is now HTML/CSS/SVG. Only swap in an image if an admin set a custom logo URL
+  // (the API returns the old default JPG when none is set, so that value counts as "not custom").
+  const lu = s.logo_url && s.logo_url !== logo ? s.logo_url : "";
+  $$("[data-logo]").forEach((el) => {
+    if (lu) {
+      if (!el.dataset.cssLogo) el.dataset.cssLogo = el.innerHTML;
+      el.classList.add("k-logo-custom");
+      el.innerHTML = `<img src="${escapeHTML(lu)}" alt="${escapeHTML(s.store_name || "Kardivo")}">`;
+    } else if (el.dataset.cssLogo) {
+      el.classList.remove("k-logo-custom");
+      el.innerHTML = el.dataset.cssLogo;
+    }
   });
   const fav = $("#favicon");
-  if (fav) fav.href = lu;
+  if (fav) fav.href = lu || "/icons/logo-mark.svg";
   const ph = $("#search");
   if (ph && S("search_placeholder")) ph.placeholder = S("search_placeholder");
   const a = $("#announce");

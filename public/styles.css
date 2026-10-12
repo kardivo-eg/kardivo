@@ -598,3 +598,23 @@ body{font-size:1rem;line-height:1.65}
 @media(max-width:700px){html{font-size:16px}.container{width:min(100% - 28px,1400px)}.nav{height:72px;gap:8px}.brand{width:110px;height:44px}.hero h1{font-size:56px}.hero p{font-size:17px}.product-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.product-body{padding:14px}.product-card .product-name{font-size:15px}.price{font-size:19px}.add-btn{padding:10px 12px}.store{padding:56px 0}.steps article{min-height:0;padding:26px}}
 @media(max-width:430px){.product-grid{grid-template-columns:1fr}.hero h1{font-size:46px}.brand{width:80px}}
 @media(prefers-reduced-motion:reduce){.product-card:hover{transform:none}}
+
+/* ===== Kardivo logo: pure HTML + CSS + inline SVG (replaces the old JPG) ===== */
+.k-logo{--k-main:#7a4ad8;--k-mid:#5c35ad;--k-dark:#3f2379;display:inline-flex;align-items:center;justify-content:center;direction:ltr;color:#fff;line-height:1;white-space:nowrap;user-select:none;font-size:16px}
+.k-logo-mark{display:block;flex:none;height:2.6em;width:auto;overflow:visible}
+.k-logo .k-main path{fill:var(--k-main)}.k-logo .k-mid path{fill:var(--k-mid)}.k-logo .k-dark path{fill:var(--k-dark)}
+.k-logo-word{font-family:"Exo 2",Inter,system-ui,sans-serif;font-weight:800;letter-spacing:.01em;font-size:1.55em;color:#fff}
+.k-logo.k-row{flex-direction:row;gap:.55em}
+.k-logo.k-stack{flex-direction:column;gap:.35em}
+.k-logo.k-stack .k-logo-mark{height:5.6em}
+.k-logo.k-stack .k-logo-word{font-size:2.3em}
+.k-logo-custom{display:inline-block}.k-logo-custom img{display:block;width:100%;height:100%;object-fit:contain;border-radius:0}
+/* sizes (these replace the old fixed image boxes) */
+.brand{width:auto;height:auto;min-height:48px}
+.brand .k-logo{font-size:15px}
+.footer-logo.k-logo{width:auto;height:auto;font-size:16px;margin-bottom:6px}
+.hero-logo.k-logo{width:auto;max-height:none;height:auto;font-size:clamp(11px,2.7vw,19px);filter:drop-shadow(0 18px 36px #0009);opacity:1!important}
+.hero-logo.k-logo.k-logo-custom{width:min(66%,420px);height:auto;font-size:inherit}
+.brand .k-logo-custom,.footer-logo.k-logo-custom{width:130px;height:48px}
+@media(max-width:700px){.brand .k-logo{font-size:13px}.hero-logo.k-logo{font-size:12px}}
+@media(max-width:430px){.brand{width:auto}.brand .k-logo{font-size:12px}}
