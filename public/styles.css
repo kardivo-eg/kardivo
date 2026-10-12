@@ -499,3 +499,100 @@ html[dir="rtl"] #email,html[dir="rtl"] #password,html[dir="rtl"] #guestContact,h
 .search-suggestion img{width:46px;height:46px;flex:0 0 46px;object-fit:cover;border-radius:8px}
 .category-art{background:linear-gradient(135deg,#20152f,#0c0912)}
 @media(max-width:700px){.campaign-card{min-height:0}.campaign-art{min-height:190px}.campaign-copy{grid-row:2}.campaign-art{grid-row:1}}
+
+
+/* KARDIVO BIG MARKETPLACE LOOK · v17
+   Scale-up layer: larger type, bigger cards, bolder hero and prices.
+   Appended last so it overrides earlier rules. Uses logical properties so RTL stays correct. */
+:root{--radius:24px;--accent:#a477ff;--accent-2:#6d3fe8;--glow:0 18px 50px #6d3fe84d}
+html{font-size:17px}
+body{font-size:1rem;line-height:1.65}
+.container{width:min(1400px,calc(100% - 64px))}
+
+/* header */
+.site-header{background:#09070fee}
+.nav{height:96px;gap:52px}
+.brand{width:170px;height:60px}
+.nav nav{font-size:16px;font-weight:700;gap:38px;color:#d9d3e6}
+.icon-btn,.account-btn,.cart-btn{min-height:50px;font-size:15px;font-weight:700;border-radius:16px}
+.icon-btn{min-width:50px;font-size:24px}
+.cart-btn{background:linear-gradient(135deg,var(--accent-2),var(--accent));border-color:transparent;padding-inline:20px;box-shadow:var(--glow)}
+.cart-btn span{background:#fff;color:#2a1068;min-width:26px;height:26px;font-size:13px;font-weight:800}
+
+/* hero */
+.hero{min-height:760px;gap:90px;padding:110px 0 96px;position:relative}
+.hero::before{content:"";position:absolute;inset:40px -40px auto;height:640px;z-index:-1;border-radius:40px;background:radial-gradient(900px 500px at 70% 30%,#6d3fe855,transparent 65%),linear-gradient(135deg,#1a1230,#0b0912);border:1px solid #ffffff10}
+.hero h1{font-size:clamp(68px,8.4vw,120px);line-height:.95}
+.hero p{font-size:21px;max-width:640px;color:#c9c2d8}
+.eyebrow{font-size:13px;letter-spacing:.2em}
+.hero-actions{gap:14px;margin:38px 0 32px}
+.btn{min-height:56px;padding:14px 28px;font-size:17px;border-radius:16px}
+.btn.primary{background:linear-gradient(135deg,var(--accent-2),var(--accent));border-color:transparent;box-shadow:var(--glow)}
+.trust-row{gap:12px;font-size:15px}
+.trust-row span{padding:10px 16px;border:1px solid #ffffff1a;border-radius:999px;background:#ffffff08;font-weight:600}
+.hero-frame{width:min(560px,100%)}
+
+/* section headings */
+.section-head h2,.deal-band h2{font-size:clamp(34px,4vw,52px);letter-spacing:-.03em}
+.section-head p{font-size:17px;color:#b4adc2}
+.store{padding:90px 0}
+.search input{font-size:16px;padding:16px 0;width:340px}
+.store-tools select{font-size:15px;padding:16px;border-radius:14px}
+.chip,.smart-filter{font-size:15px;padding:12px 20px;font-weight:600}
+
+/* categories and popular rows */
+.category-cards{gap:20px}
+.category-card{min-height:230px;border-radius:24px}
+.category-card h3{font-size:22px}
+.category-card p{font-size:14px}
+.popular-products{gap:20px}
+.popular-product-name{font-size:16px}
+.popular-product-copy{padding:18px}
+
+/* product grid */
+.product-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:26px}
+.product-card{border-radius:24px;background:linear-gradient(180deg,#171320,#0f0c15)}
+.product-card:hover{transform:translateY(-8px);border-color:#7d5bd0;box-shadow:0 28px 60px #000a,0 0 0 1px #8b5cf655}
+.product-image{height:auto;aspect-ratio:4/4.4}
+.sale{font-size:13px;padding:7px 12px;border-radius:10px;background:linear-gradient(135deg,#ff5d8f,#ff8a5c);color:#fff}
+.stock{font-size:12px;padding:6px 11px;border-radius:10px}
+.product-body{padding:22px}
+.product-cat{font-size:12px;letter-spacing:.1em}
+.product-card .product-name{font-size:19px;font-weight:800;margin:10px 0 6px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;min-height:2.5em;line-height:1.25}
+.product-meta{font-size:14px;min-height:22px}
+.price-row{margin-top:18px}
+.price{font-size:24px;font-weight:900;color:#fff}
+.product-card .price .old{font-size:15px;margin-left:0;margin-inline-start:10px}
+.add-btn{padding:12px 18px;font-size:14px;border-radius:12px;background:linear-gradient(135deg,var(--accent-2),var(--accent));color:#fff;border-color:transparent}
+
+/* deals and steps */
+.deal-band{padding:56px;border-radius:28px;gap:56px;background:linear-gradient(110deg,#1b1330,#0d0b12)}
+.deal-points b{font-size:15px}
+.deal-points span{font-size:16px}
+.steps{gap:22px}
+.steps article{padding:36px;min-height:240px;border-radius:24px}
+.steps h3{font-size:24px}
+.steps p{font-size:16px}
+
+/* footer, forms, modals */
+.footer-grid{padding:72px 0 48px}
+.footer-logo{width:160px;height:58px}
+.footer-grid p,.footer-grid a{font-size:15px;color:#a39bb0}
+.footer-bottom{font-size:14px}
+.modal{border-radius:26px}
+.modal-head h2{font-size:24px}
+.field label{font-size:14px}
+.field input,.field select,.field textarea{font-size:16px;padding:14px 16px;border-radius:12px}
+.line{font-size:16px}
+.toast{font-size:15px}
+
+/* keyboard focus everywhere */
+:where(a,button,input,select,textarea,summary):focus-visible{outline:3px solid #c4a8ff;outline-offset:3px}
+
+/* wide, medium, small screens */
+@media(min-width:1700px){.product-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.container{width:min(1560px,calc(100% - 96px))}}
+@media(max-width:1180px){.product-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:950px){.hero{min-height:0;padding:56px 0}.hero::before{inset:10px -12px auto;height:auto;bottom:10px}.nav{height:80px}.nav nav{display:none}.deal-band{padding:32px}}
+@media(max-width:700px){html{font-size:16px}.container{width:min(100% - 28px,1400px)}.nav{height:72px;gap:8px}.brand{width:110px;height:44px}.hero h1{font-size:56px}.hero p{font-size:17px}.product-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.product-body{padding:14px}.product-card .product-name{font-size:15px}.price{font-size:19px}.add-btn{padding:10px 12px}.store{padding:56px 0}.steps article{min-height:0;padding:26px}}
+@media(max-width:430px){.product-grid{grid-template-columns:1fr}.hero h1{font-size:46px}.brand{width:80px}}
+@media(prefers-reduced-motion:reduce){.product-card:hover{transform:none}}
