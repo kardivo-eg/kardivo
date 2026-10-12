@@ -1,3 +1,13 @@
+# Kardivo V16 — Admin-only order search
+
+- Removed the public Track order controls from the storefront header and footer.
+- Public order-number lookup now requires an authenticated admin role.
+- Added a Find an order shortcut to the admin dashboard, opening the existing searchable Orders tab.
+- Legacy tracking URLs redirect to the customer account; delivery/support emails link to account access instead.
+- No database schema or migration changes; no customer/order/inventory records were modified.
+
+Validation performed: JavaScript syntax checks and ZIP integrity. Live Cloudflare/browser behavior still requires staging verification.
+
 # Kardivo V15 — Currency, imagery and campaign correction
 
 - Fixed the currency control to use the exact same button class and font styling as the EN/AR control. Currency preference is remembered, and product prices refresh when switching. Order totals and payment instructions remain EGP.

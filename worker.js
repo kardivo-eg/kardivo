@@ -947,12 +947,12 @@ function mailTemplate(lang, kind, d, storeName = "Kardivo") {
       en: ["Reset your password", "You asked to reset your password. Use the button to choose a new one. The link is valid for one hour. If this wasn't you, ignore this email.", "Choose a new password"],
     },
     delivered: {
-      ar: [`طلبك ${d.order || ""} اتسلّم`, "طلبك اتسلّم. تقدر تشوف التفاصيل في أي وقت من «تتبّع الطلب».", "تتبّع الطلب"],
-      en: [`Your order ${d.order || ""} is delivered`, "Your order has been delivered. You can see the details any time under Track order.", "Track order"],
+      ar: [`طلبك ${d.order || ""} اتسلّم`, "طلبك اتسلّم. سجّل دخولك لحسابك لعرض تفاصيل الطلب.", "افتح حسابك"],
+      en: [`Your order ${d.order || ""} is delivered`, "Your order has been delivered. Sign in to your account to view the order details.", "Open account"],
     },
     reply: {
-      ar: [`رد جديد على طلبك ${d.order || ""}`, "فريق الدعم رد على رسالتك:", "افتح الطلب"],
-      en: [`New reply on your order ${d.order || ""}`, "Our support team replied to your message:", "Open order"],
+      ar: [`رد جديد على طلبك ${d.order || ""}`, "فريق الدعم رد على رسالتك. سجّل دخولك لحسابك لعرض المحادثة.", "افتح حسابك"],
+      en: [`New reply on your order ${d.order || ""}`, "Our support team replied. Sign in to your account to view the conversation.", "Open account"],
     },
     restock: {
       ar: [`${d.product || ""} رجع متوفر`, "المنتج اللي كنت مستنيه رجع متوفر. الكمية محدودة.", "شوف المنتج"],
@@ -1631,7 +1631,7 @@ async function emailDelivered(env, ctx, order, origin) {
     const codes = (await env.DB.prepare("SELECT code FROM inventory WHERE order_id=? AND status='sold'").bind(order.id).all()).results;
     if (codes.length) extra = (extra ? extra + "\n\n" : "") + codes.map((c) => c.code).join("\n");
   }
-  sendEmail(env, ctx, { to, ...mailTemplate(order.lang, "delivered", { order: order.order_number, extra, url: origin ? `${origin}/?track=${encodeURIComponent(order.order_number)}` : "" }, s.store_name) });
+  sendEmail(env, ctx, { to, ...mailTemplate(order.lang, "delivered", { order: order.order_number, extra, url: origin ? `${origin}/#account` : "" }, s.store_name) });
 }
 async function api(req, env, url, ctx) {
   if (!env.DB)
@@ -1909,6 +1909,9 @@ async function api(req, env, url, ctx) {
     return json(await ordersWithCodes(env, "o.user_id=?", me.id));
   }
   if (path === "/api/orders/lookup" && method === "POST") {
+    // Legacy order lookup is admin-only; customers use their authenticated account order history.
+    const admin = await requireAdmin(req, env);
+    if (!admin) return json({ error: "Admin access required." }, 403);
     const b = await readJson(req);
     if (!(await throttle(env, `lookup:${ipOf(req)}`, 15)))
       return json({ error: "Too many attempts. Try again later." }, 429);
@@ -2990,7 +2993,7 @@ async function api(req, env, url, ctx) {
       const to = u?.email || (looksEmail(existing.guest_contact) ? clean(existing.guest_contact) : "");
       if (to) {
         const st = await allSettings(env);
-        sendEmail(env, ctx, { to, ...mailTemplate(existing.lang, "reply", { order: existing.order_number, extra: text, url: `${url.origin}/?track=${encodeURIComponent(existing.order_number)}` }, st.store_name) });
+        sendEmail(env, ctx, { to, ...mailTemplate(existing.lang, "reply", { order: existing.order_number, extra: text, url: `${url.origin}/#account` }, st.store_name) });
       }
       return json({ ok: true }, 201);
     }
