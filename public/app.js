@@ -8,6 +8,8 @@ const state = {
   query: "",
   sort: "featured",
   discovery: "all",
+  currencyView: "EGP",
+  checkoutAfterAuth: false,
   admin: { tab: "dashboard", data: {} },
 };
 const AR = {
@@ -111,6 +113,10 @@ const AR = {
   "Log in": "تسجيل الدخول",
   "Create account": "إنشاء حساب",
   "Continue as guest": "كمّل كضيف",
+  "Checkout and payment remain in EGP.": "إتمام الطلب والدفع بالجنيه المصري.",
+  "Switch price display to USD": "عرض الأسعار بالدولار الأمريكي",
+  "Switch price display to EGP": "عرض الأسعار بالجنيه المصري",
+  "Simple checkout": "إتمام طلب بسهولة",
   Email: "الإيميل",
   Password: "الباسورد",
   "Welcome back, {0}.": "نورتنا تاني يا {0}.",
@@ -287,6 +293,10 @@ function t(k, ...a) {
 }
 function S(k) {
   const s = state.settings;
+  if (k === "trust_1") {
+    if (state.lang === "ar" && /اطلب كضيف/.test(String(s.trust_1_ar || ""))) return "✓ اطلب بسهولة";
+    if (/guest checkout/i.test(String(s.trust_1 || ""))) return "✓ Simple checkout";
+  }
   if (state.lang === "ar") {
     const a = s[k + "_ar"];
     if (a != null && String(a).trim() !== "") return a;
@@ -345,6 +355,7 @@ function setDir() {
     b.title = ar ? "Switch to English" : "التبديل للعربي";
     b.setAttribute("aria-label", b.title);
   }
+  updateCurrencyButton();
 }
 function applyLang() {
   setDir();
@@ -433,11 +444,39 @@ function escapeHTML(v) {
       })[c],
   );
 }
-function money(v) {
-  let c = state.settings.store_currency || "EGP";
-  if (state.lang === "ar" && !state.adminOpen && String(c).toUpperCase() === "EGP")
-    c = "ج.م";
+function moneyEGP(v) {
+  const c = state.lang === "ar" && !state.adminOpen ? "ج.م" : (state.settings.store_currency || "EGP");
   return `${Number(v || 0).toFixed(2)} ${c}`;
+}
+function money(v) {
+  const amount = Number(v || 0);
+  if (!state.adminOpen && state.currencyView === "USD") {
+    const rate = Math.max(0.01, Number(state.settings.usd_exchange_rate) || 50);
+    return `$${(amount / rate).toFixed(2)} USD`;
+  }
+  return moneyEGP(amount);
+}
+function updateCurrencyButton() {
+  const b = $("#currencyBtn");
+  if (!b) return;
+  const toUSD = state.currencyView !== "USD";
+  b.textContent = toUSD ? "USD" : "EGP";
+  b.title = t(toUSD ? "Switch price display to USD" : "Switch price display to EGP");
+  b.setAttribute("aria-label", b.title);
+}
+function toggleCurrency() {
+  state.currencyView = state.currencyView === "EGP" ? "USD" : "EGP";
+  updateCurrencyButton();
+  if (!state.ready) return;
+  if (isProductRoute()) {
+    openProductPage(decodeURIComponent(location.pathname.slice(1)).replace(/\/$/, ""));
+    return;
+  }
+  renderCategories();
+  renderCategoryCards();
+  renderPopularProducts();
+  renderProducts();
+  renderSearchSuggestions();
 }
 function pName(p) {
   return state.lang === "ar" && String(p?.name_ar || "").trim()
@@ -566,20 +605,8 @@ function categoryArtworkMap() {
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch { return {}; }
 }
-function renderHeroShowcase() {
-  const el = $("#heroShowcase");
-  if (!el) return;
-  const ranked = [...state.products].sort((a, b) => Number(b.featured || 0) - Number(a.featured || 0) || Number(b.id || 0) - Number(a.id || 0));
-  const picks = ranked.slice(0, 3);
-  el.innerHTML = picks.map((p, i) => {
-    const name = pName(p);
-    const activeVariants = (p.variants || []).filter(v => Number(v.active) !== 0);
-    const price = activeVariants.length ? Math.min(...activeVariants.map(v => Number(v.price || 0))) : Number(p.price || 0);
-    const img = p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span class="hero-tile-letter">${escapeHTML(name.slice(0, 1).toUpperCase() || "K")}</span>`;
-    return `<a class="hero-product-tile hero-product-tile-${i + 1}" href="/${encodeURIComponent(p.slug || p.id)}" aria-label="View ${escapeHTML(name)}"><div class="hero-tile-art">${img}</div><span class="hero-tile-name">${escapeHTML(name)}</span><b>${money(price)}</b></a>`;
-  }).join("");
-  el.hidden = !picks.length;
-}
+function renderHeroShowcase() { /* Hero intentionally uses the original logo only. */ }
+
 function productAvailable(p) {
   if (p.delivery_type !== "code") return true;
   const active = (p.variants || []).filter(v => Number(v.active) !== 0);
@@ -1061,6 +1088,12 @@ function changeQty(key, d) {
 function openCheckout() {
   const items = cartItems();
   if (!items.length) return;
+  if (!state.user) {
+    state.checkoutAfterAuth = true;
+    openAuth();
+    toast(state.lang === "ar" ? "سجّل دخولك أو اعمل حساب عشان تكمل الطلب." : "Log in or create an account to continue checkout.");
+    return;
+  }
   fetch("/api/checkout-events", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -1084,14 +1117,10 @@ function openCheckout() {
   state.co = { total: subtotal };
   openModal(
     t("Checkout"),
-    `<div class="notice">${t("You can check out as a guest. To keep order history, log in or create an account before placing the order.")}</div><div class="form-grid" style="margin-top:14px"><div class="field"><label>${t("Name")}</label><input id="guestName" placeholder="${t("Your name")}"></div><div class="field"><label>${t("Contact (WhatsApp or phone)")}</label><input id="guestContact" placeholder="${t("WhatsApp or phone")}"></div></div><div class="field"><label>${t("Discount code")}</label><div style="display:flex;gap:8px"><input id="discountCode" value="${escapeHTML(savedRef)}" placeholder="${t("Optional code")}" style="flex:1"><button type="button" class="btn ghost" id="applyDiscount">${t("Apply")}</button></div><small id="coNote" class="success-text"></small></div><label class="switch-row" id="creditRow" hidden><span>${t("Use store credit")} <b id="creditBal"></b></span><input class="switch" id="useCredit" type="checkbox"></label><div class="form-grid"><div class="field"><label>${t("Transfer reference")} <small>(${t("optional")})</small></label><input id="payRef" placeholder="${t("Reference number from the transfer receipt")}"></div><div class="field"><label>${t("Payment proof")} <small>(${t("optional")})</small></label><input id="checkoutProof" type="file" accept="image/*"></div></div><div class="checkout-summary"><div class="line"><span>${t("Subtotal")}</span><span id="coSubtotal">${money(subtotal)}</span></div><div class="line"><span>${t("Discount")}</span><span id="coDiscount">${money(0)}</span></div><div class="line" id="coCreditLine" hidden><span>${t("Store credit")}</span><span id="coCredit">${money(0)}</span></div><div class="line total"><span>${t("Total")}</span><span id="coTotal">${money(subtotal)}</span></div></div><div id="payWrap" style="margin-top:18px"><b>${t("Payment method")}</b><div class="payment-grid" id="payments"></div></div><div class="modal-actions"><button class="btn ghost" id="backCart">${t("Back")}</button><button class="btn primary" id="placeOrder">${t("Place order")}</button></div>`,
+    `<div class="notice">${t("Checkout and payment remain in EGP.")}</div><div class="field"><label>${t("Discount code")}</label><div style="display:flex;gap:8px"><input id="discountCode" value="${escapeHTML(savedRef)}" placeholder="${t("Optional code")}" style="flex:1"><button type="button" class="btn ghost" id="applyDiscount">${t("Apply")}</button></div><small id="coNote" class="success-text"></small></div><label class="switch-row" id="creditRow" hidden><span>${t("Use store credit")} <b id="creditBal"></b></span><input class="switch" id="useCredit" type="checkbox"></label><div class="form-grid"><div class="field"><label>${t("Transfer reference")} <small>(${t("optional")})</small></label><input id="payRef" placeholder="${t("Reference number from the transfer receipt")}"></div><div class="field"><label>${t("Payment proof")} <small>(${t("optional")})</small></label><input id="checkoutProof" type="file" accept="image/*"></div></div><div class="checkout-summary"><div class="line"><span>${t("Subtotal")}</span><span id="coSubtotal">${moneyEGP(subtotal)}</span></div><div class="line"><span>${t("Discount")}</span><span id="coDiscount">${moneyEGP(0)}</span></div><div class="line" id="coCreditLine" hidden><span>${t("Store credit")}</span><span id="coCredit">${moneyEGP(0)}</span></div><div class="line total"><span>${t("Total")}</span><span id="coTotal">${moneyEGP(subtotal)}</span></div></div><div id="payWrap" style="margin-top:18px"><b>${t("Payment method")}</b><div class="payment-grid" id="payments"></div></div><div class="modal-actions"><button class="btn ghost" id="backCart">${t("Back")}</button><button class="btn primary" id="placeOrder">${t("Place order")}</button></div>`,
   );
   $("#backCart").onclick = openCart;
   renderPaymentOptions();
-  if (state.user) {
-    $("#guestName").value = state.user.name;
-    $("#guestContact").value = state.user.email;
-  }
   $("#applyDiscount").onclick = async () => {
     if (!$("#discountCode").value.trim()) {
       toast(t("Enter a code to apply."));
@@ -1100,7 +1129,6 @@ function openCheckout() {
     await refreshTotals(true);
   };
   $("#useCredit").onchange = () => refreshTotals(false);
-  $("#guestContact").onchange = () => refreshTotals(false);
   refreshTotals(false);
 }
 // Asks the server what the cart costs: coupon, automatic bundle offers, referral codes and store credit are all decided there.
@@ -1113,20 +1141,20 @@ async function refreshTotals(announce, useCode = true) {
       body: JSON.stringify({
         items: state.cart,
         code,
-        contact: ($("#guestContact")?.value || "").trim(),
+        contact: String(state.user?.email || "").trim(),
         use_credit: !!$("#useCredit")?.checked,
       }),
     });
     state.co = { total: r.total };
-    $("#coSubtotal").textContent = money(r.subtotal);
-    $("#coDiscount").textContent = r.discount ? "− " + money(r.discount) : money(0);
-    $("#coCredit").textContent = "− " + money(r.credit);
+    $("#coSubtotal").textContent = moneyEGP(r.subtotal);
+    $("#coDiscount").textContent = r.discount ? "− " + moneyEGP(r.discount) : moneyEGP(0);
+    $("#coCredit").textContent = "− " + moneyEGP(r.credit);
     $("#coCreditLine").hidden = !(r.credit > 0);
-    $("#coTotal").textContent = money(r.total);
+    $("#coTotal").textContent = moneyEGP(r.total);
     $("#payWrap").hidden = r.total <= 0;
     const row = $("#creditRow");
     row.hidden = !(state.user && r.credit_available > 0);
-    $("#creditBal").textContent = `(${money(r.credit_available)})`;
+    $("#creditBal").textContent = `(${moneyEGP(r.credit_available)})`;
     $("#coNote").textContent = r.discount
       ? r.discount_source === "auto"
         ? `${t("Automatic offer applied.")} (${r.discount_code})`
@@ -1185,17 +1213,13 @@ async function placeOrder() {
       variant_id: i.variant_id || null,
       quantity: i.quantity,
     })),
-    guestName = $("#guestName").value.trim(),
-    guestContact = $("#guestContact").value.trim(),
+    guestName = String(state.user?.name || "").trim(),
+    guestContact = String(state.user?.email || "").trim(),
     proof = $("#checkoutProof")?.files?.[0],
     payRef = $("#payRef")?.value.trim() || "",
     free = state.co && state.co.total <= 0;
   if (!free && !state.selectedPayment) {
     toast(t("Choose a payment method."));
-    return;
-  }
-  if (!state.user && (!guestName || !guestContact)) {
-    toast(t("Name and contact are required."));
     return;
   }
   try {
@@ -1205,8 +1229,8 @@ async function placeOrder() {
       body: JSON.stringify({
         items,
         lang: state.lang,
-        guest_name: guestName,
-        guest_contact: guestContact,
+        guest_name: "",
+        guest_contact: "",
         discount_code: $("#discountCode").value,
         use_credit: !!$("#useCredit")?.checked,
         payment_ref: payRef,
@@ -1238,7 +1262,7 @@ async function placeOrder() {
     refreshStore().catch(() => {});
     openModal(
       t("Order placed"),
-      `<div class="notice success-text">${t("Order <b>{0}</b> created. Save this number.", escapeHTML(r.order_number))}</div><div class="checkout-summary" style="margin-top:14px"><div class="line"><span>${t("Total to pay")}</span><b>${money(r.total)}</b></div>${r.credit_used > 0 ? `<div class="line"><span>${t("Store credit")}</span><b>− ${money(r.credit_used)}</b></div>` : ""}${
+      `<div class="notice success-text">${t("Order <b>{0}</b> created. Save this number.", escapeHTML(r.order_number))}</div><div class="checkout-summary" style="margin-top:14px"><div class="line"><span>${t("Total to pay")}</span><b>${moneyEGP(r.total)}</b></div>${r.credit_used > 0 ? `<div class="line"><span>${t("Store credit")}</span><b>− ${moneyEGP(r.credit_used)}</b></div>` : ""}${
         r.paid
           ? `<div class="notice success-text" style="margin-top:10px">${t("Nothing to pay. Your order is confirmed and will be delivered shortly.")}</div>`
           : `<div class="line"><span>${t("Payment")}</span><b>${escapeHTML(payName(r.payment_method))}</b></div><div class="destination"><b>${t("Send payment to")}</b><code>${escapeHTML(r.destination)}</code></div>`
@@ -1257,15 +1281,11 @@ function openAccount() {
 function openAuth() {
   openModal(
     t("Account"),
-    `<div class="auth-tabs"><button class="active" id="loginTab">${t("Log in")}</button><button id="registerTab">${t("Create account")}</button><button id="guestTab">${t("Continue as guest")}</button></div><div id="authForm"></div>`,
+    `<div class="auth-tabs"><button class="active" id="loginTab">${t("Log in")}</button><button id="registerTab">${t("Create account")}</button></div><div id="authForm"></div>`,
   );
   showLogin();
   $("#loginTab").onclick = showLogin;
   $("#registerTab").onclick = showRegister;
-  $("#guestTab").onclick = () => {
-    closeModal();
-    openCart();
-  };
 }
 function showLogin() {
   $("#authForm").innerHTML =
@@ -1285,6 +1305,7 @@ function showLogin() {
       state.user = r.user;
       toast(t("Welcome back, {0}.", r.user.name));
       closeModal();
+      if (state.checkoutAfterAuth) { state.checkoutAfterAuth = false; openCheckout(); }
     } catch (err) {
       toast(err.message);
     }
@@ -1346,6 +1367,7 @@ function showRegister() {
       state.user = r.user;
       toast(t("Account created."));
       closeModal();
+      if (state.checkoutAfterAuth) { state.checkoutAfterAuth = false; openCheckout(); }
     } catch (err) {
       toast(err.message);
     }
@@ -1676,7 +1698,7 @@ async function adminDashboard(main) {
   <div class="stats"><div class="stat"><small>AWAITING PAYMENT</small><b>${d.awaiting_payment}</b></div><div class="stat"><small>ORDERS</small><b>${d.orders}</b></div><div class="stat"><small>PAID REVENUE</small><b>${money(d.paid_revenue)}</b></div><div class="stat"><small>7-DAY REVENUE</small><b>${money(d.revenue_7d)}</b></div><div class="stat"><small>30-DAY REVENUE</small><b>${money(d.revenue_30d)}</b></div><div class="stat"><small>AVG ORDER</small><b>${money(d.avg_order)}</b></div><div class="stat"><small>AVAILABLE CODES</small><b>${d.available_codes}</b></div><div class="stat"><small>CUSTOMERS</small><b>${d.customers}</b></div></div>
   <div class="admin-panel admin-quick-actions"><div class="panel-head"><div><h3>Quick actions</h3><small>Jump straight to the jobs you do most</small></div></div><div class="admin-quick-grid"><button type="button" data-admin-jump="queue"><span>01</span><b>Review payments</b><small>${d.review_queue || 0} awaiting proof review</small></button><button type="button" data-admin-jump="products"><span>02</span><b>Manage products</b><small>Prices, images, stock and delivery</small></button><button type="button" data-admin-jump="merge"><span>03</span><b>Manage variations</b><small>Combine safely with preview and undo</small></button><button type="button" data-admin-jump="settings"><span>04</span><b>Storefront & campaigns</b><small>Edit bilingual homepage content</small></button></div></div>
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Checkout funnel · last ${r.days} days</h3></div><div class="modal-body"><div class="funnel"><div class="stat"><small>CHECKOUT STARTED</small><b>${f.started}</b></div><div class="stat"><small>CHECKOUT COMPLETED</small><b>${f.completed}</b></div><div class="stat"><small>COMPLETION RATE</small><b>${f.rate}%</b></div><div class="stat"><small>PAID ORDERS</small><b>${f.paid_orders}</b></div></div><small>Counts unique browsing sessions. "Started" = opened checkout; "completed" = placed an order.</small></div></div>
-  <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Revenue · last ${r.days} days</h3></div><div class="modal-body"><div class="line"><span>Cash revenue (paid orders)</span><b>${money(r.cash_revenue)}</b></div><div class="line"><span>Discounts given</span><b>${money(r.discounts_given)}</b></div><div class="line"><span>Store credit used</span><b>${money(r.credit_used)}</b></div><div class="line"><span>Supplier cost</span><b>${money(r.total_cost)}</b></div><div class="line"><span>Estimated profit</span><b>${money(r.profit_estimate)}</b></div>${r.costs_incomplete ? `<small>Some products have no cost recorded, so profit is overstated. Add a supplier cost when importing codes, or a cost price on manual products.</small>` : ""}<div class="bars" title="Daily revenue">${r.daily.map((x) => `<span style="height:${Math.max(4, Math.round((x.revenue / maxRev) * 100))}%" title="${escapeHTML(x.date)}: ${money(x.revenue)} (${x.orders} orders)"></span>`).join("") || `<small>No paid orders in this period.</small>`}</div></div></div>
+  <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Revenue · last ${r.days} days</h3></div><div class="modal-body"><div class="line"><span>Cash revenue (paid orders)</span><b>${money(r.cash_revenue)}</b></div><div class="line"><span>Discounts given</span><b>${money(r.discounts_given)}</b></div><div class="line"><span>Store credit used</span><b>${moneyEGP(r.credit_used)}</b></div><div class="line"><span>Supplier cost</span><b>${money(r.total_cost)}</b></div><div class="line"><span>Estimated profit</span><b>${money(r.profit_estimate)}</b></div>${r.costs_incomplete ? `<small>Some products have no cost recorded, so profit is overstated. Add a supplier cost when importing codes, or a cost price on manual products.</small>` : ""}<div class="bars" title="Daily revenue">${r.daily.map((x) => `<span style="height:${Math.max(4, Math.round((x.revenue / maxRev) * 100))}%" title="${escapeHTML(x.date)}: ${money(x.revenue)} (${x.orders} orders)"></span>`).join("") || `<small>No paid orders in this period.</small>`}</div></div></div>
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Top products & profit</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Units</th><th>Revenue</th><th>Cost</th><th>Profit</th></tr></thead><tbody>${r.products.map((p) => `<tr><td>${escapeHTML(p.name)}</td><td>${p.units}</td><td>${money(p.revenue)}</td><td>${p.cost == null ? "—" : money(p.cost)}</td><td>${p.profit == null ? "—" : money(p.profit)}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">No sales yet.</td></tr>`}</tbody></table></div></div>
   ${d.low_stock.length ? `<div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Low stock</h3></div><div class="modal-body">${d.low_stock.map((x) => `<div class="line"><span>${escapeHTML(x.name)}${x.variant_name ? " — " + escapeHTML(x.variant_name) : ""}</span><b>${x.stock} left <small>(alert at ${x.threshold ?? "default"})</small></b></div>`).join("")}</div></div>` : ""}
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Automatic jobs</h3></div><div class="modal-body">${(d.jobs || []).map((j) => `<div class="line"><span>${escapeHTML(JOB_NAMES[j.job] || j.job)}</span><span><span class="tag ${j.ok ? "green" : "red"}">${j.ok ? "OK" : "FAILED"}</span> <small>${escapeHTML(fmtTime(j.ran_at))} ${escapeHTML(j.detail || "")}</small></span></div>`).join("") || `<small>No scheduled run recorded yet. Jobs run from the Cloudflare cron trigger in wrangler.toml.</small>`}<div class="modal-actions"><button class="btn ghost" id="cleanupReservations">Release expired reservations now</button><button class="btn ghost" id="sendLowStock">Send low-stock alert now</button></div></div></div>
@@ -2706,7 +2728,7 @@ async function adminSettings(main) {
   const field = ([k, label, type]) =>
     type === "toggle"
       ? `<label class="switch-row" style="margin:8px 0"><span>${label}</span><input class="switch" id="s_${k}" type="checkbox" ${s[k] !== "0" ? "checked" : ""}></label>`
-      : `<div class="field"><label>${label}</label>${type === "textarea" ? `<textarea id="s_${k}">${escapeHTML(s[k] || "")}</textarea>` : `<input id="s_${k}" type="${type === "color" ? "color" : type === "number" ? "number" : "text"}" value="${escapeHTML(s[k] || "")}">`}</div>`;
+      : `<div class="field"><label>${label}</label>${type === "textarea" ? `<textarea id="s_${k}">${escapeHTML(s[k] || "")}</textarea>` : `<input id="s_${k}" type="${type === "color" ? "color" : type === "number" ? "number" : "text"}" ${type === "number" ? 'step="0.01"' : ""} value="${escapeHTML(s[k] || "")}">`}</div>`;
   const pay = `<details open><summary><b>Payment methods</b></summary>${PAY.map(([k, n]) => `<div class="switch-row"><div><b>${n}</b><div class="field" style="margin:7px 0 0"><input id="s_${k}" value="${escapeHTML(s[k] || "")}" placeholder="Destination / number"></div></div><input class="switch" id="s_${k}_enabled" type="checkbox" ${s[k + "_enabled"] !== "0" ? "checked" : ""}></div>`).join("")}</details>`;
   main.innerHTML = `<div class="admin-top"><h2>Settings</h2><span class="eyebrow">EVERYTHING EDITABLE</span></div><form id="settingsForm" class="admin-panel"><div class="modal-body">${pay}${SETTINGS_SCHEMA.map(([t, f]) => `<details style="margin-top:14px"><summary><b>${t}</b></summary>${f.map(field).join("")}</details>`).join("")}<div class="modal-actions"><button class="btn primary">Save settings</button></div></div></form>
   <form id="pwForm" class="admin-panel" style="margin-top:14px"><div class="modal-body"><b>Change admin password</b><div class="form-grid"><div class="field"><label>Current password</label><input id="pwCur" type="password" required></div><div class="field"><label>New password (8+ characters)</label><input id="pwNew" type="password" minlength="8" required></div></div><div class="modal-actions"><button class="btn ghost">Change password</button></div></div></form>`;
@@ -2793,6 +2815,7 @@ const SETTINGS_SCHEMA = [
       ["store_name", "Store name"],
       ["logo_url", "Logo image URL"],
       ["store_currency", "Currency label (e.g. EGP)"],
+      ["usd_exchange_rate", "EGP per 1 USD (display conversion rate)", "number"],
       ["accent_color", "Accent color", "color"],
       ["announcement", "Announcement bar text (empty = hidden)"],
       ["meta_title", "Browser tab title"],
@@ -3043,6 +3066,7 @@ async function adminCustomers(main) {
   main.innerHTML = `<div class="admin-top"><h2>Customers</h2><span class="eyebrow">${rows.length} ACCOUNTS</span></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Orders</th><th>Paid total</th><th>Joined</th></tr></thead><tbody>${rows.map((u) => `<tr><td>${escapeHTML(u.name)}</td><td>${escapeHTML(u.email)}</td><td>${escapeHTML(u.role)}</td><td>${u.orders}</td><td>${money(u.spent)}</td><td>${escapeHTML(u.created_at)}</td></tr>`).join("")}</tbody></table></div></div>`;
 }
 $("#langBtn").onclick = () => setLang(state.lang === "ar" ? "en" : "ar");
+$("#currencyBtn").onclick = toggleCurrency;
 $("#footerTrack").onclick = (e) => {
   e.preventDefault();
   openTrack();

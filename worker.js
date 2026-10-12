@@ -162,6 +162,7 @@ const DEFAULTS = {
   store_name: "Kardivo",
   logo_url: LOGO_URL,
   store_currency: "EGP",
+  usd_exchange_rate: "50",
   accent_color: "#8b5cf6",
   announcement: "",
   meta_title: "Digital gaming marketplace",
@@ -179,7 +180,7 @@ const DEFAULTS = {
     "Games, gift cards, subscriptions and digital products without the ancient ritual of hunting through twelve tabs.",
   hero_cta: "Browse store",
   hero_cta2: "How it works",
-  trust_1: "✓ Guest checkout",
+  trust_1: "✓ Simple checkout",
   trust_2: "✓ Manual payment",
   trust_3: "✓ Human support",
   category_eyebrow: "FIND YOUR NEXT FAVORITE",
@@ -258,7 +259,7 @@ const DEFAULTS = {
     "ألعاب وكروت هدايا واشتراكات ومنتجات رقمية، من غير ما تلف على اتناشر تاب وتتعب نفسك.",
   hero_cta_ar: "شوف المتجر",
   hero_cta2_ar: "إزاي بتطلب؟",
-  trust_1_ar: "✓ اطلب كضيف من غير حساب",
+  trust_1_ar: "✓ اطلب بسهولة",
   trust_2_ar: "✓ دفع يدوي بالتحويل",
   trust_3_ar: "✓ دعم من ناس حقيقيين",
   catalog_eyebrow_ar: "الكتالوج",
@@ -3385,6 +3386,7 @@ async function api(req, env, url, ctx) {
       if (["referral_discount_percent"].includes(key))
         v = String(Math.min(90, Math.max(0, Number(v) || 0)));
       if (["referral_reward"].includes(key)) v = String(Math.max(0, Number(v) || 0));
+      if (key === "usd_exchange_rate") v = String(Math.min(1000, Math.max(0.01, Number(v) || Number(DEFAULTS[key]))));
       if (["backup_keep"].includes(key))
         v = String(Math.min(90, Math.max(1, Math.floor(Number(v)) || 14)));
       if (["max_qty", "reserve_hours", "low_stock_threshold"].includes(key))

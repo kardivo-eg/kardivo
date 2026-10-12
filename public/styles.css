@@ -469,3 +469,18 @@ html[dir="rtl"] #email,html[dir="rtl"] #password,html[dir="rtl"] #guestContact,h
 .admin-quick-grid button>b{font-size:12px;line-height:1.3}
 .admin-quick-grid button>small{font-size:10px;color:#898194;line-height:1.5}
 @media(max-width:700px){.admin-quick-grid{grid-template-columns:repeat(2,minmax(0,1fr));padding:10px}.admin-quick-grid button{min-height:105px;padding:11px}}
+
+
+/* V14 correction: preserve the original logo and keep the campaign below the hero, never layered over the mark. */
+.hero-frame{display:grid;place-items:center;min-height:390px;background:radial-gradient(ellipse at 50% 48%,#6537a62a,transparent 52%),linear-gradient(145deg,#20142f,#0c0912 72%);}
+.hero-logo{position:relative;width:min(66%,420px);max-height:66%;height:auto;object-fit:contain;opacity:1!important;filter:drop-shadow(0 18px 36px #0009);animation:none!important;z-index:3;}
+.hero-showcase,.hero-product-tile{display:none!important;}
+.hero-orbit{opacity:.45;}
+.campaign-section{padding-top:0;padding-bottom:36px;}
+.campaign-card{min-height:280px;border-color:#a78bfa38;background:linear-gradient(115deg,#1b1230 0%,#110d1a 58%,#09080e 100%);box-shadow:inset 0 1px #ffffff12,0 28px 80px #0007,0 0 55px #8b5cf610;}
+.campaign-copy{padding:clamp(28px,4.5vw,54px);}
+.campaign-copy h2{max-width:15ch;font-size:clamp(32px,4.5vw,54px);}
+.campaign-art{min-height:280px;opacity:1;}
+.currency-btn{min-width:52px;font-size:11px;font-weight:850;letter-spacing:.02em;}
+@media(max-width:700px){.hero-frame{width:min(100%,390px);min-height:280px;aspect-ratio:1.08/1}.hero-logo{width:70%;max-height:70%}.campaign-section{padding-top:0;padding-bottom:26px}.campaign-card{min-height:0}.campaign-art{min-height:130px}.campaign-copy h2{font-size:32px}.currency-btn{min-width:48px;padding-inline:9px}}
+@media(max-width:430px){.brand{width:72px}.nav{gap:6px}.nav-actions{gap:4px}.icon-btn{width:36px;height:36px}.currency-btn{min-width:38px;padding:0 5px;font-size:9px}.cart-btn{padding:8px 9px;font-size:11px}}

@@ -1,3 +1,17 @@
+# Kardivo V14 — Hero, Checkout & Currency Correction
+
+- Removed the floating product cards from the hero; the original logo asset remains intact and fully opaque.
+- Kept the editable promotional campaign directly after the complete hero (logo, headline, and copy), with a clearer purple titanium-glass treatment.
+- Removed the guest checkout path and the separate “Continue as guest” account tab. Checkout now asks the customer to log in or create an account, then returns them to checkout automatically. Existing historical guest orders remain unchanged.
+- Added a USD/EGP display toggle beside EN/AR. EGP is the default on every page load. The USD equivalent uses the admin-editable “EGP per 1 USD” setting (default 50); change it to match the rate you want to display. This is display-only: checkout totals, payment instructions, and order records remain in EGP.
+- No schema or migration changes; existing database records are not touched by these UI changes.
+
+## Validation
+
+Syntax and static checks are run for this package. A real browser session, deployed Cloudflare Worker, D1, R2, and live checkout still require staging verification.
+
+---
+
 # Kardivo V13 — Storefront & Admin Upgrade
 
 ## What is materially new in V13
