@@ -3425,8 +3425,22 @@ const HTML_HEADERS = (status = 200, extra = {}) => ({
   status,
   headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=60", ...extra },
 });
+// Fetch the SPA shell. Workers Static Assets answers "/index.html" with a 307 redirect to "/",
+// and passing that through to the browser caused a redirect loop, so ask for "/" and follow any redirect here.
+async function shellFetch(env, url, request) {
+  let target = new URL("/", url);
+  for (let i = 0; i < 3; i++) {
+    const res = await env.ASSETS.fetch(new Request(target, { method: "GET", headers: request.headers }));
+    if (res.status >= 300 && res.status < 400 && res.headers.get("location")) {
+      target = new URL(res.headers.get("location"), target);
+      continue;
+    }
+    return res;
+  }
+  return new Response("Static assets redirect loop.", { status: 500 });
+}
 async function htmlForHome(env, request, url) {
-  const res = await env.ASSETS.fetch(new Request(new URL("/index.html", url), request));
+  const res = await shellFetch(env, url, request);
   if (!res.ok) return res;
   await ensureSchema(env);
   const s = await allSettings(env),
@@ -3448,7 +3462,7 @@ async function htmlForHome(env, request, url) {
   return new Response(applySeo(await res.text(), { lang, title, desc, head }), HTML_HEADERS());
 }
 async function htmlForProduct(env, request, url) {
-  const res = await env.ASSETS.fetch(new Request(new URL("/index.html", url), request));
+  const res = await shellFetch(env, url, request);
   if (!res.ok) return res;
   await ensureSchema(env);
   const slug = decodeURIComponent(url.pathname.slice(1)).replace(/\/$/, ""),
@@ -3592,9 +3606,7 @@ export default {
       request.method === "GET" &&
       (request.headers.get("accept") || "").includes("text/html")
     )
-      res = await env.ASSETS.fetch(
-        new Request(new URL("/index.html", url), request),
-      );
+      res = await shellFetch(env, url, request);
     return res;
   },
 };
