@@ -2,8 +2,6 @@ name = "kardivo"
 main = "worker.js"
 compatibility_date = "2026-10-08"
 
-[assets]
-directory = "./public"
 # ...
 [[d1_databases]]
 binding = "DB"
