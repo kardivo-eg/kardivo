@@ -1600,6 +1600,28 @@ function reviewForm(productId, orderId) {
   };
 }
 async function openUserAccount() {
+  // Keep the admin account entry independent of customer-only account data.
+  // If any customer account endpoint is slow or rejects for admins, the header
+  // account button must still open and expose the dashboard.
+  if (state.user?.role === "admin") {
+    const adminUser = state.user;
+    openModal(
+      t("Hi, {0}", escapeHTML(adminUser.name || adminUser.email || "Admin")),
+      `<div class="notice"><b>${escapeHTML(adminUser.email || "")}</b><br>${t("Administrator account")}</div><div class="modal-actions"><button class="btn primary" id="adminBtn">${t("Admin dashboard")}</button><button class="btn ghost" id="logoutBtn">${t("Log out")}</button></div>`,
+      true,
+    );
+    $("#adminBtn")?.addEventListener("click", () => { closeModal(); openAdmin(); });
+    $("#logoutBtn")?.addEventListener("click", async () => {
+      try { await api("/api/auth/logout", { method: "POST" }); }
+      catch (e) { toast(e.message); return; }
+      state.user = null;
+      state.favorites = [];
+      saveFavorites();
+      closeModal();
+      toast(t("Logged out."));
+    });
+    return;
+  }
   let orders = [],
     notifications = [],
     ref = null;
