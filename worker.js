@@ -2224,7 +2224,7 @@ async function api(req, env, url, ctx) {
   if (path === "/api/checkout-events" && method === "POST") {
     const b = await readJson(req),
       event = clean(b.event);
-    if (!["checkout_started", "checkout_completed"].includes(event))
+    if (!["checkout_started", "checkout_completed", "product_viewed", "cart_added", "favorites_opened", "bundle_builder_opened"].includes(event))
       return json({ error: "Invalid event." }, 400);
     const key = clean(b.session_key || ipOf(req)).slice(0, 120);
     if (!(await throttle(env, `event:${key}:${event}`, 20, 3600000)))
@@ -2232,7 +2232,7 @@ async function api(req, env, url, ctx) {
     await env.DB.prepare(
       "INSERT INTO checkout_events(event,session_key,order_id) VALUES(?,?,?)",
     )
-      .bind(event, key, b.order_id ? Number(b.order_id) : null)
+      .bind(event, key, event === "checkout_completed" && b.order_id ? Number(b.order_id) : null)
       .run();
     return json({ ok: true });
   }

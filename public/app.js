@@ -10,6 +10,7 @@ const state = {
   discovery: "all",
   currencyView: "EGP",
   checkoutAfterAuth: false,
+  favorites: loadFavorites(),
   admin: { tab: "dashboard", data: {} },
 };
 const AR = {
@@ -277,7 +278,81 @@ const ERR_AR_V10 = {
   "A verified order is required.": "لازم يكون عندك طلب موثّق.",
   "Enter an email or WhatsApp number.": "اكتب إيميل أو رقم واتساب.",
   "Upload a JPG, PNG, WEBP, or GIF image.": "ارفع صورة JPG أو PNG أو WEBP أو GIF.",
+  "Favorites": "المفضلة",
+  "Save": "احفظ",
+  "Saved": "محفوظ",
+  "Remove from favorites": "إزالة من المفضلة",
+  "Your saved products": "المنتجات المحفوظة",
+  "No saved products yet.": "لسه مفيش منتجات محفوظة.",
+  "Build a bundle": "كوّن باقتك",
+  "Pick products to add together. Each item will be added separately at its current price.": "اختار المنتجات اللي عايز تضيفها مع بعض. كل منتج هيتضاف لوحده بسعره الحالي.",
+  "Add selected items": "أضف المنتجات المختارة",
+  "What to know": "معلومات مهمة",
+  "Platform": "المنصة",
+  "Region": "المنطقة",
+  "Delivery": "طريقة التسليم",
+  "Digital delivery details": "تفاصيل التسليم الرقمي",
+  "Review your order": "راجع طلبك",
+  "Secure total": "الإجمالي النهائي",
+  "Your total is confirmed by the store before the order is placed.": "المتجر بيأكد الإجمالي قبل تسجيل الطلب.",
+  "Payment is reviewed manually when required.": "قد تتم مراجعة الدفع يدويًا عند الحاجة.",
+  "Resume your cart": "كمّل سلتك",
+  "You have items waiting in your cart.": "في منتجات لسه موجودة في سلتك.",
 };
+function loadFavorites() {
+  try { const v = JSON.parse(localStorage.getItem("kardivo_favorites") || "[]"); return Array.isArray(v) ? v.map(Number).filter(Number.isFinite) : []; }
+  catch { return []; }
+}
+function saveFavorites() { try { localStorage.setItem("kardivo_favorites", JSON.stringify(state.favorites || [])); } catch {} }
+function isFavorite(id) { return (state.favorites || []).includes(Number(id)); }
+function trackMarketingEvent(event, extra = {}) {
+  const allowed = new Set(["product_viewed", "cart_added", "favorites_opened", "bundle_builder_opened"]);
+  if (!allowed.has(event)) return;
+  const payload = { event, session_key: checkoutSession(), ...extra };
+  fetch("/api/checkout-events", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload), keepalive: true }).catch(() => {});
+}
+function toggleFavorite(id) {
+  id = Number(id);
+  if (!id) return;
+  state.favorites = isFavorite(id) ? state.favorites.filter(x => x !== id) : [...state.favorites, id];
+  saveFavorites();
+  renderProducts();
+  renderPopularProducts();
+  toast(isFavorite(id) ? t("Saved") : t("Remove from favorites"));
+}
+function favoriteButton(p, cls = "favorite-toggle") {
+  const saved = isFavorite(p.id);
+  return `<button type="button" class="${cls} ${saved ? "is-saved" : ""}" data-favorite="${Number(p.id)}" aria-pressed="${saved ? "true" : "false"}" aria-label="${escapeHTML(t(saved ? "Remove from favorites" : "Save"))}" title="${escapeHTML(t(saved ? "Remove from favorites" : "Save"))}">${saved ? "♥" : "♡"}</button>`;
+}
+function bindFavoriteButtons(scope = document) {
+  scope.querySelectorAll("[data-favorite]").forEach(b => { if (b.dataset.boundFavorite) return; b.dataset.boundFavorite = "1"; b.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); toggleFavorite(b.dataset.favorite); }); });
+}
+function openFavorites() {
+  trackMarketingEvent("favorites_opened");
+  const products = state.favorites.map(id => state.products.find(p => Number(p.id) === Number(id))).filter(Boolean);
+  openModal(t("Favorites"), products.length ? `<div class="favorite-grid">${products.map(p => `<article class="favorite-item">${favoriteButton(p)}<a href="/${encodeURIComponent(p.slug || p.id)}" class="favorite-item-link">${stockImg(p.image_url, pName(p), stockArtFor(p))}<b>${escapeHTML(pName(p))}</b><small>${money(Number(p.price || 0))}</small></a></article>`).join("")}</div>` : `<div class="empty">${t("No saved products yet.")}</div>`);
+  bindFavoriteButtons();
+  $$(".favorite-item-link").forEach(a => a.addEventListener("click", () => closeModal()));
+}
+function openBundleBuilder() {
+  trackMarketingEvent("bundle_builder_opened");
+  const products = state.products.filter(p => productAvailable(p) && !(p.variants || []).some(v => Number(v.active) !== 0)).slice(0, 12);
+  openModal(t("Build a bundle"), `<p class="checkout-helper">${t("Pick products to add together. Each item will be added separately at its current price.")}</p><div class="bundle-picker">${products.map(p => `<label class="bundle-option"><input type="checkbox" value="${Number(p.id)}"><span>${stockImg(p.image_url, pName(p), stockArtFor(p))}</span><span class="bundle-option-copy"><b>${escapeHTML(pName(p))}</b><small>${money(Number(p.price || 0))}</small></span></label>`).join("")}</div><div class="modal-actions"><button class="btn primary" id="addBundleItems">${t("Add selected items")}</button></div>`);
+  $("#addBundleItems").onclick = () => {
+    const ids = $$(".bundle-option input:checked").map(x => Number(x.value));
+    if (!ids.length) { toast(state.lang === "ar" ? "اختار منتج واحد على الأقل." : "Choose at least one product."); return; }
+    ids.forEach(id => { const p = state.products.find(x => Number(x.id) === id); if (p) addToCart(id); });
+    closeModal(); openCart();
+  };
+}
+function renderAbandonedCartNudge() {
+  const el = $("#cartResumeNudge");
+  if (!el) return;
+  const hasItems = Array.isArray(state.cart) && state.cart.length > 0;
+  el.hidden = !hasItems;
+  if (hasItems) el.innerHTML = `<div><b>${t("Resume your cart")}</b><span>${t("You have items waiting in your cart.")}</span></div><button class="btn primary" type="button" id="resumeCartBtn">${t("Your cart")}</button>`;
+  $("#resumeCartBtn")?.addEventListener("click", openCart);
+}
 state.lang = (() => {
   try {
     const q = new URLSearchParams(location.search).get("lang");
@@ -632,7 +707,15 @@ function categoryArtworkMap() {
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch { return {}; }
 }
-function renderHeroShowcase() { /* Hero intentionally uses the original logo only. */ }
+function renderHeroShowcase() {
+  const visual = $(".hero-visual");
+  if (!visual || !state.products?.length) return;
+  const picks = state.products.filter(p => Number(p.featured) && productAvailable(p)).slice(0, 3);
+  if (!picks.length) return;
+  visual.classList.add("hero-visual-products");
+  visual.querySelector(".hero-product-stack")?.remove();
+  visual.insertAdjacentHTML("beforeend", `<div class="hero-product-stack" aria-label="Featured products">${picks.map((p,i) => `<a class="hero-product-tile hero-product-tile-${i+1}" href="/${encodeURIComponent(p.slug || p.id)}"><span class="hero-product-art">${stockImg(p.image_url, pName(p), stockArtFor(p))}</span><span class="hero-product-tile-copy"><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || t("Featured"))}</small><b>${escapeHTML(pName(p))}</b><strong>${money(Number(p.price || 0))}</strong></span></a>`).join("")}</div>`);
+}
 
 function productAvailable(p) {
   if (p.delivery_type !== "code") return true;
@@ -739,8 +822,9 @@ function renderPopularProducts() {
     const name = pName(p);
     const cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
     const img = stockImg(p.image_url, name, stockArtFor(p));
-    return `<a class="popular-product" href="/${encodeURIComponent(p.slug || p.id)}"><div class="popular-product-image">${img}</div><div class="popular-product-copy"><span class="popular-product-category">${escapeHTML(cat || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</span><span class="popular-product-name">${escapeHTML(name)}</span><span class="popular-product-price">${money(price)}${old > price ? `<del>${money(old)}</del>` : ""}</span></div></a>`;
+    return `<article class="popular-product-wrap">${favoriteButton(p)}<a class="popular-product" href="/${encodeURIComponent(p.slug || p.id)}"><div class="popular-product-image">${img}</div><div class="popular-product-copy"><span class="popular-product-category">${escapeHTML(cat || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</span><span class="popular-product-name">${escapeHTML(name)}</span><span class="popular-product-price">${money(price)}${old > price ? `<del>${money(old)}</del>` : ""}</span></div></a></article>`;
   }).join("");
+  bindFavoriteButtons(el);
   const section = $("#popularSection");
   if (section) section.hidden = chosen.length === 0;
 }
@@ -833,10 +917,11 @@ function renderProducts() {
         href = "/" + encodeURIComponent(p.slug),
         name = pName(p),
         cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
-      return `<article class="product-card product-card-link"><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-image">${stockImg(p.image_url, name, stockArtFor(p))}${sale ? `<span class="sale">${t("SALE")}</span>` : ""}<span class="stock">${badge}</span></div><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span>` : ""}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
+      return `<article class="product-card product-card-link">${favoriteButton(p)}<a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-image">${stockImg(p.image_url, name, stockArtFor(p))}${sale ? `<span class="sale">${t("SALE")}</span>` : ""}<span class="stock">${badge}</span></div><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span>` : ""}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
     })
     .join("");
-  $$("[data-add]").forEach(
+  bindFavoriteButtons(el);
+  $$ ("[data-add]").forEach(
     (b) =>
       (b.onclick = () => {
         const p = state.products.find((x) => x.id === Number(b.dataset.add));
@@ -863,6 +948,7 @@ async function openProductPage(slug) {
         p.delivery_type === "code" &&
         (variants.length ? totalStock <= 0 : Number(p.stock) <= 0);
     document.title = `${name} | ${sn}`;
+    trackMarketingEvent("product_viewed", { product_id: Number(p.id) });
     const first = variants[0],
       price = variants.length ? Number(first.price) : Number(p.price),
       old = variants.length
@@ -883,7 +969,7 @@ async function openProductPage(slug) {
       .map((x) => `<span>${escapeHTML(x)}</span>`)
       .join(
         "",
-      )}</div>${variants.length ? `<div class="field" style="margin:18px 0"><label>${t("Choose option")}</label><select id="productVariant">${variants.map((v, i) => `<option value="${v.id}" ${i === 0 ? "selected" : ""} data-price="${v.price}" data-old="${v.old_price || 0}" data-stock="${v.stock || 0}">${escapeHTML(v.name)}${p.delivery_type === "code" && state.settings.show_stock !== false ? ` — ${v.stock || 0} ${t("left")}` : ""}</option>`).join("")}</select></div>` : ""}<div class="product-description">${desc ? escapeHTML(desc).replace(/\n/g, "<br>") : t("No description has been added for this product yet.")}</div>${(p.reviews || []).length ? `<div class="admin-panel" style="margin-top:20px"><h3>${t("Customer reviews")}</h3>${p.reviews.map((r) => `<div class="line" style="padding:10px 0"><span><b>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</b><br><small>${escapeHTML(r.user_name || "Verified customer")}</small></span><span style="max-width:55%">${escapeHTML(r.body || "")}${r.photo ? `<br><a href="${escapeHTML(r.photo)}" target="_blank" rel="noreferrer"><img class="review-photo" loading="lazy" src="${escapeHTML(r.photo)}" alt=""></a>` : ""}</span></div>`).join("")}</div>` : ""}<div class="notify-box" id="notifyBox" hidden><b>${t("Sold out right now")}</b><br><small>${t("Leave your email or WhatsApp number and we'll tell you when it's back.")}</small><div style="display:flex;gap:8px;margin-top:8px"><input id="notifyContact" placeholder="${t("Email or WhatsApp number")}" style="flex:1"><button class="btn ghost" id="notifyBtn" type="button">${t("Notify me")}</button></div></div><div class="product-detail-actions"><button class="btn primary" id="productAdd" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Add to cart") : t("Add to cart")}</button><a class="btn ghost" href="/" data-home>${t("Back to store")}</a></div></div></div></section>`;
+      )}</div><div class="product-facts"><h3>${t("What to know")}</h3><dl>${p.platform ? `<div><dt>${t("Platform")}</dt><dd>${escapeHTML(p.platform)}</dd></div>` : ""}${p.region ? `<div><dt>${t("Region")}</dt><dd>${escapeHTML(p.region)}</dd></div>` : ""}<div><dt>${t("Delivery")}</dt><dd>${escapeHTML(p.delivery_type === "code" ? (state.lang === "ar" ? "كود رقمي" : "Digital code") : t("Manual delivery"))}</dd></div></dl><p>${t("Digital delivery details")}</p></div>${variants.length ? `<div class="field" style="margin:18px 0"><label>${t("Choose option")}</label><select id="productVariant">${variants.map((v, i) => `<option value="${v.id}" ${i === 0 ? "selected" : ""} data-price="${v.price}" data-old="${v.old_price || 0}" data-stock="${v.stock || 0}">${escapeHTML(v.name)}${p.delivery_type === "code" && state.settings.show_stock !== false ? ` — ${v.stock || 0} ${t("left")}` : ""}</option>`).join("")}</select></div>` : ""}<div class="product-description">${desc ? escapeHTML(desc).replace(/\n/g, "<br>") : t("No description has been added for this product yet.")}</div>${(p.reviews || []).length ? `<div class="admin-panel" style="margin-top:20px"><h3>${t("Customer reviews")}</h3>${p.reviews.map((r) => `<div class="line" style="padding:10px 0"><span><b>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</b><br><small>${escapeHTML(r.user_name || "Verified customer")}</small></span><span style="max-width:55%">${escapeHTML(r.body || "")}${r.photo ? `<br><a href="${escapeHTML(r.photo)}" target="_blank" rel="noreferrer"><img class="review-photo" loading="lazy" src="${escapeHTML(r.photo)}" alt=""></a>` : ""}</span></div>`).join("")}</div>` : ""}<div class="notify-box" id="notifyBox" hidden><b>${t("Sold out right now")}</b><br><small>${t("Leave your email or WhatsApp number and we'll tell you when it's back.")}</small><div style="display:flex;gap:8px;margin-top:8px"><input id="notifyContact" placeholder="${t("Email or WhatsApp number")}" style="flex:1"><button class="btn ghost" id="notifyBtn" type="button">${t("Notify me")}</button></div></div><div class="product-detail-actions"><button class="btn primary" id="productAdd" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Add to cart") : t("Add to cart")}</button><a class="btn ghost" href="/" data-home>${t("Back to store")}</a></div></div></div></section>`;
     const updateVariant = () => {
       const sel = $("#productVariant");
       if (!sel) {
@@ -941,7 +1027,7 @@ function recentList() {
 function miniCard(p) {
   const vs = (p.variants || []).filter((v) => Number(v.active) !== 0),
     price = vs.length ? Math.min(...vs.map((v) => Number(v.price))) : Number(p.price);
-  return `<a class="mini-card" href="/${encodeURIComponent(p.slug)}"><div class="mini-img">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span>K</span>`}</div><b>${escapeHTML(pName(p))}</b><small>${vs.length ? t("From") + " " : ""}${money(price)}</small></a>`;
+  return `<div class="mini-card-wrap">${favoriteButton(p)}<a class="mini-card" href="/${encodeURIComponent(p.slug)}"><div class="mini-img">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span>K</span>`}</div><b>${escapeHTML(pName(p))}</b><small>${vs.length ? t("From") + " " : ""}${money(price)}</small></a></div>`;
 }
 // "Recently viewed" comes from this browser; "You may also like" scores category and platform matches among in-stock products.
 function renderRecommendations(cur) {
@@ -971,7 +1057,7 @@ function renderRecommendations(cur) {
     row = (title, list) =>
       list.length ? `<div class="rec-row"><h3>${title}</h3><div class="rec-grid">${list.map(miniCard).join("")}</div></div>` : "";
   const page = $(".product-page");
-  if (page) page.insertAdjacentHTML("beforeend", row(t("You may also like"), like) + row(t("Recently viewed"), recentP));
+  if (page) { page.insertAdjacentHTML("beforeend", row(t("You may also like"), like) + row(t("Recently viewed"), recentP)); bindFavoriteButtons(page); }
 }
 async function renderTestimonials() {
   const sec = $("#testimonials");
@@ -1023,6 +1109,8 @@ function addToCart(id, variant_id = null) {
       quantity: 1,
     });
   saveCart();
+  trackMarketingEvent("cart_added", { product_id: Number(p.id) });
+  renderAbandonedCartNudge();
   toast(t("{0} added to cart.", pName(p)));
 }
 function cartItems() {
@@ -1156,7 +1244,7 @@ function openCheckout() {
   state.co = { total: subtotal };
   openModal(
     t("Checkout"),
-    `<div class="notice">${t("Checkout and payment remain in EGP.")}</div><div class="field"><label>${t("Discount code")}</label><div style="display:flex;gap:8px"><input id="discountCode" value="${escapeHTML(savedRef)}" placeholder="${t("Optional code")}" style="flex:1"><button type="button" class="btn ghost" id="applyDiscount">${t("Apply")}</button></div><small id="coNote" class="success-text"></small></div><label class="switch-row" id="creditRow" hidden><span>${t("Use store credit")} <b id="creditBal"></b></span><input class="switch" id="useCredit" type="checkbox"></label><div class="form-grid"><div class="field"><label>${t("Transfer reference")} <small>(${t("optional")})</small></label><input id="payRef" placeholder="${t("Reference number from the transfer receipt")}"></div><div class="field"><label>${t("Payment proof")} <small>(${t("optional")})</small></label><input id="checkoutProof" type="file" accept="image/*"></div></div><div class="checkout-summary"><div class="line"><span>${t("Subtotal")}</span><span id="coSubtotal">${moneyEGP(subtotal)}</span></div><div class="line"><span>${t("Discount")}</span><span id="coDiscount">${moneyEGP(0)}</span></div><div class="line" id="coCreditLine" hidden><span>${t("Store credit")}</span><span id="coCredit">${moneyEGP(0)}</span></div><div class="line total"><span>${t("Total")}</span><span id="coTotal">${moneyEGP(subtotal)}</span></div></div><div id="payWrap" style="margin-top:18px"><b>${t("Payment method")}</b><div class="payment-grid" id="payments"></div></div><div class="modal-actions"><button class="btn ghost" id="backCart">${t("Back")}</button><button class="btn primary" id="placeOrder">${t("Place order")}</button></div>`,
+    `<div class="checkout-stepper"><span class="checkout-step active"><i>1</i><b>${t("Review your order")}</b></span><span class="checkout-step"><i>2</i><b>${t("Payment method")}</b></span><span class="checkout-step"><i>3</i><b>${t("Place order")}</b></span></div><div class="checkout-trust"><span>✓ ${t("Your total is confirmed by the store before the order is placed.")}</span><span>✓ ${t("Payment is reviewed manually when required.")}</span></div><div class="notice">${t("Checkout and payment remain in EGP.")}</div><div class="field"><label>${t("Discount code")}</label><div style="display:flex;gap:8px"><input id="discountCode" value="${escapeHTML(savedRef)}" placeholder="${t("Optional code")}" style="flex:1"><button type="button" class="btn ghost" id="applyDiscount">${t("Apply")}</button></div><small id="coNote" class="success-text"></small></div><label class="switch-row" id="creditRow" hidden><span>${t("Use store credit")} <b id="creditBal"></b></span><input class="switch" id="useCredit" type="checkbox"></label><div class="form-grid"><div class="field"><label>${t("Transfer reference")} <small>(${t("optional")})</small></label><input id="payRef" placeholder="${t("Reference number from the transfer receipt")}"></div><div class="field"><label>${t("Payment proof")} <small>(${t("optional")})</small></label><input id="checkoutProof" type="file" accept="image/*"></div></div><div class="checkout-summary"><div class="checkout-summary-title">${t("Review your order")}</div><div class="line"><span>${t("Subtotal")}</span><span id="coSubtotal">${moneyEGP(subtotal)}</span></div><div class="line"><span>${t("Discount")}</span><span id="coDiscount">${moneyEGP(0)}</span></div><div class="line" id="coCreditLine" hidden><span>${t("Store credit")}</span><span id="coCredit">${moneyEGP(0)}</span></div><div class="line total"><span>${t("Total")}</span><span id="coTotal">${moneyEGP(subtotal)}</span></div></div><div id="payWrap" style="margin-top:18px"><b>${t("Payment method")}</b><div class="payment-grid" id="payments"></div></div><div class="modal-actions"><button class="btn ghost" id="backCart">${t("Back")}</button><button class="btn primary" id="placeOrder">${t("Place order")}</button></div>`,
   );
   $("#backCart").onclick = openCart;
   renderPaymentOptions();
@@ -2782,6 +2870,7 @@ async function refreshStore() {
   renderSmartFilters();
   renderHeroShowcase();
   renderProducts();
+  renderAbandonedCartNudge();
   renderFooter();
 }
 const PAY = [
@@ -3205,3 +3294,11 @@ Object.assign(ERR_AR, ERR_AR_V10);
 setDir();
 translateStatic();
 boot();
+
+
+// V21 additive growth enhancements: all are isolated from order creation and payment processing.
+document.addEventListener("click", (event) => {
+  if (event.target.closest("#wishlistBtn")) { openFavorites(); return; }
+  if (event.target.closest("#bundleBuilderBtn")) { openBundleBuilder(); return; }
+});
+window.addEventListener("DOMContentLoaded", () => { renderAbandonedCartNudge(); });
