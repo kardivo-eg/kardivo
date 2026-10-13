@@ -3204,7 +3204,7 @@ async function adminCustomers(main) {
 $("#langBtn").onclick = () => setLang(state.lang === "ar" ? "en" : "ar");
 $("#currencyBtn").addEventListener("click", (event) => { event.preventDefault(); toggleCurrency(); });
 $("#cartBtn").onclick = () => navigate("/cart");
-$("#accountBtn").onclick = () => navigate("/account");
+$("#accountBtn").onclick = () => openAccount();
 $("#footerAccount").onclick = (e) => {
   e.preventDefault();
   navigate("/account");
