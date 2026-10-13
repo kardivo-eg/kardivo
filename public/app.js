@@ -279,6 +279,19 @@ const ERR_AR_V10 = {
   "Enter an email or WhatsApp number.": "اكتب إيميل أو رقم واتساب.",
   "Upload a JPG, PNG, WEBP, or GIF image.": "ارفع صورة JPG أو PNG أو WEBP أو GIF.",
   "Favorites": "المفضلة",
+  "Your favorites": "منتجاتي المفضلة",
+  "Your cart": "سلة التسوق",
+  "Continue shopping": "مواصلة التسوق",
+  "Remove": "حذف",
+  "You must sign in to sync favorites across devices.": "سجّل الدخول لحفظ المفضلة في حسابك ومزامنتها بين أجهزتك.",
+  "Sign in to save your favorites to your account.": "سجّل الدخول لحفظ المنتجات المفضلة في حسابك.",
+  "Back to store": "العودة للمتجر",
+  "Browse products": "تصفح المنتجات",
+  "Your cart is empty. Humanity's oldest shopping problem.": "سلتك فارغة حاليًا.",
+  "Your saved products": "المنتجات المحفوظة",
+  "Saved to your account": "تم الحفظ في حسابك",
+  "Favorite": "المفضلة",
+  "Cart": "السلة",
   "Save": "احفظ",
   "Saved": "محفوظ",
   "Remove from favorites": "إزالة من المفضلة",
@@ -305,20 +318,37 @@ function loadFavorites() {
 }
 function saveFavorites() { try { localStorage.setItem("kardivo_favorites", JSON.stringify(state.favorites || [])); } catch {} }
 function isFavorite(id) { return (state.favorites || []).includes(Number(id)); }
+async function syncFavoritesWithAccount(mergeLocal = true) {
+  if (!state.user) return false;
+  try {
+    const result = await api("/api/me/favorites");
+    const remote = Array.isArray(result.ids) ? result.ids.map(Number).filter(Number.isFinite) : [];
+    const ids = [...new Set(mergeLocal ? [...remote, ...(state.favorites || [])] : remote)].slice(0, 200);
+    if (mergeLocal && ids.length !== remote.length || mergeLocal && ids.some(id => !remote.includes(id))) {
+      await api("/api/me/favorites", { method: "PUT", body: JSON.stringify({ ids }) });
+    }
+    state.favorites = ids; saveFavorites(); return true;
+  } catch (e) { console.warn("Favorites account sync unavailable", e); return false; }
+}
 function trackMarketingEvent(event, extra = {}) {
   const allowed = new Set(["product_viewed", "cart_added", "favorites_opened", "bundle_builder_opened"]);
   if (!allowed.has(event)) return;
   const payload = { event, session_key: checkoutSession(), ...extra };
   fetch("/api/checkout-events", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload), keepalive: true }).catch(() => {});
 }
-function toggleFavorite(id) {
+async function toggleFavorite(id) {
   id = Number(id);
   if (!id) return;
-  state.favorites = isFavorite(id) ? state.favorites.filter(x => x !== id) : [...state.favorites, id];
+  const had = isFavorite(id);
+  state.favorites = had ? state.favorites.filter(x => x !== id) : [...state.favorites, id];
   saveFavorites();
-  renderProducts();
-  renderPopularProducts();
-  toast(isFavorite(id) ? t("Saved") : t("Remove from favorites"));
+  if (state.user) {
+    try { await api("/api/me/favorites", { method: "PUT", body: JSON.stringify({ ids: state.favorites }) }); }
+    catch (e) { toast(e.message || t("Could not sync favorites.")); }
+  }
+  if (location.pathname.replace(/\/$/, "") === "/favorites") renderFavoritesPage();
+  else { renderProducts(); renderPopularProducts(); }
+  toast(had ? t("Remove from favorites") : state.user ? t("Saved to your account") : t("Saved"));
 }
 function favoriteButton(p, cls = "favorite-toggle") {
   const saved = isFavorite(p.id);
@@ -327,12 +357,15 @@ function favoriteButton(p, cls = "favorite-toggle") {
 function bindFavoriteButtons(scope = document) {
   scope.querySelectorAll("[data-favorite]").forEach(b => { if (b.dataset.boundFavorite) return; b.dataset.boundFavorite = "1"; b.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); toggleFavorite(b.dataset.favorite); }); });
 }
-function openFavorites() {
-  trackMarketingEvent("favorites_opened");
+function renderFavoritesPage() {
+  document.body.classList.remove("product-route"); document.body.classList.add("account-route");
   const products = state.favorites.map(id => state.products.find(p => Number(p.id) === Number(id))).filter(Boolean);
-  openModal(t("Favorites"), products.length ? `<div class="favorite-grid">${products.map(p => `<article class="favorite-item">${favoriteButton(p)}<a href="/${encodeURIComponent(p.slug || p.id)}" class="favorite-item-link">${stockImg(p.image_url, pName(p), stockArtFor(p))}<b>${escapeHTML(pName(p))}</b><small>${money(Number(p.price || 0))}</small></a></article>`).join("")}</div>` : `<div class="empty">${t("No saved products yet.")}</div>`);
-  bindFavoriteButtons();
-  $$(".favorite-item-link").forEach(a => a.addEventListener("click", () => closeModal()));
+  const guestNote = !state.user ? `<div class="notice favorite-account-note"><b>${t("Sign in to save your favorites to your account.")}</b><p>${t("You must sign in to sync favorites across devices.")}</p><button class="btn primary" id="favoritesLogin">${t("Log in")}</button></div>` : `<div class="notice favorite-account-note">${t("Saved to your account")}</div>`;
+  $("main").innerHTML = `<section class="collection-page container"><div class="collection-hero"><div><span class="eyebrow">KARDIVO · ${t("Favorites")}</span><h1>${t("Your favorites")}</h1><p>${t("Your saved products")}</p></div><a class="btn ghost" href="/#store" data-collection-store>${t("Browse products")}</a></div>${guestNote}<div class="collection-grid">${products.length ? products.map(p => `<article class="collection-product">${favoriteButton(p)}<a class="collection-product-link" href="/${encodeURIComponent(p.slug || p.id)}"><div class="collection-product-image">${stockImg(p.image_url,pName(p),stockArtFor(p))}</div><div class="collection-product-info"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML([p.platform,p.region].filter(Boolean).join(" · ") || dlv(p))}</small><strong>${money(Number(p.price || 0))}</strong></div></a><button class="btn ghost collection-add" type="button" data-fav-add="${Number(p.id)}">${t("Add to cart")}</button></article>`).join("") : `<div class="empty collection-empty"><div class="empty-icon">♡</div><h2>${t("No saved products yet.")}</h2><p>${t("Browse products")}</p><a class="btn primary" href="/#store" data-collection-store>${t("Browse products")}</a></div>`}</div></section>`;
+  $("#favoritesLogin")?.addEventListener("click", openAuth);
+  $("[data-collection-store]")?.addEventListener("click",e=>{e.preventDefault();navigate("/#store","#store")});
+  $$('[data-fav-add]').forEach(b=>b.addEventListener('click',()=>{addToCart(Number(b.dataset.favAdd));toast(t("Added to cart."));}));
+  bindFavoriteButtons($("main"));
 }
 function openBundleBuilder() {
   trackMarketingEvent("bundle_builder_opened");
@@ -439,9 +472,11 @@ function applyLang() {
   applySettings();
   renderFooter();
   renderCartCount();
-  if (location.pathname.replace(/\/$/, "") === "/account") {
-    renderAccountPage();
-  } else if (isProductRoute())
+  const routePath = location.pathname.replace(/\/$/, "") || "/";
+  if (routePath === "/account") renderAccountPage();
+  else if (routePath === "/favorites") renderFavoritesPage();
+  else if (routePath === "/cart") renderCartPage();
+  else if (isProductRoute())
     openProductPage(
       decodeURIComponent(location.pathname.slice(1)).replace(/\/$/, ""),
     );
@@ -642,6 +677,7 @@ async function boot() {
     state.categories = categories;
     state.settings = settings;
     state.user = me.user;
+    if (state.user) await syncFavoritesWithAccount(true);
     state.cart = state.cart.filter((i) => cartRowValid(i, products));
     saveCart();
     applySettings();
@@ -917,7 +953,7 @@ function renderProducts() {
         href = "/" + encodeURIComponent(p.slug),
         name = pName(p),
         cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
-      return `<article class="product-card product-card-link">${favoriteButton(p)}<a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-image">${stockImg(p.image_url, name, stockArtFor(p))}${sale ? `<span class="sale">${t("SALE")}</span>` : ""}<span class="stock">${badge}</span></div><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span>` : ""}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
+      return `<article class="product-card product-card-link"><div class="product-image">${stockImg(p.image_url, name, stockArtFor(p))}<a class="product-image-link" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"></a>${favoriteButton(p)}${sale ? `<span class="sale">${t("SALE")}</span>` : ""}<span class="stock">${badge}</span></div><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span>` : ""}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
     })
     .join("");
   bindFavoriteButtons(el);
@@ -1136,56 +1172,17 @@ function closeModal() {
   state.adminOpen = false;
   $("#modalRoot").innerHTML = "";
 }
-function openCart() {
+function openCart() { navigate("/cart"); }
+function renderCartPage() {
+  document.body.classList.remove("product-route"); document.body.classList.add("account-route");
   const items = cartItems();
-  if (!items.length) {
-    openModal(
-      t("Your cart"),
-      `<div class="empty">${t("Your cart is empty. Humanity's oldest shopping problem.")}</div>`,
-    );
-    return;
-  }
-  const subtotal = items.reduce(
-    (s, i) =>
-      s +
-      Number(
-        i.p.variants?.find((v) => Number(v.id) === Number(i.variant_id))
-          ?.price ?? i.p.price,
-      ) *
-        i.quantity,
-    0,
-  );
-  openModal(
-    t("Your cart"),
-    `<div>${items
-      .map((i) => {
-        const v = i.p.variants?.find(
-            (x) => Number(x.id) === Number(i.variant_id),
-          ),
-          label = v ? `<br><small>${escapeHTML(v.name)}</small>` : "",
-          price = Number(v?.price ?? i.p.price);
-        return `<div class="line"><span><b>${escapeHTML(pName(i.p))}</b>${label}<br><small>${t("{0} each", money(price))}</small></span><span><button class="mini" data-minus="${escapeHTML(cartKey(i))}">−</button> <b>${i.quantity}</b> <button class="mini" data-plus="${escapeHTML(cartKey(i))}">+</button> <button class="mini danger" data-remove="${escapeHTML(cartKey(i))}">${t("Remove")}</button></span></div>`;
-      })
-      .join(
-        "",
-      )}</div><div class="line total"><span>${t("Subtotal")}</span><span>${money(subtotal)}</span></div><div class="modal-actions"><button class="btn ghost" id="continueShopping">${t("Continue shopping")}</button><button class="btn primary" id="checkoutBtn">${t("Continue to checkout")}</button></div>`,
-  );
-  $$("[data-minus]").forEach(
-    (b) => (b.onclick = () => changeQty(b.dataset.minus, -1)),
-  );
-  $$("[data-plus]").forEach(
-    (b) => (b.onclick = () => changeQty(b.dataset.plus, 1)),
-  );
-  $$("[data-remove]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        state.cart = state.cart.filter((x) => cartKey(x) !== b.dataset.remove);
-        saveCart();
-        openCart();
-      }),
-  );
-  $("#continueShopping").onclick = closeModal;
-  $("#checkoutBtn").onclick = openCheckout;
+  const subtotal = items.reduce((sum, i) => sum + Number(i.p.variants?.find(v => Number(v.id) === Number(i.variant_id))?.price ?? i.p.price) * i.quantity, 0);
+  $("main").innerHTML = `<section class="collection-page container cart-page"><div class="collection-hero"><div><span class="eyebrow">KARDIVO · ${t("Cart")}</span><h1>${t("Your cart")}</h1><p>${items.length} ${state.lang === "ar" ? "منتج في سلتك" : "items in your cart"}</p></div><a class="btn ghost" href="/#store" data-collection-store>${t("Continue shopping")}</a></div>${items.length ? `<div class="cart-page-layout"><div class="cart-page-items">${items.map(i=>{const v=i.p.variants?.find(x=>Number(x.id)===Number(i.variant_id));const price=Number(v?.price ?? i.p.price);return `<article class="cart-page-item"><div class="cart-page-image">${stockImg(i.p.image_url,pName(i.p),stockArtFor(i.p))}</div><div class="cart-page-item-info"><b>${escapeHTML(pName(i.p))}</b>${v?`<small>${escapeHTML(v.name)}</small>`:""}<small>${money(price)} ${t("each")}</small><div class="cart-quantity"><button type="button" class="mini" data-minus="${escapeHTML(cartKey(i))}" aria-label="Decrease quantity">−</button><b>${i.quantity}</b><button type="button" class="mini" data-plus="${escapeHTML(cartKey(i))}" aria-label="Increase quantity">+</button><button type="button" class="mini danger" data-remove="${escapeHTML(cartKey(i))}">${t("Remove")}</button></div></div><strong class="cart-line-total">${money(price*i.quantity)}</strong></article>`}).join("")}</div><aside class="cart-page-summary"><span class="eyebrow">${t("Order summary")}</span><h2>${t("Subtotal")}</h2><div class="line"><span>${t("Subtotal")}</span><b>${money(subtotal)}</b></div><p>${t("Shipping and final discounts are confirmed at checkout.")}</p><button class="btn primary cart-checkout" id="checkoutBtn">${t("Continue to checkout")}</button><a class="btn ghost cart-back" href="/#store" data-collection-store>${t("Continue shopping")}</a></aside></div>` : `<div class="empty collection-empty"><div class="empty-icon">🛒</div><h2>${t("Your cart is empty. Humanity's oldest shopping problem.")}</h2><a class="btn primary" href="/#store" data-collection-store>${t("Browse products")}</a></div>`}</section>`;
+  $("[data-collection-store]")?.addEventListener("click",e=>{e.preventDefault();navigate("/#store","#store")});
+  $$('[data-minus]').forEach(b=>b.onclick=()=>changeQty(b.dataset.minus,-1));
+  $$('[data-plus]').forEach(b=>b.onclick=()=>changeQty(b.dataset.plus,1));
+  $$('[data-remove]').forEach(b=>b.onclick=()=>{state.cart=state.cart.filter(x=>cartKey(x)!==b.dataset.remove);saveCart();renderCartPage();});
+  $("#checkoutBtn")?.addEventListener("click",openCheckout);
 }
 function changeQty(key, d) {
   const row = state.cart.find((x) => cartKey(x) === key);
@@ -1210,7 +1207,7 @@ function changeQty(key, d) {
       state.cart = state.cart.filter((x) => cartKey(x) !== key);
   }
   saveCart();
-  openCart();
+  renderCartPage();
 }
 function openCheckout() {
   const items = cartItems();
@@ -1430,6 +1427,8 @@ function showLogin() {
         }),
       });
       state.user = r.user;
+      await syncFavoritesWithAccount(true);
+      if (location.pathname.replace(/\/$/, "") === "/favorites") renderFavoritesPage();
       toast(t("Welcome back, {0}.", r.user.name));
       closeModal();
       if (state.checkoutAfterAuth) { state.checkoutAfterAuth = false; openCheckout(); }
@@ -1492,6 +1491,8 @@ function showRegister() {
         }),
       });
       state.user = r.user;
+      await syncFavoritesWithAccount(true);
+      if (location.pathname.replace(/\/$/, "") === "/favorites") renderFavoritesPage();
       toast(t("Account created."));
       closeModal();
       if (state.checkoutAfterAuth) { state.checkoutAfterAuth = false; openCheckout(); }
@@ -1639,6 +1640,8 @@ async function openUserAccount() {
   $("#logoutBtn").onclick = async () => {
     await api("/api/auth/logout", { method: "POST" });
     state.user = null;
+    state.favorites = [];
+    saveFavorites();
     closeModal();
     toast(t("Logged out."));
   };
@@ -3165,7 +3168,13 @@ function renderAccountPage() {
   $("[data-account-store]")?.addEventListener("click", (e) => { e.preventDefault(); navigate("/#store", "#store"); });
 }
 async function route() {
-  if (location.pathname.replace(/\/$/, "") === "/account") renderAccountPage();
+  const path = location.pathname.replace(/\/$/, "") || "/";
+  [["/account", "#accountBtn"], ["/cart", "#cartBtn"], ["/favorites", "#wishlistBtn"]].forEach(([p, selector]) => {
+    const el = $(selector); if (el) { const active = path === p; el.classList.toggle("is-active", active); if (active) el.setAttribute("aria-current", "page"); else el.removeAttribute("aria-current"); }
+  });
+  if (path === "/account") renderAccountPage();
+  else if (path === "/favorites") { if (state.user) await syncFavoritesWithAccount(false); renderFavoritesPage(); }
+  else if (path === "/cart") renderCartPage();
   else if (isProductRoute())
     await openProductPage(
       decodeURIComponent(location.pathname.slice(1)).replace(/\/$/, ""),
@@ -3194,7 +3203,7 @@ async function adminCustomers(main) {
 }
 $("#langBtn").onclick = () => setLang(state.lang === "ar" ? "en" : "ar");
 $("#currencyBtn").addEventListener("click", (event) => { event.preventDefault(); toggleCurrency(); });
-$("#cartBtn").onclick = openCart;
+$("#cartBtn").onclick = () => navigate("/cart");
 $("#accountBtn").onclick = () => navigate("/account");
 $("#footerAccount").onclick = (e) => {
   e.preventDefault();
@@ -3298,7 +3307,7 @@ boot();
 
 // V21 additive growth enhancements: all are isolated from order creation and payment processing.
 document.addEventListener("click", (event) => {
-  if (event.target.closest("#wishlistBtn")) { openFavorites(); return; }
+  if (event.target.closest("#wishlistBtn")) { navigate("/favorites"); return; }
   if (event.target.closest("#bundleBuilderBtn")) { openBundleBuilder(); return; }
 });
 window.addEventListener("DOMContentLoaded", () => { renderAbandonedCartNudge(); });

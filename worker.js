@@ -292,7 +292,7 @@ const DEFAULTS = {
   backup_keep: "14",
   testimonials_enabled: "1",
 };
-const SCHEMA_VERSION = 12;
+const SCHEMA_VERSION = 13;
 // Columns added over time. Each is added only if missing (additive, never destructive).
 const COLUMN_ADDS = [
   ["discounts", "max_uses", "INTEGER"],
@@ -339,6 +339,8 @@ const SCHEMA_TABLES = [
   "CREATE INDEX IF NOT EXISTS idx_variant_sources_product ON variant_sources(source_product_id)",
   "CREATE TABLE IF NOT EXISTS audit_logs(id INTEGER PRIMARY KEY AUTOINCREMENT,admin_user_id INTEGER,action TEXT NOT NULL,target_type TEXT,target_id INTEGER,details TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(admin_user_id) REFERENCES users(id) ON DELETE SET NULL)",
   "CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at)",
+  "CREATE TABLE IF NOT EXISTS kd_user_favorites(user_id INTEGER NOT NULL,product_id INTEGER NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,product_id),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE)",
+  "CREATE INDEX IF NOT EXISTS idx_kd_favorites_product ON kd_user_favorites(product_id)",
   "CREATE TABLE IF NOT EXISTS checkout_events(id INTEGER PRIMARY KEY AUTOINCREMENT,event TEXT NOT NULL,session_key TEXT,order_id INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
   "CREATE INDEX IF NOT EXISTS idx_checkout_events_created ON checkout_events(created_at,event)",
   "CREATE TABLE IF NOT EXISTS product_reviews(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,user_id INTEGER,order_id INTEGER,rating INTEGER NOT NULL,body TEXT DEFAULT '',approved INTEGER NOT NULL DEFAULT 0,photo_key TEXT,featured INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(product_id,order_id,user_id),FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE,FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL,FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE SET NULL)",
@@ -1663,6 +1665,21 @@ async function api(req, env, url, ctx) {
   if (path === "/api/health")
     return json({ ok: true, version: "10.0.0", logo: LOGO_URL });
   if (path === "/api/me" && method === "GET") return json({ user: me });
+  if (path === "/api/me/favorites" && method === "GET") {
+    if (!me) return json({ error: "Login required." }, 401);
+    const rows = (await env.DB.prepare("SELECT product_id FROM kd_user_favorites WHERE user_id=? ORDER BY created_at DESC LIMIT 200").bind(me.id).all()).results;
+    return json({ ids: rows.map(r => Number(r.product_id)) });
+  }
+  if (path === "/api/me/favorites" && method === "PUT") {
+    if (!me) return json({ error: "Login required." }, 401);
+    const body = await readJson(req);
+    if (!Array.isArray(body.ids)) return json({ error: "Favorites must be a list." }, 400);
+    const ids = [...new Set(body.ids.map(Number).filter(id => Number.isInteger(id) && id > 0))].slice(0, 200);
+    const valid = ids.length ? (await env.DB.prepare(`SELECT id FROM products WHERE active=1 AND id IN (${ids.map(() => "?").join(",")})`).bind(...ids).all()).results.map(r => Number(r.id)) : [];
+    const stmts = [env.DB.prepare("DELETE FROM kd_user_favorites WHERE user_id=?").bind(me.id), ...valid.map(id => env.DB.prepare("INSERT OR IGNORE INTO kd_user_favorites(user_id,product_id) VALUES(?,?)").bind(me.id,id))];
+    await env.DB.batch(stmts);
+    return json({ ok: true, ids: valid });
+  }
   if (path === "/api/categories" && method === "GET")
     return json(
       (

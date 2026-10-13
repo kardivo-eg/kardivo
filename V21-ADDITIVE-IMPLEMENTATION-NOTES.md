@@ -1,25 +1,21 @@
-# Kardivo V21 additive improvements
+# Kardivo V21 additive UI update — Cart and Favorites pages
 
-This build adds a storefront conversion pass while preserving the existing purchase lifecycle.
+## Changes in this update
+- Fixed favorite-button overlap: favorite action is now positioned inside the product image, separate from the availability/Ready badge and sale badge.
+- Added dedicated `/cart` and `/favorites` pages instead of modal/floating windows.
+- Cart navigation and the header cart control now open the dedicated cart page. Cart quantities, remove buttons, subtotal, and the existing checkout entry point are retained.
+- Favorites are synced to the signed-in account through `GET/PUT /api/me/favorites` and the new `kd_user_favorites` table. Guests can hold temporary local favorites until they sign in; local favorites are merged into the account on login/registration. On logout, local favorites are cleared to avoid exposing another account's saved list on a shared browser.
+- Added `migration-v5-favorites.sql` for the additive favorites table. Worker auto-schema is also incremented to version 13 and creates the same table if the existing migration runner is used.
 
-## Included
-- Product-led homepage feature tiles populated only from existing featured products.
-- Favorites stored locally in the current browser (no schema migration, account sync, or new authentication behavior).
-- Product fact panel using existing platform, region, and delivery_type fields.
-- Checkout visual hierarchy: step indicator, trust/total guidance, and clearer summary. Existing order and payment handlers remain in place.
-- Related-product favorites buttons and an optional bundle builder that adds selected products as separate cart items at their existing prices. This is not a discounted single-SKU bundle and does not reserve stock itself.
-- Additive marketing events for product views, cart additions, favorites opens, and bundle builder opens using the existing checkout_events table and endpoint.
-- A same-browser cart resume nudge. No email is sent and no server-side abandoned-cart job is introduced.
+## Protected behavior
+The checkout order-creation, payment proof, stock reservation, fulfillment, refund logic, authentication/session implementation, service worker, deployment configuration, root-level duplicate frontend files, base schema, and existing migrations v3/v4 are not rewritten. The only backend behavior added is account-scoped favorites persistence and the schema version bump required for its table.
 
-## Deliberately not represented as complete
-- Cross-device/account-synced wishlist: needs an isolated persistent wishlist table and endpoints.
-- Automated abandoned-cart emails: needs consent rules, durable cart records, secure resume tokens, and a scheduled sender.
-- Full affiliate commissions and payouts: existing customer referrals are not the same as an affiliate ledger. This build does not alter referral accounting.
-- Discounted purchasable bundles: needs a reviewed server-side bundle model and stock/pricing integration. The bundle builder here only adds separate items using existing cart behavior.
-- Marketing source attribution: basic event capture is present; reliable campaign attribution and a reporting dashboard remain separate work.
+## Cart persistence
+The cart is now a full page, but cart storage remains the existing `kardivo_cart` browser storage. Cross-device cart syncing is a separate feature and is not implied by this UI change. Existing checkout and order behavior remain the same.
 
-## Protected files
-`wrangler.toml`, `public/sw.js`, root `sw.js`, root `app.js`, root `index.html`, root `styles.css`, `schema.sql`, and existing migrations are unchanged. `worker.js` is changed only to allow additional non-purchase analytics event names through the existing endpoint. Existing order creation, payment proof, stock reservation, fulfillment, authentication, and refund logic are not intentionally modified.
-
-## Before deployment
-Run the store in staging, test Arabic RTL and English LTR, and regression-test login, variants, cart quantities, discount application, payment method selection, proof upload, order creation, order tracking, and stock reservations. Review the diff before deploying.
+## Test before deployment
+- Product cards: favorite button must not cover the Ready/stock badge or sale badge; test RTL and LTR.
+- `/favorites`: signed-in user sees account-synced favorites; sign-in merges guest favorites; remove favorite updates page; logout clears local account-specific favorites.
+- `/cart`: empty state, quantity increase/decrease, removal, subtotal, variant pricing, and checkout entry.
+- Existing purchase regression: login, variant selection, discounts, checkout totals, payment selection, proof upload, order creation, inventory reservations, fulfillment, and order history.
+- Verify `GET/PUT /api/me/favorites` rejects unauthenticated requests and cannot save inactive or nonexistent product IDs.
