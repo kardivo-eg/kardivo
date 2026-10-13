@@ -8,7 +8,6 @@ const state = {
   query: "",
   sort: "featured",
   discovery: "all",
-  pageType: "home",
   currencyView: "EGP",
   checkoutAfterAuth: false,
   admin: { tab: "dashboard", data: {} },
@@ -16,9 +15,6 @@ const state = {
 const AR = {
   Cart: "السلة",
   Store: "المتجر",
-  Games: "الألعاب",
-  "Gift Cards": "بطاقات الهدايا",
-  Subscriptions: "الاشتراكات",
   Deals: "العروض",
   "How it works": "إزاي بتطلب؟",
   "Track order": "تتبّع الطلب",
@@ -107,8 +103,8 @@ const AR = {
   "Total to pay": "المطلوب دفعه",
   Payment: "الدفع",
   "Send payment to": "حوّل المبلغ على",
-  'Sign in to your account to view and follow this order.':
-    "سجّل دخولك لحسابك لعرض تفاصيل الطلب ومتابعته.",
+  'You can check this order any time with "Track order" using the order number and the contact you entered.':
+    "تقدر تتابع الطلب في أي وقت من «تتبّع الطلب» برقم الطلب ورقم التواصل اللي كتبته.",
   "Open WhatsApp Support": "افتح واتساب الدعم",
   Done: "تمام",
   From: "ابتداءً من",
@@ -368,7 +364,9 @@ function applyLang() {
   applySettings();
   renderFooter();
   renderCartCount();
-  if (isProductRoute())
+  if (location.pathname.replace(/\/$/, "") === "/account") {
+    renderAccountPage();
+  } else if (isProductRoute())
     openProductPage(
       decodeURIComponent(location.pathname.slice(1)).replace(/\/$/, ""),
     );
@@ -397,25 +395,6 @@ const $ = (s) => document.querySelector(s),
   $$ = (s) => [...document.querySelectorAll(s)];
 const logo =
   "https://i.ibb.co/rRqtGKkw/0db84367-e795-4617-835e-5e0a2bf2ff45.jpg";
-// Stock fallback artwork keeps the storefront visual even when a product has no uploaded image
-// or an older third-party image URL has gone offline. These are generic gaming visuals, not product claims.
-const STOCK_ART = [
-  "https://images.pexels.com/photos/7776883/pexels-photo-7776883.jpeg?cs=srgb&dl=pexels-pavel-danilyuk-7776883.jpg&fm=jpg",
-  "https://images.unsplash.com/photo-1610561212775-b191f21b6998?auto=format&fit=crop&fm=jpg&q=80&w=1200",
-  "https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&fm=jpg&q=80&w=1200",
-];
-const stockArtFor = (item) => {
-  const id = Math.abs(Number(item?.id) || 0);
-  const label = `${item?.name || ""} ${item?.category_name || ""} ${item?.category_name_ar || ""} ${item?.platform || ""}`.toLowerCase();
-  if (/gift|card|رصيد|كارت|بطاقة/.test(label)) return STOCK_ART[1];
-  if (/subscription|اشتراك|plus|pass|membership/.test(label)) return STOCK_ART[2];
-  return STOCK_ART[id % STOCK_ART.length];
-};
-const stockImg = (url, alt, fallback = STOCK_ART[0], className = "") => {
-  const src = String(url || fallback).trim();
-  const safeFallback = escapeHTML(fallback);
-  return `<img${className ? ` class="${escapeHTML(className)}"` : ""} src="${escapeHTML(src)}" alt="${escapeHTML(alt || "")}" loading="lazy" data-stock-fallback="${safeFallback}" onerror="if(this.dataset.stockFallback&&this.src!==this.dataset.stockFallback){this.src=this.dataset.stockFallback;this.dataset.stockFallback=''}else{this.remove()}">`;
-};
 function loadCart() {
   try {
     return JSON.parse(localStorage.getItem("kardivo_cart") || "[]");
@@ -490,7 +469,6 @@ function updateCurrencyButton() {
 function toggleCurrency() {
   state.currencyView = state.currencyView === "EGP" ? "USD" : "EGP";
   updateCurrencyButton();
-  // A click before API boot completes is still honored; boot will render using this state.
   if (!state.ready) return;
   if (isProductRoute()) {
     openProductPage(decodeURIComponent(location.pathname.slice(1)).replace(/\/$/, ""));
@@ -577,16 +555,11 @@ async function boot() {
     renderCartCount();
     await route();
     state.ready = true;
-    updateCurrencyButton();
     if (location.hash === "#account") openAccount();
     if (qs.get("reset")) {
       openReset(qs.get("reset"));
       history.replaceState({}, "", location.pathname + location.hash);
-    } else if (qs.get("track")) {
-      // Legacy public tracking links now lead to the customer account instead.
-      history.replaceState({}, "", location.pathname + "#account");
-      if (state.user) openAccount();
-    }
+    } else if (qs.get("track")) openTrack(qs.get("track"));
     if (state.user?.role === "admin") {
       const oid = Number(qs.get("admin_order"));
       if (oid || qs.get("admin_tab")) {
@@ -673,29 +646,18 @@ function searchScore(p, query) {
 function renderCampaign() {
   const section = $("#campaignSection");
   if (!section) return;
-  const enabledValue = state.settings.campaign_enabled;
-  // Missing legacy settings should not silently hide the banner; only an explicit admin "off" hides it.
-  const enabled = enabledValue == null ? true : String(enabledValue) === "1";
-  const fallbackTitle = state.lang === "ar" ? "عروض وأساسيات الجيمينج في مكان واحد" : "Your next gaming upgrade starts here.";
-  const fallbackText = state.lang === "ar" ? "اكتشف المنتجات الرقمية والعروض المتاحة دلوقتي." : "Discover digital gaming essentials and current offers.";
-  const title = String(S("campaign_title") || fallbackTitle).trim();
+  const enabled = String(state.settings.campaign_enabled || "0") === "1";
+  const title = String(S("campaign_title") || "").trim();
   const image = String(state.settings.campaign_image || "").trim();
   const link = String(state.settings.campaign_link || "/#store").trim();
   section.hidden = !enabled || !title;
-  const titleEl = section.querySelector('[data-s="campaign_title"]');
-  const textEl = section.querySelector('[data-s="campaign_text"]');
-  const eyebrowEl = section.querySelector('[data-s="campaign_eyebrow"]');
-  const ctaEl = section.querySelector('[data-s="campaign_cta"]');
-  if (titleEl && !String(S("campaign_title") || "").trim()) titleEl.textContent = fallbackTitle;
-  if (textEl && !String(S("campaign_text") || "").trim()) textEl.textContent = fallbackText;
-  if (eyebrowEl && !String(S("campaign_eyebrow") || "").trim()) eyebrowEl.textContent = state.lang === "ar" ? "عروض كارديفو" : "THE KARDIVO DROP";
-  if (ctaEl && !String(S("campaign_cta") || "").trim()) ctaEl.textContent = state.lang === "ar" ? "اكتشف المنتجات" : "Explore the store";
   const cta = $("#campaignCta");
   if (cta) cta.href = /^(https?:\/\/|\/#|\/product\/|\/)/i.test(link) ? link : "/#store";
   const art = $("#campaignArt");
   if (art) {
-    const artwork = image && /^https?:\/\//i.test(image) ? image : STOCK_ART[0];
-    art.style.backgroundImage = `linear-gradient(90deg,#100b1bf0 0%,#100b1b9c 45%,#100b1b20 100%),url("${artwork.replace(/["\\]/g, "")}")`;
+    art.style.backgroundImage = image && /^https?:\/\//i.test(image)
+      ? `linear-gradient(90deg,#100b1be8,#100b1b35),url("${image.replace(/["\\]/g, "")}")`
+      : "radial-gradient(circle at 65% 35%,#a477ff66,transparent 28%),radial-gradient(circle at 80% 75%,#5b21b666,transparent 38%),linear-gradient(135deg,#1b1230,#0b0912)";
   }
 }
 function renderSearchSuggestions() {
@@ -704,7 +666,7 @@ function renderSearchSuggestions() {
   const q = input.value.trim().toLowerCase();
   if (q.length < 2) { box.hidden = true; box.innerHTML = ""; return; }
   const matches = state.products.map(p => ({ p, score: searchScore(p, q) })).filter(x => x.score >= 0).sort((a, b) => b.score - a.score || Number(b.p.featured || 0) - Number(a.p.featured || 0)).slice(0, 5).map(x => x.p);
-  box.innerHTML = matches.map((p) => `<a class="search-suggestion" href="/${encodeURIComponent(p.slug || p.id)}" data-suggestion-product="${p.id}">${stockImg(p.image_url, "", stockArtFor(p))}<span class="suggestion-copy"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</small></span><strong>${money(Number(p.price || 0))}</strong></a>`).join("") || `<div class="search-suggestion-empty">${state.lang === "ar" ? "مفيش نتائج مطابقة. جرّب اسم تاني." : "No matching products. Try another search."}</div>`;
+  box.innerHTML = matches.map((p) => `<a class="search-suggestion" href="/${encodeURIComponent(p.slug || p.id)}" data-suggestion-product="${p.id}">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span class="suggestion-placeholder">K</span>`}<span class="suggestion-copy"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</small></span><strong>${money(Number(p.price || 0))}</strong></a>`).join("") || `<div class="search-suggestion-empty">${state.lang === "ar" ? "مفيش نتائج مطابقة. جرّب اسم تاني." : "No matching products. Try another search."}</div>`;
   box.hidden = false;
 }
 function renderCategoryCards() {
@@ -714,12 +676,11 @@ function renderCategoryCards() {
   const categories = state.categories.filter((c) => state.products.some((p) => String(p.category_id) === String(c.id)));
   el.innerHTML = categories.map((c) => {
     const product = state.products.find((p) => String(p.category_id) === String(c.id) && p.image_url);
-    const fallbackProduct = state.products.find((p) => String(p.category_id) === String(c.id));
-    const art = String(map[c.id] || (product && product.image_url) || stockArtFor({ ...c, id: c.id, name: c.name, category_name: c.name }));
+    const art = String(map[c.id] || (product && product.image_url) || "");
     const name = cName(c);
     const count = state.products.filter((p) => String(p.category_id) === String(c.id)).length;
     const subtitle = state.lang === "ar" ? `${count} منتج` : `${count} ${count === 1 ? "product" : "products"}`;
-    return `<button class="category-card" type="button" data-category-card="${escapeHTML(c.id)}" aria-label="${escapeHTML(name)}"><div class="category-art">${stockImg(art, "", stockArtFor(fallbackProduct || c))}</div><div class="category-card-content"><div><h3>${escapeHTML(name)}</h3><p>${subtitle}</p></div><span class="cat-arrow" aria-hidden="true">${arrow()}</span></div></button>`;
+    return `<button class="category-card" type="button" data-category-card="${escapeHTML(c.id)}" aria-label="${escapeHTML(name)}"><div class="category-art">${art ? `<img src="${escapeHTML(art)}" alt="" loading="lazy" onerror="this.parentElement.remove()">` : ""}</div><div class="category-card-content"><div><h3>${escapeHTML(name)}</h3><p>${subtitle}</p></div><span class="cat-arrow" aria-hidden="true">${arrow()}</span></div></button>`;
   }).join("");
   el.querySelectorAll("[data-category-card]").forEach((b) => b.addEventListener("click", () => {
     state.category = String(b.dataset.categoryCard);
@@ -740,7 +701,7 @@ function renderPopularProducts() {
     const old = Number(p.old_price || 0);
     const name = pName(p);
     const cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
-    const img = stockImg(p.image_url, name, stockArtFor(p));
+    const img = p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(name)}" loading="lazy">` : `<span class="popular-placeholder">K</span>`;
     return `<a class="popular-product" href="/${encodeURIComponent(p.slug || p.id)}"><div class="popular-product-image">${img}</div><div class="popular-product-copy"><span class="popular-product-category">${escapeHTML(cat || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</span><span class="popular-product-name">${escapeHTML(name)}</span><span class="popular-product-price">${money(price)}${old > price ? `<del>${money(old)}</del>` : ""}</span></div></a>`;
   }).join("");
   const section = $("#popularSection");
@@ -778,14 +739,6 @@ function filtered() {
     arr = arr.filter((p) => Number(p.featured));
   else if (state.category !== "all")
     arr = arr.filter((p) => String(p.category_id) === String(state.category));
-  if (state.pageType && state.pageType !== "home" && state.pageType !== "store") {
-    const norm = (v) => String(v || "").toLowerCase();
-    const textOf = (p) => norm([p.name, p.name_ar, p.description, p.description_ar, p.category_name, p.category_name_ar, p.platform, p.region, p.delivery_type].join(" "));
-    if (state.pageType === "games") arr = arr.filter(p => /game|games|playstation|ps4|ps5|xbox|steam|nintendo|switch|pc game|gaming/.test(textOf(p)) && !/gift.?card|wallet code|top.?up|subscription|membership|plus essential|game pass ultimate/.test(textOf(p)));
-    else if (state.pageType === "gift-cards") arr = arr.filter(p => /gift.?card|wallet|psn card|steam card|google play|itunes|roblox credit|xbox credit|top.?up|topup/.test(textOf(p)));
-    else if (state.pageType === "subscriptions") arr = arr.filter(p => /subscription|membership|game pass|playstation plus|ps plus|ps\+|xbox live|netflix|spotify|youtube premium|prime video|online membership/.test(textOf(p)));
-    else if (state.pageType === "deals") arr = arr.filter(productOnSale);
-  }
   const q = state.query.toLowerCase();
   if (q)
     arr = arr.map(p => ({ p, score: searchScore(p, q) })).filter(x => x.score >= 0).sort((a, b) => b.score - a.score).map(x => x.p);
@@ -843,7 +796,7 @@ function renderProducts() {
         href = "/" + encodeURIComponent(p.slug),
         name = pName(p),
         cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
-      return `<article class="product-card product-card-link"><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-image">${stockImg(p.image_url, name, stockArtFor(p))}${sale ? `<span class="sale">${t("SALE")}</span>` : ""}<span class="stock">${badge}</span></div><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span>` : ""}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
+      return `<article class="product-card product-card-link"><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-image">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(name)}" loading="lazy">` : `<div class="no-image">K</div>`}${sale ? `<span class="sale">${t("SALE")}</span>` : ""}<span class="stock">${badge}</span></div><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span>` : ""}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
     })
     .join("");
   $$("[data-add]").forEach(
@@ -878,7 +831,7 @@ async function openProductPage(slug) {
       old = variants.length
         ? Number(first.old_price || 0)
         : Number(p.old_price || 0);
-    main.innerHTML = `<section class="product-page container"><div class="product-breadcrumb"><a href="/" data-home>${t("Store")}</a><span>/</span><span>${escapeHTML(name)}</span></div><div class="product-detail"><div class="product-detail-media">${stockImg(p.image_url, name, stockArtFor(p))}</div><div class="product-detail-copy"><span class="eyebrow">${escapeHTML(cName({ name: p.category_name, name_ar: p.category_name_ar }) || t("DIGITAL PRODUCT"))}</span><h1>${escapeHTML(name)}</h1><div class="product-detail-price" id="productPrice">${money(price)} ${old > price ? `<del>${money(old)}</del>` : ""}</div><div class="product-detail-meta">${[
+    main.innerHTML = `<section class="product-page container"><div class="product-breadcrumb"><a href="/" data-home>${t("Store")}</a><span>/</span><span>${escapeHTML(name)}</span></div><div class="product-detail"><div class="product-detail-media">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(name)}">` : `<div class="product-detail-placeholder">K</div>`}</div><div class="product-detail-copy"><span class="eyebrow">${escapeHTML(cName({ name: p.category_name, name_ar: p.category_name_ar }) || t("DIGITAL PRODUCT"))}</span><h1>${escapeHTML(name)}</h1><div class="product-detail-price" id="productPrice">${money(price)} ${old > price ? `<del>${money(old)}</del>` : ""}</div><div class="product-detail-meta">${[
       p.platform,
       p.region,
       p.delivery_type === "code"
@@ -1315,7 +1268,7 @@ async function placeOrder() {
         r.paid
           ? `<div class="notice success-text" style="margin-top:10px">${t("Nothing to pay. Your order is confirmed and will be delivered shortly.")}</div>`
           : `<div class="line"><span>${t("Payment")}</span><b>${escapeHTML(payName(r.payment_method))}</b></div><div class="destination"><b>${t("Send payment to")}</b><code>${escapeHTML(r.destination)}</code></div>`
-      }<p style="color:#aaa1b1;font-size:12px">${escapeHTML(r.support_text)}</p>${proofMsg ? `<p style="color:#aaa1b1;font-size:12px">${escapeHTML(proofMsg)}</p>` : ""}<p style="color:#aaa1b1;font-size:12px">${t('Sign in to your account to view and follow this order.')}</p></div><div class="modal-actions">${r.whatsapp ? `<a class="btn primary" href="${escapeHTML(r.whatsapp)}" target="_blank" rel="noreferrer">${t("Open WhatsApp Support")} ${arrow()}</a>` : ""}<button class="btn ghost" id="doneOrder">${t("Done")}</button></div>`,
+      }<p style="color:#aaa1b1;font-size:12px">${escapeHTML(r.support_text)}</p>${proofMsg ? `<p style="color:#aaa1b1;font-size:12px">${escapeHTML(proofMsg)}</p>` : ""}<p style="color:#aaa1b1;font-size:12px">${t('You can check this order any time with "Track order" using the order number and the contact you entered.')}</p></div><div class="modal-actions">${r.whatsapp ? `<a class="btn primary" href="${escapeHTML(r.whatsapp)}" target="_blank" rel="noreferrer">${t("Open WhatsApp Support")} ${arrow()}</a>` : ""}<button class="btn ghost" id="doneOrder">${t("Done")}</button></div>`,
     );
     $("#doneOrder").onclick = closeModal;
   } catch (e) {
@@ -1490,6 +1443,61 @@ function bindOrderExtras(contact) {
   $$("[data-thread]").forEach(
     (d) => (d.ontoggle = () => d.open && loadThread(Number(d.dataset.thread), contact)),
   );
+}
+function orderBlock(o) {
+  const st = (x) => escapeHTML(statusName(x));
+  const proof =
+    !o.payment_proof &&
+    o.payment_status === "awaiting_payment" &&
+    o.fulfillment_status !== "cancelled"
+    ? `<div class="field" style="margin-top:10px"><label>${t("Payment proof")}</label><input id="proof-${o.id}" type="file" accept="image/*"><input id="ref-${o.id}" placeholder="${t("Transfer reference (optional)")}" style="margin-top:6px"><button type="button" class="mini" data-upload-proof="${o.id}" style="margin-top:6px">${t("Upload screenshot")}</button></div>`
+    : "";
+  return `<div class="notice" style="margin-bottom:10px"><div class="line"><b>${escapeHTML(o.order_number)}</b><span>${money(o.total)}</span></div><small>${escapeHTML(o.item_summary || "")}</small><br><small>${t("Payment: {0} · Delivery: {1} · {2}", st(o.payment_status), st(o.fulfillment_status), escapeHTML(fmtTime(o.created_at)))}</small>${timelineHTML(o)}${o.delivery_message ? `<div class="notice success-text" style="margin-top:10px"><b>${t("Delivery message")}</b><br>${escapeHTML(o.delivery_message).replace(/\n/g, "<br>")}</div>` : ""}${(o.codes || []).length ? `<div style="margin-top:10px"><b>${t("Your codes")}</b>${o.codes.map((c) => `<div class="line"><span>${escapeHTML(c.product_name)}${c.variant_name ? ` — ${escapeHTML(c.variant_name)}` : ""}<br><code>${escapeHTML(c.code)}</code></span><span><button class="mini" data-copy="${escapeHTML(c.code)}">${t("Copy")}</button>${state.user ? ` <button class="mini" data-review-product="${c.product_id}" data-review-order="${o.id}">${t("Review")}</button>` : ""}</span></div>`).join("")}</div>` : ""}${proof}<details class="thread-box" data-thread="${o.id}"><summary>${t("Messages with support")}</summary><div class="thread-body" id="thread-${o.id}"></div></details></div>`;
+}
+function openTrack(prefill = "") {
+  openModal(
+    t("Track your order"),
+    `<form id="trackForm"><div class="field"><label>${t("Order number")}</label><input id="tNum" required placeholder="KDV-2026-XXXXXXXX" value="${escapeHTML(prefill)}"></div><div class="field"><label>${t("Contact you used (WhatsApp / phone / account email)")}</label><input id="tContact" required></div><button class="btn primary">${t("Find order")}</button></form><div id="trackResult" style="margin-top:16px"></div>`,
+  );
+  $("#trackForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const o = await api("/api/orders/lookup", {
+        method: "POST",
+        body: JSON.stringify({
+          order_number: $("#tNum").value,
+          contact: $("#tContact").value,
+        }),
+      });
+      $("#trackResult").innerHTML = orderBlock(o);
+      bindOrderExtras($("#tContact").value);
+      $$("[data-upload-proof]").forEach(
+        (b) =>
+          (b.onclick = async () => {
+            const f = $(`#proof-${b.dataset.uploadProof}`)?.files?.[0];
+            if (!f) {
+              toast(t("Choose a file first."));
+              return;
+            }
+            try {
+              await uploadPaymentProof(
+                Number(b.dataset.uploadProof),
+                f,
+                $("#tContact").value,
+                $(`#ref-${b.dataset.uploadProof}`)?.value.trim() || "",
+              );
+              toast(t("Proof uploaded."));
+              $("#trackForm").requestSubmit();
+            } catch (err) {
+              toast(err.message);
+            }
+          }),
+      );
+    } catch (err) {
+      $("#trackResult").innerHTML =
+        `<div class="notice danger-text">${escapeHTML(err.message)}</div>`;
+    }
+  };
 }
 function reviewForm(productId, orderId) {
   openModal(
@@ -1690,7 +1698,7 @@ async function adminDashboard(main) {
   main.innerHTML = `<div class="admin-top"><h2>Dashboard</h2><select id="repDays">${[7, 30, 90, 365].map((n) => `<option value="${n}" ${n === r.days ? "selected" : ""}>Last ${n} days</option>`).join("")}</select></div>
   ${d.review_queue ? `<div class="notice" style="margin-bottom:12px"><b>${d.review_queue}</b> order(s) have a payment proof waiting. <button class="mini primary" id="goQueue">Review now</button></div>` : ""}
   <div class="stats"><div class="stat"><small>AWAITING PAYMENT</small><b>${d.awaiting_payment}</b></div><div class="stat"><small>ORDERS</small><b>${d.orders}</b></div><div class="stat"><small>PAID REVENUE</small><b>${money(d.paid_revenue)}</b></div><div class="stat"><small>7-DAY REVENUE</small><b>${money(d.revenue_7d)}</b></div><div class="stat"><small>30-DAY REVENUE</small><b>${money(d.revenue_30d)}</b></div><div class="stat"><small>AVG ORDER</small><b>${money(d.avg_order)}</b></div><div class="stat"><small>AVAILABLE CODES</small><b>${d.available_codes}</b></div><div class="stat"><small>CUSTOMERS</small><b>${d.customers}</b></div></div>
-  <div class="admin-panel admin-quick-actions"><div class="panel-head"><div><h3>Quick actions</h3><small>Jump straight to the jobs you do most</small></div></div><div class="admin-quick-grid"><button type="button" data-admin-jump="queue"><span>01</span><b>Review payments</b><small>${d.review_queue || 0} awaiting proof review</small></button><button type="button" data-admin-jump="orders"><span>02</span><b>Find an order</b><small>Search any order and open its details</small></button><button type="button" data-admin-jump="products"><span>03</span><b>Manage products</b><small>Prices, images, stock and delivery</small></button><button type="button" data-admin-jump="merge"><span>04</span><b>Manage variations</b><small>Combine safely with preview and undo</small></button><button type="button" data-admin-jump="settings"><span>05</span><b>Storefront & campaigns</b><small>Edit bilingual homepage content</small></button></div></div>
+  <div class="admin-panel admin-quick-actions"><div class="panel-head"><div><h3>Quick actions</h3><small>Jump straight to the jobs you do most</small></div></div><div class="admin-quick-grid"><button type="button" data-admin-jump="queue"><span>01</span><b>Review payments</b><small>${d.review_queue || 0} awaiting proof review</small></button><button type="button" data-admin-jump="products"><span>02</span><b>Manage products</b><small>Prices, images, stock and delivery</small></button><button type="button" data-admin-jump="merge"><span>03</span><b>Manage variations</b><small>Combine safely with preview and undo</small></button><button type="button" data-admin-jump="settings"><span>04</span><b>Storefront & campaigns</b><small>Edit bilingual homepage content</small></button></div></div>
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Checkout funnel · last ${r.days} days</h3></div><div class="modal-body"><div class="funnel"><div class="stat"><small>CHECKOUT STARTED</small><b>${f.started}</b></div><div class="stat"><small>CHECKOUT COMPLETED</small><b>${f.completed}</b></div><div class="stat"><small>COMPLETION RATE</small><b>${f.rate}%</b></div><div class="stat"><small>PAID ORDERS</small><b>${f.paid_orders}</b></div></div><small>Counts unique browsing sessions. "Started" = opened checkout; "completed" = placed an order.</small></div></div>
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Revenue · last ${r.days} days</h3></div><div class="modal-body"><div class="line"><span>Cash revenue (paid orders)</span><b>${money(r.cash_revenue)}</b></div><div class="line"><span>Discounts given</span><b>${money(r.discounts_given)}</b></div><div class="line"><span>Store credit used</span><b>${moneyEGP(r.credit_used)}</b></div><div class="line"><span>Supplier cost</span><b>${money(r.total_cost)}</b></div><div class="line"><span>Estimated profit</span><b>${money(r.profit_estimate)}</b></div>${r.costs_incomplete ? `<small>Some products have no cost recorded, so profit is overstated. Add a supplier cost when importing codes, or a cost price on manual products.</small>` : ""}<div class="bars" title="Daily revenue">${r.daily.map((x) => `<span style="height:${Math.max(4, Math.round((x.revenue / maxRev) * 100))}%" title="${escapeHTML(x.date)}: ${money(x.revenue)} (${x.orders} orders)"></span>`).join("") || `<small>No paid orders in this period.</small>`}</div></div></div>
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Top products & profit</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Units</th><th>Revenue</th><th>Cost</th><th>Profit</th></tr></thead><tbody>${r.products.map((p) => `<tr><td>${escapeHTML(p.name)}</td><td>${p.units}</td><td>${money(p.revenue)}</td><td>${p.cost == null ? "—" : money(p.cost)}</td><td>${p.profit == null ? "—" : money(p.profit)}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">No sales yet.</td></tr>`}</tbody></table></div></div>
@@ -1705,10 +1713,9 @@ async function adminDashboard(main) {
     state.admin.tab = "queue";
     renderAdminTab();
   });
-  $$("[data-admin-jump]").forEach(b => b.addEventListener("click", async () => {
+  $$("[data-admin-jump]").forEach(b => b.addEventListener("click", () => {
     state.admin.tab = b.dataset.adminJump;
-    await renderAdminTab();
-    if (state.admin.tab === "orders") $("#oSearch")?.focus();
+    renderAdminTab();
   }));
   const act = (id, path, msg) =>
     $(id)?.addEventListener("click", async (e) => {
@@ -2991,21 +2998,13 @@ function applySettings() {
   $$("[data-store-name]").forEach(
     (el) => (el.textContent = s.store_name || "Kardivo"),
   );
-  // The built-in logo is now HTML/CSS/SVG. Only swap in an image if an admin set a custom logo URL
-  // (the API returns the old default JPG when none is set, so that value counts as "not custom").
-  const lu = s.logo_url && s.logo_url !== logo ? s.logo_url : "";
-  $$("[data-logo]").forEach((el) => {
-    if (lu) {
-      if (!el.dataset.cssLogo) el.dataset.cssLogo = el.innerHTML;
-      el.classList.add("k-logo-custom");
-      el.innerHTML = `<img src="${escapeHTML(lu)}" alt="${escapeHTML(s.store_name || "Kardivo")}">`;
-    } else if (el.dataset.cssLogo) {
-      el.classList.remove("k-logo-custom");
-      el.innerHTML = el.dataset.cssLogo;
-    }
+  const lu = s.logo_url || logo;
+  $$("[data-logo]").forEach((i) => {
+    i.src = lu;
+    i.alt = s.store_name || "Kardivo";
   });
   const fav = $("#favicon");
-  if (fav) fav.href = lu || "/icons/logo-mark.svg";
+  if (fav) fav.href = lu;
   const ph = $("#search");
   if (ph && S("search_placeholder")) ph.placeholder = S("search_placeholder");
   const a = $("#announce");
@@ -3025,14 +3024,11 @@ function applySettings() {
     document.title = `${s.store_name || "Kardivo"} | ${S("meta_title") || "Digital gaming marketplace"}`;
 }
 function showHome() {
-  state.pageType = "home";
-  state.discovery = "all";
-  document.body.classList.remove("product-route", "collection-route");
+  document.body.classList.remove("product-route");
   $("main").innerHTML = homeHTML;
   translateStatic();
   applySettings();
   renderCampaign();
-  renderFooter();
   renderCategories();
   renderSmartFilters();
   renderHeroShowcase();
@@ -3044,65 +3040,56 @@ function showHome() {
   renderSearchSuggestions();
   renderTestimonials();
 }
-function renderCollectionPage(type) {
-  const config = {
-    store: { eyebrow: "THE FULL KARDIVO CATALOG", title: "Your next digital upgrade.", text: "Browse every currently available product in one place.", icon: "▦" },
-    games: { eyebrow: "THE GAME LIBRARY", title: "Find your next obsession.", text: "Explore games and gaming essentials, all in one place.", icon: "▣" },
-    "gift-cards": { eyebrow: "DIGITAL GIFT CARDS", title: "The right code. Delivered digitally.", text: "Browse available gift cards and digital wallet credit.", icon: "◇" },
-    subscriptions: { eyebrow: "MEMBERSHIPS & SUBSCRIPTIONS", title: "Keep your favorites going.", text: "Explore available memberships and subscription products.", icon: "∞" },
-    deals: { eyebrow: "KARDIVO DEALS", title: "Good deals. No mystery math.", text: "Only products with an actual reduced price appear here.", icon: "✦" },
-  }[type];
-  state.pageType = type;
-  state.category = "all";
-  state.discovery = type === "deals" ? "sale" : "all";
-  document.body.classList.remove("product-route");
-  document.body.classList.add("collection-route");
-  $("main").innerHTML = `<section class="collection-hero container"><div class="collection-mark" aria-hidden="true">${config.icon}</div><div class="collection-copy"><span class="eyebrow">${config.eyebrow}</span><h1>${config.title}</h1><p>${config.text}</p><div class="trust-row"><span>✓ Digital products</span><span>✓ Clear pricing</span><span>✓ Local payment options</span></div></div></section><section id="store" class="store container collection-store"><div class="section-head"><div><span class="eyebrow">BROWSE KARDIVO</span><h2>${type === "deals" ? "Available offers" : "Explore the catalog"}</h2><p class="section-subtitle" id="collectionSummary">Find exactly what you came for.</p></div><div class="store-tools"><div class="search-wrap"><label class="search"><span>⌕</span><input id="search" autocomplete="off" placeholder="Search..."><div id="searchSuggestions" class="search-suggestions" hidden></div></label></div><select id="sort"><option value="featured">Featured</option><option value="newest">Newest</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="name">Name</option></select></div></div><div id="categories" class="chips"></div><div class="discovery-toolbar"><div class="discovery-toolbar-copy"><span class="eyebrow">QUICK FILTERS</span><span id="discoverySummary" class="discovery-summary"></span></div><div id="smartFilters" class="smart-filters" aria-label="Product filters"></div></div><div id="productGrid" class="product-grid"><div class="loading-card">Loading the catalog...</div></div><div class="collection-foot"><a class="btn ghost" href="/">← Back to home</a><a class="btn primary" href="/how-it-works">How buying works ↗</a></div></section>`;
-  renderCategories();
-  renderSmartFilters();
-  $("#sort").value = state.sort;
-  $("#search").value = state.query;
-  renderProducts();
-}
-function renderHowPage() {
-  document.body.classList.remove("product-route");
-  document.body.classList.add("collection-route");
-  $("main").innerHTML = `<section class="collection-hero container"><div class="collection-mark">↗</div><div class="collection-copy"><span class="eyebrow">THE KARDIVO PROCESS</span><h1>Three steps. No ceremony.</h1><p>Know what you're paying, choose your payment method, and follow your order in one place.</p></div></section><section class="how container"><div class="steps"><article><b>01</b><h3>Build your cart</h3><p>Browse the catalog, check product details, and add the products you want.</p></article><article><b>02</b><h3>Choose payment</h3><p>Review your total and select one of the payment methods currently available at checkout.</p></article><article><b>03</b><h3>Send proof</h3><p>Submit your payment reference or proof when requested, then follow the order from your account.</p></article></div><div class="collection-foot"><a class="btn ghost" href="/">Back home</a><a class="btn primary" href="/games">Browse products ↗</a></div></section>`;
-}
-function renderCartPage() {
-  document.body.classList.remove("product-route");
-  document.body.classList.add("collection-route");
-  const items = cartItems();
-  const subtotal = items.reduce((sum, i) => sum + Number(i.p.variants?.find(v => Number(v.id) === Number(i.variant_id))?.price ?? i.p.price) * i.quantity, 0);
-  $("main").innerHTML = `<section class="collection-hero container"><div class="collection-mark">⌑</div><div class="collection-copy"><span class="eyebrow">YOUR SELECTION</span><h1>Your cart.</h1><p>Your selected digital goods, gathered in one place.</p></div></section><section class="container cart-page"><div class="cart-page-items">${items.length ? items.map(i => { const v=i.p.variants?.find(x=>Number(x.id)===Number(i.variant_id)); return `<article class="cart-page-item"><div class="cart-page-image">${stockImg(i.p.image_url,pName(i.p),stockArtFor(i.p))}</div><div class="cart-page-detail"><span class="eyebrow">${escapeHTML(cName({name:i.p.category_name,name_ar:i.p.category_name_ar}) || "DIGITAL")}</span><h3>${escapeHTML(pName(i.p))}</h3><p>${v ? escapeHTML(v.name) : "Digital product"}</p><b>${money(Number(v?.price ?? i.p.price) * i.quantity)}</b></div><div class="cart-page-controls"><button class="mini" data-minus="${escapeHTML(cartKey(i))}">−</button><b>${i.quantity}</b><button class="mini" data-plus="${escapeHTML(cartKey(i))}">+</button><button class="mini danger" data-remove="${escapeHTML(cartKey(i))}">Remove</button></div></article>`; }).join("") : `<div class="empty cart-empty"><div class="collection-mark">⌑</div><h2>Your cart is empty.</h2><p>Nothing to check out yet. The digital goods are not going to add themselves.</p><a class="btn primary" href="/games">Explore products ↗</a></div>`}</div>${items.length ? `<aside class="cart-summary"><span class="eyebrow">ORDER SUMMARY</span><h2>Ready when you are.</h2><div class="line"><span>Subtotal</span><b>${money(subtotal)}</b></div><p>Discounts and final payment totals are confirmed at checkout.</p><button class="btn primary" id="cartPageCheckout">Continue to checkout ↗</button><button class="btn ghost" id="cartPageContinue">Continue shopping</button></aside>` : ""}</section>`;
-  $$('[data-minus]').forEach(b=>b.onclick=()=>changeQty(b.dataset.minus,-1));
-  $$('[data-plus]').forEach(b=>b.onclick=()=>changeQty(b.dataset.plus,1));
-  $$('[data-remove]').forEach(b=>b.onclick=()=>{state.cart=state.cart.filter(x=>cartKey(x)!==b.dataset.remove);saveCart();renderCartPage();renderCartCount();});
-  $("#cartPageCheckout")?.addEventListener("click", openCheckout);
-  $("#cartPageContinue")?.addEventListener("click", () => navigate("/games"));
-}
 function renderAccountPage() {
   document.body.classList.remove("product-route");
-  document.body.classList.add("collection-route");
+  document.body.classList.add("account-route");
   const user = state.user;
-  $("main").innerHTML = `<section class="collection-hero container"><div class="collection-mark">◎</div><div class="collection-copy"><span class="eyebrow">YOUR KARDIVO</span><h1>${user ? `Welcome back, ${escapeHTML(user.name || "player")}.` : "Your account, your orders."}</h1><p>${user ? "Keep track of your purchases, order status, and digital products." : "Sign in to follow orders and manage your purchases. You can still browse the store without an account."}</p></div></section><section class="container account-hub"><article class="account-hub-card"><span class="eyebrow">ACCOUNT & ORDERS</span><h2>${user ? "Your account is ready." : "Pick up where you left off."}</h2><p>${user ? `Signed in as <b>${escapeHTML(user.email || user.name || "Kardivo customer")}</b>.` : "Sign in or create an account to view order history and follow delivery status."}</p><button class="btn primary" id="accountHubAction">${user ? "Open account & orders ↗" : "Sign in / Create account ↗"}</button></article><article class="account-hub-card"><span class="eyebrow">KEEP EXPLORING</span><h2>Digital goods, minus the nonsense.</h2><p>Browse the catalog and add products to your cart. Checkout will guide you through the next steps.</p><a class="btn ghost" href="/store">Browse all products ↗</a></article></section>`;
+  const ar = state.lang === "ar";
+  const copy = ar ? {
+    eyebrow: "حسابك في كارديفو",
+    titleIn: `حمد لله على السلامة${user && user.name ? ` يا ${escapeHTML(user.name)}` : ""}!`,
+    titleOut: "حسابك وطلباتك في مكان واحد.",
+    introIn: "تابع مشترياتك وحالة طلباتك والأكواد الرقمية بتاعتك.",
+    introOut: "سجّل دخولك عشان تتابع طلباتك ومشترياتك. وتقدر تتصفح المتجر عادي من غير حساب.",
+    cardEyebrow: "الحساب والطلبات",
+    cardTitleIn: "حسابك جاهز.",
+    cardTitleOut: "كمّل من آخر مرة.",
+    cardTextIn: `إنت مسجّل دخول بـ <b>${escapeHTML(user?.email || user?.name || "عميل كارديفو")}</b>.`,
+    cardTextOut: "سجّل دخولك أو اعمل حساب جديد عشان تشوف سجل الطلبات وتتابع التسليم.",
+    actionIn: "افتح الحساب والطلبات ↖",
+    actionOut: "تسجيل الدخول / إنشاء حساب ↖",
+    explore: "كمّل تصفّح",
+    exploreTitle: "كل المنتجات الرقمية في مكان واحد.",
+    exploreText: "اختار اللي محتاجه وضيفه للسلة، وخطوات الشراء هتكون واضحة.",
+    browse: "ارجع للمتجر ↖"
+  } : {
+    eyebrow: "YOUR KARDIVO ACCOUNT",
+    titleIn: `Welcome back${user && user.name ? `, ${escapeHTML(user.name)}` : ""}.`,
+    titleOut: "Your account and orders, in one place.",
+    introIn: "Keep track of your purchases, order status, and digital products.",
+    introOut: "Sign in to follow orders and manage purchases. You can still browse the store without an account.",
+    cardEyebrow: "ACCOUNT & ORDERS",
+    cardTitleIn: "Your account is ready.",
+    cardTitleOut: "Pick up where you left off.",
+    cardTextIn: `Signed in as <b>${escapeHTML(user?.email || user?.name || "Kardivo customer")}</b>.`,
+    cardTextOut: "Sign in or create an account to view order history and follow delivery status.",
+    actionIn: "Open account & orders ↗",
+    actionOut: "Sign in / Create account ↗",
+    explore: "KEEP EXPLORING",
+    exploreTitle: "Digital goods, minus the nonsense.",
+    exploreText: "Browse the catalog and add products to your cart. Checkout will guide you through the next steps.",
+    browse: "Back to the store ↗"
+  };
+  $("main").innerHTML = `<section class="account-page container"><div class="account-page-hero"><span class="account-page-mark" aria-hidden="true">◎</span><div><span class="eyebrow">${copy.eyebrow}</span><h1>${user ? copy.titleIn : copy.titleOut}</h1><p>${copy.introIn && user ? copy.introIn : copy.introOut}</p></div></div><section class="account-page-grid"><article class="account-page-card"><span class="eyebrow">${copy.cardEyebrow}</span><h2>${user ? copy.cardTitleIn : copy.cardTitleOut}</h2><p>${user ? copy.cardTextIn : copy.cardTextOut}</p><button class="btn primary" id="accountHubAction">${user ? copy.actionIn : copy.actionOut}</button></article><article class="account-page-card"><span class="eyebrow">${copy.explore}</span><h2>${copy.exploreTitle}</h2><p>${copy.exploreText}</p><a class="btn ghost" href="/#store" data-account-store>${copy.browse}</a></article></section></section>`;
   $("#accountHubAction")?.addEventListener("click", openAccount);
-}
-function routePageType(path) {
-  const clean = path.replace(/\/$/, "") || "/";
-  if (["/store", "/games", "/gift-cards", "/subscriptions", "/deals"].includes(clean)) return clean.slice(1);
-  if (clean === "/how-it-works") return "how";
-  if (clean === "/cart") return "cart";
-  if (clean === "/account") return "account";
-  return null;
+  $("[data-account-store]")?.addEventListener("click", (e) => { e.preventDefault(); navigate("/#store", "#store"); });
 }
 async function route() {
-  const page = routePageType(location.pathname);
-  if (page === "store" || page === "games" || page === "gift-cards" || page === "subscriptions" || page === "deals") renderCollectionPage(page);
-  else if (page === "how") renderHowPage();
-  else if (page === "cart") renderCartPage();
-  else if (page === "account") renderAccountPage();
-  else if (isProductRoute()) await openProductPage(decodeURIComponent(location.pathname.slice(1)).replace(/\/$/, ""));
+  if (location.pathname.replace(/\/$/, "") === "/account") renderAccountPage();
+  else if (isProductRoute())
+    await openProductPage(
+      decodeURIComponent(location.pathname.slice(1)).replace(/\/$/, ""),
+    );
   else showHome();
 }
 function navigate(path, scrollTo) {
@@ -3126,16 +3113,26 @@ async function adminCustomers(main) {
   main.innerHTML = `<div class="admin-top"><h2>Customers</h2><span class="eyebrow">${rows.length} ACCOUNTS</span></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Orders</th><th>Paid total</th><th>Joined</th></tr></thead><tbody>${rows.map((u) => `<tr><td>${escapeHTML(u.name)}</td><td>${escapeHTML(u.email)}</td><td>${escapeHTML(u.role)}</td><td>${u.orders}</td><td>${money(u.spent)}</td><td>${escapeHTML(u.created_at)}</td></tr>`).join("")}</tbody></table></div></div>`;
 }
 $("#langBtn").onclick = () => setLang(state.lang === "ar" ? "en" : "ar");
-$("#currencyBtn").addEventListener("click", (event) => { event.preventDefault(); toggleCurrency(); });
-$("#cartBtn").onclick = () => navigate("/cart");
-$("#accountBtn").onclick = () => navigate("/account");
+$("#currencyBtn").onclick = toggleCurrency;
+$("#footerTrack").onclick = (e) => {
+  e.preventDefault();
+  openTrack();
+};
+$("#cartBtn").onclick = openCart;
+$("#accountBtn").onclick = openAccount;
+$("#trackBtn").onclick = openTrack;
 $("#footerAccount").onclick = (e) => {
   e.preventDefault();
-  navigate("/account");
+  openAccount();
 };
 $("#searchFocus").onclick = () => {
-  if (!$("#search")) { navigate("/games"); setTimeout(() => $("#search")?.focus(), 200); }
-  else { $("#store")?.scrollIntoView(); $("#search")?.focus(); }
+  if (isProductRoute()) {
+    navigate("/#store", "#store");
+    setTimeout(() => $("#search")?.focus(), 200);
+  } else {
+    $("#store")?.scrollIntoView();
+    $("#search")?.focus();
+  }
 };
 document.addEventListener("input", (e) => {
   if (e.target.id === "search") {

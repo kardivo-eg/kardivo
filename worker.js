@@ -3632,23 +3632,12 @@ export default {
     if (request.method === "GET" && !url.pathname.includes(".")) {
       try {
         const pagePath = url.pathname.replace(/\/$/, "") || "/";
-        const pageMeta = {
-          "/store": ["Store | Kardivo", "Browse the full catalog of digital products at Kardivo."],
-          "/games": ["Games | Kardivo", "Browse digital games and gaming essentials at Kardivo."],
-          "/gift-cards": ["Gift Cards | Kardivo", "Explore available digital gift cards and wallet credit at Kardivo."],
-          "/subscriptions": ["Subscriptions | Kardivo", "Browse available digital memberships and subscriptions at Kardivo."],
-          "/deals": ["Deals | Kardivo", "Explore current discounted digital products at Kardivo."],
-          "/how-it-works": ["How it works | Kardivo", "Learn how to order digital products from Kardivo."],
-          "/cart": ["Your Cart | Kardivo", "Review your selected digital products before checkout."],
-          "/account": ["Your Account | Kardivo", "Access your Kardivo account and order history."],
-        };
         if (pagePath === "/") return await htmlForHome(env, request, url);
-        if (pageMeta[pagePath]) {
+        if (pagePath === "/account") {
           const shell = await shellFetch(env, url, request);
           if (!shell.ok) return shell;
           const html = await shell.text();
-          const [title, desc] = pageMeta[pagePath];
-          return new Response(applySeo(html, { lang: pageLang(url), title, desc, head: '<meta name="robots" content="index,follow">' }), HTML_HEADERS());
+          return new Response(applySeo(html, { lang: pageLang(url), title: "Your Account | Kardivo", desc: "Access your Kardivo account and order history." }), HTML_HEADERS());
         }
         return await htmlForProduct(env, request, url);
       } catch (e) {

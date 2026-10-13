@@ -8,7 +8,6 @@ const state = {
   query: "",
   sort: "featured",
   discovery: "all",
-  pageType: "home",
   currencyView: "EGP",
   checkoutAfterAuth: false,
   admin: { tab: "dashboard", data: {} },
@@ -16,9 +15,6 @@ const state = {
 const AR = {
   Cart: "السلة",
   Store: "المتجر",
-  Games: "الألعاب",
-  "Gift Cards": "بطاقات الهدايا",
-  Subscriptions: "الاشتراكات",
   Deals: "العروض",
   "How it works": "إزاي بتطلب؟",
   "Track order": "تتبّع الطلب",
@@ -368,7 +364,9 @@ function applyLang() {
   applySettings();
   renderFooter();
   renderCartCount();
-  if (isProductRoute())
+  if (location.pathname.replace(/\/$/, "") === "/account") {
+    renderAccountPage();
+  } else if (isProductRoute())
     openProductPage(
       decodeURIComponent(location.pathname.slice(1)).replace(/\/$/, ""),
     );
@@ -778,14 +776,6 @@ function filtered() {
     arr = arr.filter((p) => Number(p.featured));
   else if (state.category !== "all")
     arr = arr.filter((p) => String(p.category_id) === String(state.category));
-  if (state.pageType && state.pageType !== "home" && state.pageType !== "store") {
-    const norm = (v) => String(v || "").toLowerCase();
-    const textOf = (p) => norm([p.name, p.name_ar, p.description, p.description_ar, p.category_name, p.category_name_ar, p.platform, p.region, p.delivery_type].join(" "));
-    if (state.pageType === "games") arr = arr.filter(p => /game|games|playstation|ps4|ps5|xbox|steam|nintendo|switch|pc game|gaming/.test(textOf(p)) && !/gift.?card|wallet code|top.?up|subscription|membership|plus essential|game pass ultimate/.test(textOf(p)));
-    else if (state.pageType === "gift-cards") arr = arr.filter(p => /gift.?card|wallet|psn card|steam card|google play|itunes|roblox credit|xbox credit|top.?up|topup/.test(textOf(p)));
-    else if (state.pageType === "subscriptions") arr = arr.filter(p => /subscription|membership|game pass|playstation plus|ps plus|ps\+|xbox live|netflix|spotify|youtube premium|prime video|online membership/.test(textOf(p)));
-    else if (state.pageType === "deals") arr = arr.filter(productOnSale);
-  }
   const q = state.query.toLowerCase();
   if (q)
     arr = arr.map(p => ({ p, score: searchScore(p, q) })).filter(x => x.score >= 0).sort((a, b) => b.score - a.score).map(x => x.p);
@@ -3025,14 +3015,11 @@ function applySettings() {
     document.title = `${s.store_name || "Kardivo"} | ${S("meta_title") || "Digital gaming marketplace"}`;
 }
 function showHome() {
-  state.pageType = "home";
-  state.discovery = "all";
-  document.body.classList.remove("product-route", "collection-route");
+  document.body.classList.remove("product-route");
   $("main").innerHTML = homeHTML;
   translateStatic();
   applySettings();
   renderCampaign();
-  renderFooter();
   renderCategories();
   renderSmartFilters();
   renderHeroShowcase();
@@ -3044,65 +3031,56 @@ function showHome() {
   renderSearchSuggestions();
   renderTestimonials();
 }
-function renderCollectionPage(type) {
-  const config = {
-    store: { eyebrow: "THE FULL KARDIVO CATALOG", title: "Your next digital upgrade.", text: "Browse every currently available product in one place.", icon: "▦" },
-    games: { eyebrow: "THE GAME LIBRARY", title: "Find your next obsession.", text: "Explore games and gaming essentials, all in one place.", icon: "▣" },
-    "gift-cards": { eyebrow: "DIGITAL GIFT CARDS", title: "The right code. Delivered digitally.", text: "Browse available gift cards and digital wallet credit.", icon: "◇" },
-    subscriptions: { eyebrow: "MEMBERSHIPS & SUBSCRIPTIONS", title: "Keep your favorites going.", text: "Explore available memberships and subscription products.", icon: "∞" },
-    deals: { eyebrow: "KARDIVO DEALS", title: "Good deals. No mystery math.", text: "Only products with an actual reduced price appear here.", icon: "✦" },
-  }[type];
-  state.pageType = type;
-  state.category = "all";
-  state.discovery = type === "deals" ? "sale" : "all";
-  document.body.classList.remove("product-route");
-  document.body.classList.add("collection-route");
-  $("main").innerHTML = `<section class="collection-hero container"><div class="collection-mark" aria-hidden="true">${config.icon}</div><div class="collection-copy"><span class="eyebrow">${config.eyebrow}</span><h1>${config.title}</h1><p>${config.text}</p><div class="trust-row"><span>✓ Digital products</span><span>✓ Clear pricing</span><span>✓ Local payment options</span></div></div></section><section id="store" class="store container collection-store"><div class="section-head"><div><span class="eyebrow">BROWSE KARDIVO</span><h2>${type === "deals" ? "Available offers" : "Explore the catalog"}</h2><p class="section-subtitle" id="collectionSummary">Find exactly what you came for.</p></div><div class="store-tools"><div class="search-wrap"><label class="search"><span>⌕</span><input id="search" autocomplete="off" placeholder="Search..."><div id="searchSuggestions" class="search-suggestions" hidden></div></label></div><select id="sort"><option value="featured">Featured</option><option value="newest">Newest</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="name">Name</option></select></div></div><div id="categories" class="chips"></div><div class="discovery-toolbar"><div class="discovery-toolbar-copy"><span class="eyebrow">QUICK FILTERS</span><span id="discoverySummary" class="discovery-summary"></span></div><div id="smartFilters" class="smart-filters" aria-label="Product filters"></div></div><div id="productGrid" class="product-grid"><div class="loading-card">Loading the catalog...</div></div><div class="collection-foot"><a class="btn ghost" href="/">← Back to home</a><a class="btn primary" href="/how-it-works">How buying works ↗</a></div></section>`;
-  renderCategories();
-  renderSmartFilters();
-  $("#sort").value = state.sort;
-  $("#search").value = state.query;
-  renderProducts();
-}
-function renderHowPage() {
-  document.body.classList.remove("product-route");
-  document.body.classList.add("collection-route");
-  $("main").innerHTML = `<section class="collection-hero container"><div class="collection-mark">↗</div><div class="collection-copy"><span class="eyebrow">THE KARDIVO PROCESS</span><h1>Three steps. No ceremony.</h1><p>Know what you're paying, choose your payment method, and follow your order in one place.</p></div></section><section class="how container"><div class="steps"><article><b>01</b><h3>Build your cart</h3><p>Browse the catalog, check product details, and add the products you want.</p></article><article><b>02</b><h3>Choose payment</h3><p>Review your total and select one of the payment methods currently available at checkout.</p></article><article><b>03</b><h3>Send proof</h3><p>Submit your payment reference or proof when requested, then follow the order from your account.</p></article></div><div class="collection-foot"><a class="btn ghost" href="/">Back home</a><a class="btn primary" href="/games">Browse products ↗</a></div></section>`;
-}
-function renderCartPage() {
-  document.body.classList.remove("product-route");
-  document.body.classList.add("collection-route");
-  const items = cartItems();
-  const subtotal = items.reduce((sum, i) => sum + Number(i.p.variants?.find(v => Number(v.id) === Number(i.variant_id))?.price ?? i.p.price) * i.quantity, 0);
-  $("main").innerHTML = `<section class="collection-hero container"><div class="collection-mark">⌑</div><div class="collection-copy"><span class="eyebrow">YOUR SELECTION</span><h1>Your cart.</h1><p>Your selected digital goods, gathered in one place.</p></div></section><section class="container cart-page"><div class="cart-page-items">${items.length ? items.map(i => { const v=i.p.variants?.find(x=>Number(x.id)===Number(i.variant_id)); return `<article class="cart-page-item"><div class="cart-page-image">${stockImg(i.p.image_url,pName(i.p),stockArtFor(i.p))}</div><div class="cart-page-detail"><span class="eyebrow">${escapeHTML(cName({name:i.p.category_name,name_ar:i.p.category_name_ar}) || "DIGITAL")}</span><h3>${escapeHTML(pName(i.p))}</h3><p>${v ? escapeHTML(v.name) : "Digital product"}</p><b>${money(Number(v?.price ?? i.p.price) * i.quantity)}</b></div><div class="cart-page-controls"><button class="mini" data-minus="${escapeHTML(cartKey(i))}">−</button><b>${i.quantity}</b><button class="mini" data-plus="${escapeHTML(cartKey(i))}">+</button><button class="mini danger" data-remove="${escapeHTML(cartKey(i))}">Remove</button></div></article>`; }).join("") : `<div class="empty cart-empty"><div class="collection-mark">⌑</div><h2>Your cart is empty.</h2><p>Nothing to check out yet. The digital goods are not going to add themselves.</p><a class="btn primary" href="/games">Explore products ↗</a></div>`}</div>${items.length ? `<aside class="cart-summary"><span class="eyebrow">ORDER SUMMARY</span><h2>Ready when you are.</h2><div class="line"><span>Subtotal</span><b>${money(subtotal)}</b></div><p>Discounts and final payment totals are confirmed at checkout.</p><button class="btn primary" id="cartPageCheckout">Continue to checkout ↗</button><button class="btn ghost" id="cartPageContinue">Continue shopping</button></aside>` : ""}</section>`;
-  $$('[data-minus]').forEach(b=>b.onclick=()=>changeQty(b.dataset.minus,-1));
-  $$('[data-plus]').forEach(b=>b.onclick=()=>changeQty(b.dataset.plus,1));
-  $$('[data-remove]').forEach(b=>b.onclick=()=>{state.cart=state.cart.filter(x=>cartKey(x)!==b.dataset.remove);saveCart();renderCartPage();renderCartCount();});
-  $("#cartPageCheckout")?.addEventListener("click", openCheckout);
-  $("#cartPageContinue")?.addEventListener("click", () => navigate("/games"));
-}
 function renderAccountPage() {
   document.body.classList.remove("product-route");
-  document.body.classList.add("collection-route");
+  document.body.classList.add("account-route");
   const user = state.user;
-  $("main").innerHTML = `<section class="collection-hero container"><div class="collection-mark">◎</div><div class="collection-copy"><span class="eyebrow">YOUR KARDIVO</span><h1>${user ? `Welcome back, ${escapeHTML(user.name || "player")}.` : "Your account, your orders."}</h1><p>${user ? "Keep track of your purchases, order status, and digital products." : "Sign in to follow orders and manage your purchases. You can still browse the store without an account."}</p></div></section><section class="container account-hub"><article class="account-hub-card"><span class="eyebrow">ACCOUNT & ORDERS</span><h2>${user ? "Your account is ready." : "Pick up where you left off."}</h2><p>${user ? `Signed in as <b>${escapeHTML(user.email || user.name || "Kardivo customer")}</b>.` : "Sign in or create an account to view order history and follow delivery status."}</p><button class="btn primary" id="accountHubAction">${user ? "Open account & orders ↗" : "Sign in / Create account ↗"}</button></article><article class="account-hub-card"><span class="eyebrow">KEEP EXPLORING</span><h2>Digital goods, minus the nonsense.</h2><p>Browse the catalog and add products to your cart. Checkout will guide you through the next steps.</p><a class="btn ghost" href="/store">Browse all products ↗</a></article></section>`;
+  const ar = state.lang === "ar";
+  const copy = ar ? {
+    eyebrow: "حسابك في كارديفو",
+    titleIn: `حمد لله على السلامة${user && user.name ? ` يا ${escapeHTML(user.name)}` : ""}!`,
+    titleOut: "حسابك وطلباتك في مكان واحد.",
+    introIn: "تابع مشترياتك وحالة طلباتك والأكواد الرقمية بتاعتك.",
+    introOut: "سجّل دخولك عشان تتابع طلباتك ومشترياتك. وتقدر تتصفح المتجر عادي من غير حساب.",
+    cardEyebrow: "الحساب والطلبات",
+    cardTitleIn: "حسابك جاهز.",
+    cardTitleOut: "كمّل من آخر مرة.",
+    cardTextIn: `إنت مسجّل دخول بـ <b>${escapeHTML(user?.email || user?.name || "عميل كارديفو")}</b>.`,
+    cardTextOut: "سجّل دخولك أو اعمل حساب جديد عشان تشوف سجل الطلبات وتتابع التسليم.",
+    actionIn: "افتح الحساب والطلبات ↖",
+    actionOut: "تسجيل الدخول / إنشاء حساب ↖",
+    explore: "كمّل تصفّح",
+    exploreTitle: "كل المنتجات الرقمية في مكان واحد.",
+    exploreText: "اختار اللي محتاجه وضيفه للسلة، وخطوات الشراء هتكون واضحة.",
+    browse: "ارجع للمتجر ↖"
+  } : {
+    eyebrow: "YOUR KARDIVO ACCOUNT",
+    titleIn: `Welcome back${user && user.name ? `, ${escapeHTML(user.name)}` : ""}.`,
+    titleOut: "Your account and orders, in one place.",
+    introIn: "Keep track of your purchases, order status, and digital products.",
+    introOut: "Sign in to follow orders and manage purchases. You can still browse the store without an account.",
+    cardEyebrow: "ACCOUNT & ORDERS",
+    cardTitleIn: "Your account is ready.",
+    cardTitleOut: "Pick up where you left off.",
+    cardTextIn: `Signed in as <b>${escapeHTML(user?.email || user?.name || "Kardivo customer")}</b>.`,
+    cardTextOut: "Sign in or create an account to view order history and follow delivery status.",
+    actionIn: "Open account & orders ↗",
+    actionOut: "Sign in / Create account ↗",
+    explore: "KEEP EXPLORING",
+    exploreTitle: "Digital goods, minus the nonsense.",
+    exploreText: "Browse the catalog and add products to your cart. Checkout will guide you through the next steps.",
+    browse: "Back to the store ↗"
+  };
+  $("main").innerHTML = `<section class="account-page container"><div class="account-page-hero"><span class="account-page-mark" aria-hidden="true">◎</span><div><span class="eyebrow">${copy.eyebrow}</span><h1>${user ? copy.titleIn : copy.titleOut}</h1><p>${copy.introIn && user ? copy.introIn : copy.introOut}</p></div></div><section class="account-page-grid"><article class="account-page-card"><span class="eyebrow">${copy.cardEyebrow}</span><h2>${user ? copy.cardTitleIn : copy.cardTitleOut}</h2><p>${user ? copy.cardTextIn : copy.cardTextOut}</p><button class="btn primary" id="accountHubAction">${user ? copy.actionIn : copy.actionOut}</button></article><article class="account-page-card"><span class="eyebrow">${copy.explore}</span><h2>${copy.exploreTitle}</h2><p>${copy.exploreText}</p><a class="btn ghost" href="/#store" data-account-store>${copy.browse}</a></article></section></section>`;
   $("#accountHubAction")?.addEventListener("click", openAccount);
-}
-function routePageType(path) {
-  const clean = path.replace(/\/$/, "") || "/";
-  if (["/store", "/games", "/gift-cards", "/subscriptions", "/deals"].includes(clean)) return clean.slice(1);
-  if (clean === "/how-it-works") return "how";
-  if (clean === "/cart") return "cart";
-  if (clean === "/account") return "account";
-  return null;
+  $("[data-account-store]")?.addEventListener("click", (e) => { e.preventDefault(); navigate("/#store", "#store"); });
 }
 async function route() {
-  const page = routePageType(location.pathname);
-  if (page === "store" || page === "games" || page === "gift-cards" || page === "subscriptions" || page === "deals") renderCollectionPage(page);
-  else if (page === "how") renderHowPage();
-  else if (page === "cart") renderCartPage();
-  else if (page === "account") renderAccountPage();
-  else if (isProductRoute()) await openProductPage(decodeURIComponent(location.pathname.slice(1)).replace(/\/$/, ""));
+  if (location.pathname.replace(/\/$/, "") === "/account") renderAccountPage();
+  else if (isProductRoute())
+    await openProductPage(
+      decodeURIComponent(location.pathname.slice(1)).replace(/\/$/, ""),
+    );
   else showHome();
 }
 function navigate(path, scrollTo) {
@@ -3127,15 +3105,20 @@ async function adminCustomers(main) {
 }
 $("#langBtn").onclick = () => setLang(state.lang === "ar" ? "en" : "ar");
 $("#currencyBtn").addEventListener("click", (event) => { event.preventDefault(); toggleCurrency(); });
-$("#cartBtn").onclick = () => navigate("/cart");
+$("#cartBtn").onclick = openCart;
 $("#accountBtn").onclick = () => navigate("/account");
 $("#footerAccount").onclick = (e) => {
   e.preventDefault();
   navigate("/account");
 };
 $("#searchFocus").onclick = () => {
-  if (!$("#search")) { navigate("/games"); setTimeout(() => $("#search")?.focus(), 200); }
-  else { $("#store")?.scrollIntoView(); $("#search")?.focus(); }
+  if (isProductRoute()) {
+    navigate("/#store", "#store");
+    setTimeout(() => $("#search")?.focus(), 200);
+  } else {
+    $("#store")?.scrollIntoView();
+    $("#search")?.focus();
+  }
 };
 document.addEventListener("input", (e) => {
   if (e.target.id === "search") {
