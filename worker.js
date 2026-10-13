@@ -1663,7 +1663,7 @@ async function api(req, env, url, ctx) {
       return json({ error: "Bad origin." }, 403);
   }
   if (path === "/api/health")
-    return json({ ok: true, version: "10.0.0", logo: LOGO_URL });
+    return json({ ok: true, version: "22.0.0", logo: LOGO_URL });
   if (path === "/api/me" && method === "GET") return json({ user: me });
   if (path === "/api/me/favorites" && method === "GET") {
     if (!me) return json({ error: "Login required." }, 401);

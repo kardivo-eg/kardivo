@@ -51,6 +51,8 @@ const AR = {
   Ready: "جاهز",
   "View {0}": "شوف {0}",
   SALE: "خصم",
+  "Only {0} left": "باقي {0} فقط",
+  "View cart": "عرض السلة",
   Digital: "رقمي",
   Add: "ضيف",
   "Loading product...": "بنحمّل المنتج...",
@@ -336,6 +338,7 @@ function trackMarketingEvent(event, extra = {}) {
   const payload = { event, session_key: checkoutSession(), ...extra };
   fetch("/api/checkout-events", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload), keepalive: true }).catch(() => {});
 }
+let favSaveChain = Promise.resolve();
 async function toggleFavorite(id) {
   id = Number(id);
   if (!id) return;
@@ -343,8 +346,9 @@ async function toggleFavorite(id) {
   state.favorites = had ? state.favorites.filter(x => x !== id) : [...state.favorites, id];
   saveFavorites();
   if (state.user) {
-    try { await api("/api/me/favorites", { method: "PUT", body: JSON.stringify({ ids: state.favorites }) }); }
-    catch (e) { toast(e.message || t("Could not sync favorites.")); }
+    // Serialize saves so rapid taps can't land out of order and overwrite newer state with older.
+    favSaveChain = favSaveChain.then(() => api("/api/me/favorites", { method: "PUT", body: JSON.stringify({ ids: state.favorites }) })).catch(e => { toast(e.message || t("Could not sync favorites.")); });
+    await favSaveChain;
   }
   if (location.pathname.replace(/\/$/, "") === "/favorites") renderFavoritesPage();
   else { renderProducts(); renderPopularProducts(); }
@@ -662,6 +666,7 @@ async function api(path, options = {}) {
 }
 async function boot() {
   homeHTML = $("main").innerHTML;
+  { const g = $("#productGrid"); if (g) g.innerHTML = Array.from({ length: 8 }, () => `<div class="product-card skeleton-card" aria-hidden="true"><div class="sk sk-img"></div><div class="sk sk-line w40"></div><div class="sk sk-line w80"></div><div class="sk sk-line w60"></div></div>`).join(""); }
   $("#year").textContent = new Date().getFullYear();
   const qs = new URLSearchParams(location.search);
   try {
@@ -954,7 +959,7 @@ function renderProducts() {
         href = "/" + encodeURIComponent(p.slug),
         name = pName(p),
         cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
-      return `<article class="product-card product-card-link"><div class="product-image">${stockImg(p.image_url, name, stockArtFor(p))}<a class="product-image-link" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"></a>${favoriteButton(p)}${sale ? `<span class="sale">${t("SALE")}</span>` : ""}<span class="stock">${badge}</span></div><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span>` : ""}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
+      return `<article class="product-card product-card-link"><div class="product-image">${stockImg(p.image_url, name, stockArtFor(p))}<a class="product-image-link" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"></a>${favoriteButton(p)}${sale ? `<span class="sale">-${Math.max(1, Math.round((1 - displayPrice / displayOld) * 100))}%</span>` : ""}<span class="stock${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? " low" : ""}">${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? t("Only {0} left", totalStock) : badge}</span></div><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span>` : ""}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
     })
     .join("");
   bindFavoriteButtons(el);
@@ -1148,7 +1153,18 @@ function addToCart(id, variant_id = null) {
   saveCart();
   trackMarketingEvent("cart_added", { product_id: Number(p.id) });
   renderAbandonedCartNudge();
-  toast(t("{0} added to cart.", pName(p)));
+  cartToast(p);
+}
+function cartToast(p) {
+  const el = $("#toast");
+  const img = p.image_url ? `<img class="toast-thumb" src="${escapeHTML(p.image_url)}" alt="" onerror="this.remove()">` : "";
+  el.innerHTML = `<span class="toast-rich">${img}<span class="toast-msg">${escapeHTML(t("{0} added to cart.", pName(p)))}</span><button type="button" class="toast-link" id="toastCartLink">${escapeHTML(t("View cart"))}</button></span>`;
+  $("#toastCartLink").onclick = () => { el.classList.remove("show"); navigate("/cart"); };
+  el.classList.add("show");
+  clearTimeout(window.__toast);
+  window.__toast = setTimeout(() => el.classList.remove("show"), 4000);
+  const cb = $("#cartBtn");
+  if (cb) { cb.classList.remove("bump"); void cb.offsetWidth; cb.classList.add("bump"); }
 }
 function cartItems() {
   return state.cart
@@ -3177,6 +3193,7 @@ function renderAdminPage() {
 }
 async function route() {
   const path = location.pathname.replace(/\/$/, "") || "/";
+  { const m = $("main"); if (m) { m.classList.remove("page-enter"); void m.offsetWidth; m.classList.add("page-enter"); } }
   [["/account", "#accountBtn"], ["/cart", "#cartBtn"], ["/favorites", "#wishlistBtn"]].forEach(([p, selector]) => {
     const el = $(selector); if (el) { const active = path === p; el.classList.toggle("is-active", active); if (active) el.setAttribute("aria-current", "page"); else el.removeAttribute("aria-current"); }
   });

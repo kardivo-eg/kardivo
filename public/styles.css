@@ -679,3 +679,30 @@ html[dir="rtl"] .product-card .product-image .stock{right:auto;left:10px}
 
 /* Dedicated account and admin pages */
 .admin-page{padding:34px 0 70px}.admin-page-head{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:18px}.admin-page-head h1{margin:6px 0 0;font-size:clamp(28px,4vw,42px)}.admin-page .admin-shell{min-height:calc(100vh - 220px);border:1px solid #29222f;border-radius:18px;overflow:hidden;background:#100e17}.admin-page .admin-main{min-width:0}.account-page-card{min-width:0}.account-page .admin-table{min-width:620px}@media(max-width:700px){.admin-page-head{align-items:flex-start;flex-direction:column}.admin-page .admin-shell{border-radius:12px}.admin-page .admin-main{padding:14px}}
+
+
+/* V24 visual quick wins */
+@keyframes kdShimmer{0%{background-position:-300px 0}100%{background-position:300px 0}}
+.skeleton-card{padding:0 0 18px;pointer-events:none}
+.sk{background:linear-gradient(90deg,#ffffff08 0,#ffffff18 50%,#ffffff08 100%);background-size:600px 100%;animation:kdShimmer 1.3s linear infinite;border-radius:8px}
+.sk-img{height:205px;border-radius:0;margin-bottom:16px}
+.sk-line{height:12px;margin:10px 17px}.sk-line.w40{width:40%}.sk-line.w60{width:60%}.sk-line.w80{width:80%}
+.sale{background:linear-gradient(135deg,#a78bfa,#7c3aed)!important;color:#fff!important;box-shadow:0 6px 18px #7c3aed66}
+.stock.low{background:#3a1d12ee!important;border-color:#f59e0b88!important;color:#fbbf24!important;font-weight:700}
+.product-card{transition:transform .25s ease,box-shadow .25s ease,border-color .25s ease}
+.product-card:not(.skeleton-card):hover{border-color:#8b5cf688;box-shadow:0 24px 55px #000a,0 0 38px #8b5cf62e}
+.add-btn{transition:background .2s,transform .15s,box-shadow .2s}
+.add-btn:not(:disabled):hover{background:#8b5cf6!important;color:#fff!important;box-shadow:0 8px 22px #8b5cf655;transform:translateY(-1px)}
+.add-btn:active{transform:scale(.95)}
+@media(max-width:700px){.add-btn{padding:10px 14px!important;font-size:12px!important;min-height:40px}}
+@keyframes kdPageIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+main.page-enter{animation:kdPageIn .35s ease both}
+.toast-rich{display:flex;align-items:center;gap:12px}
+.toast-thumb{width:42px;height:42px;border-radius:10px;object-fit:cover;flex:none;border:1px solid #ffffff18}
+.toast-msg{font-size:13px;max-width:200px}
+.toast-link{border:1px solid #8b5cf666;background:#8b5cf622;color:#d5c4ff;border-radius:9px;padding:7px 11px;font-size:12px;font-weight:700;white-space:nowrap}
+.toast.show{pointer-events:auto}
+@keyframes kdBump{0%{transform:scale(1)}35%{transform:scale(1.18)}100%{transform:scale(1)}}
+.cart-btn.bump{animation:kdBump .45s ease}
+.cart-btn.bump span{background:#a78bfa}
+@media(prefers-reduced-motion:reduce){.sk,main.page-enter,.cart-btn.bump{animation:none}}
