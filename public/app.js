@@ -3324,6 +3324,18 @@ $("#installBtn")?.addEventListener("click", async () => {
   deferredInstall = null;
   $("#installBtn").hidden = true;
 });
+const AR_TRUST = {
+  "Instant delivery": "تسليم فوري",
+  "Codes sent right after payment is confirmed": "الكود بيوصلك أول ما الدفع يتأكد",
+  "Secure payment": "دفع آمن",
+  "Every order is checked by a real person": "كل طلب بيتراجع بإيد حد حقيقي",
+  "Arabic support": "دعم بالعربي",
+  "Chat with us in Arabic, any time": "كلمنا بالعربي في أي وقت",
+  "Egyptian payment methods": "وسائل دفع مصرية",
+  "Vodafone Cash · InstaPay · Telda": "فودافون كاش · إنستاباي · تيلدا",
+  "Why shop with us": "ليه تشتري من كاردفو",
+};
+Object.assign(AR, AR_TRUST);
 Object.assign(AR, AR_V10);
 Object.assign(ERR_AR, ERR_AR_V10);
 setDir();

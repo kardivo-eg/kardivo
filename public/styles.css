@@ -706,3 +706,14 @@ main.page-enter{animation:kdPageIn .35s ease both}
 .cart-btn.bump{animation:kdBump .45s ease}
 .cart-btn.bump span{background:#a78bfa}
 @media(prefers-reduced-motion:reduce){.sk,main.page-enter,.cart-btn.bump{animation:none}}
+
+
+/* V25 trust strip under the hero */
+.trust-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:-28px auto 56px;padding:14px;border:1px solid #ffffff14;border-radius:20px;background:linear-gradient(135deg,#17112620,#0d0b1280);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);position:relative;z-index:2}
+.ts-item{display:flex;align-items:center;gap:12px;padding:8px 10px;min-width:0}
+.ts-icon{flex:none;display:grid;place-items:center;width:42px;height:42px;border-radius:12px;color:#c9b3ff;background:#8b5cf61f;border:1px solid #8b5cf633}
+.ts-text{display:grid;min-width:0;line-height:1.3}
+.ts-text b{font-size:14px;font-weight:700;color:#f3eefc}
+.ts-text small{font-size:12px;color:#9e98ab}
+@media(max-width:950px){.trust-strip{grid-template-columns:1fr 1fr;margin-top:0}}
+@media(max-width:560px){.trust-strip{grid-template-columns:1fr;gap:2px;padding:8px;margin-bottom:36px}.ts-icon{width:38px;height:38px}}
