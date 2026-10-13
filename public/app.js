@@ -474,6 +474,7 @@ function applyLang() {
   renderCartCount();
   const routePath = location.pathname.replace(/\/$/, "") || "/";
   if (routePath === "/account") renderAccountPage();
+  else if (routePath === "/admin") renderAdminPage();
   else if (routePath === "/favorites") renderFavoritesPage();
   else if (routePath === "/cart") renderCartPage();
   else if (isProductRoute())
@@ -1712,21 +1713,10 @@ const ADMIN_TABS = [
 const BADGE_OF = { queue: "review_queue", inbox: "unread_messages", waitlist: "waitlist_ready" };
 async function openAdmin() {
   closeModal();
-  state.adminOpen = true;
-  openModal(
-    "Admin",
-    `<div class="admin-shell"><aside class="admin-side" id="adminSide">${ADMIN_TABS.map(([k, n]) => `<button data-tab="${k}">${n}<span class="badge red" data-badge="${k}" hidden></span></button>`).join("")}</aside><section class="admin-main" id="adminMain"></section></div>`,
-    true,
-  );
-  $$("#adminSide button").forEach(
-    (b) =>
-      (b.onclick = () => {
-        state.admin.tab = b.dataset.tab;
-        renderAdminTab();
-      }),
-  );
-  await renderAdminTab();
-  if (state.admin.tab !== "dashboard") adminBadges();
+  if (!state.user || state.user.role !== "admin") { toast("Administrator access required."); return; }
+  history.pushState({}, "", "/admin");
+  await route();
+  window.scrollTo(0, 0);
 }
 async function adminBadges(d) {
   try {
@@ -3145,56 +3135,53 @@ function showHome() {
   renderSearchSuggestions();
   renderTestimonials();
 }
-function renderAccountPage() {
-  document.body.classList.remove("product-route");
+async function renderAccountPage() {
+  document.body.classList.remove("product-route", "admin-route");
   document.body.classList.add("account-route");
   const user = state.user;
   const ar = state.lang === "ar";
-  const copy = ar ? {
-    eyebrow: "حسابك في كارديفو",
-    titleIn: `حمد لله على السلامة${user && user.name ? ` يا ${escapeHTML(user.name)}` : ""}!`,
-    titleOut: "حسابك وطلباتك في مكان واحد.",
-    introIn: "تابع مشترياتك وحالة طلباتك والأكواد الرقمية بتاعتك.",
-    introOut: "سجّل دخولك عشان تتابع طلباتك ومشترياتك. وتقدر تتصفح المتجر عادي من غير حساب.",
-    cardEyebrow: "الحساب والطلبات",
-    cardTitleIn: "حسابك جاهز.",
-    cardTitleOut: "كمّل من آخر مرة.",
-    cardTextIn: `إنت مسجّل دخول بـ <b>${escapeHTML(user?.email || user?.name || "عميل كارديفو")}</b>.`,
-    cardTextOut: "سجّل دخولك أو اعمل حساب جديد عشان تشوف سجل الطلبات وتتابع التسليم.",
-    actionIn: "افتح الحساب والطلبات ↖",
-    actionOut: "تسجيل الدخول / إنشاء حساب ↖",
-    explore: "كمّل تصفّح",
-    exploreTitle: "كل المنتجات الرقمية في مكان واحد.",
-    exploreText: "اختار اللي محتاجه وضيفه للسلة، وخطوات الشراء هتكون واضحة.",
-    browse: "ارجع للمتجر ↖"
-  } : {
-    eyebrow: "YOUR KARDIVO ACCOUNT",
-    titleIn: `Welcome back${user && user.name ? `, ${escapeHTML(user.name)}` : ""}.`,
-    titleOut: "Your account and orders, in one place.",
-    introIn: "Keep track of your purchases, order status, and digital products.",
-    introOut: "Sign in to follow orders and manage purchases. You can still browse the store without an account.",
-    cardEyebrow: "ACCOUNT & ORDERS",
-    cardTitleIn: "Your account is ready.",
-    cardTitleOut: "Pick up where you left off.",
-    cardTextIn: `Signed in as <b>${escapeHTML(user?.email || user?.name || "Kardivo customer")}</b>.`,
-    cardTextOut: "Sign in or create an account to view order history and follow delivery status.",
-    actionIn: "Open account & orders ↗",
-    actionOut: "Sign in / Create account ↗",
-    explore: "KEEP EXPLORING",
-    exploreTitle: "Digital goods, minus the nonsense.",
-    exploreText: "Browse the catalog and add products to your cart. Checkout will guide you through the next steps.",
-    browse: "Back to the store ↗"
-  };
-  $("main").innerHTML = `<section class="account-page container"><div class="account-page-hero"><span class="account-page-mark" aria-hidden="true">◎</span><div><span class="eyebrow">${copy.eyebrow}</span><h1>${user ? copy.titleIn : copy.titleOut}</h1><p>${copy.introIn && user ? copy.introIn : copy.introOut}</p></div></div><section class="account-page-grid"><article class="account-page-card"><span class="eyebrow">${copy.cardEyebrow}</span><h2>${user ? copy.cardTitleIn : copy.cardTitleOut}</h2><p>${user ? copy.cardTextIn : copy.cardTextOut}</p><button class="btn primary" id="accountHubAction">${user ? copy.actionIn : copy.actionOut}</button></article><article class="account-page-card"><span class="eyebrow">${copy.explore}</span><h2>${copy.exploreTitle}</h2><p>${copy.exploreText}</p><a class="btn ghost" href="/#store" data-account-store>${copy.browse}</a></article></section></section>`;
-  $("#accountHubAction")?.addEventListener("click", openAccount);
+  if (!user) {
+    const title = ar ? "حسابك في كارديفو" : "Your Kardivo account";
+    const intro = ar ? "سجّل دخولك لمتابعة طلباتك ومشترياتك." : "Sign in to view your orders and manage your purchases.";
+    $("main").innerHTML = `<section class="account-page container"><div class="account-page-hero"><span class="account-page-mark" aria-hidden="true">◎</span><div><span class="eyebrow">${title}</span><h1>${intro}</h1></div></div><section class="account-page-grid"><article class="account-page-card"><h2>${ar ? "تسجيل الدخول أو إنشاء حساب" : "Sign in or create an account"}</h2><p>${intro}</p><button class="btn primary" id="accountHubAction">${ar ? "متابعة" : "Continue"}</button></article><article class="account-page-card"><h2>${ar ? "تصفّح المتجر" : "Explore the store"}</h2><p>${ar ? "تقدر تتصفح المنتجات حتى من غير حساب." : "You can browse products even without an account."}</p><a class="btn ghost" href="/#store" data-account-store>${ar ? "ارجع للمتجر ↖" : "Back to the store ↗"}</a></article></section></section>`;
+    $("#accountHubAction")?.addEventListener("click", openAccount);
+    $("[data-account-store]")?.addEventListener("click", (e) => { e.preventDefault(); navigate("/#store", "#store"); });
+    return;
+  }
+  $("main").innerHTML = `<section class="account-page container"><div class="account-page-hero"><span class="account-page-mark" aria-hidden="true">◎</span><div><span class="eyebrow">${ar ? "حسابك في كارديفو" : "YOUR KARDIVO ACCOUNT"}</span><h1>${ar ? `أهلاً ${escapeHTML(user.name || "")}` : `Welcome back, ${escapeHTML(user.name || user.email || "Customer")}.`}</h1><p>${ar ? "إدارة حسابك ومتابعة طلباتك من هنا." : "Manage your account and keep track of your orders here."}</p></div></div><section class="account-page-grid"><article class="account-page-card"><span class="eyebrow">${ar ? "بيانات الحساب" : "ACCOUNT DETAILS"}</span><h2>${escapeHTML(user.name || (ar ? "عميل كارديفو" : "Kardivo customer"))}</h2><p>${escapeHTML(user.email || "")}</p><p>${ar ? "نوع الحساب" : "Account type"}: <b>${user.role === "admin" ? (ar ? "مدير" : "Administrator") : (ar ? "عميل" : "Customer")}</b></p><div class="modal-actions"><button class="btn primary" id="accountDetailsBtn">${ar ? "تفاصيل الحساب والطلبات" : "Account details & orders"}</button>${user.role === "admin" ? `<button class="btn ghost" id="accountAdminBtn">${ar ? "لوحة تحكم المدير" : "Admin dashboard"}</button>` : ""}<button class="btn ghost" id="accountLogoutBtn">${ar ? "تسجيل الخروج" : "Log out"}</button></div></article><article class="account-page-card"><span class="eyebrow">${ar ? "استكشف المتجر" : "KEEP EXPLORING"}</span><h2>${ar ? "كل المنتجات الرقمية في مكان واحد." : "Digital goods, minus the nonsense."}</h2><p>${ar ? "اختار اللي محتاجه وضيفه للسلة." : "Browse the catalog and add products to your cart."}</p><a class="btn ghost" href="/#store" data-account-store>${ar ? "ارجع للمتجر ↖" : "Back to the store ↗"}</a></article></section><section class="account-page-card" style="margin-top:16px"><span class="eyebrow">${ar ? "طلباتك" : "YOUR ORDERS"}</span><h2>${ar ? "سجل الطلبات" : "Order history"}</h2><div id="accountOrders"><div class="empty">${ar ? "جارٍ تحميل الطلبات…" : "Loading orders…"}</div></div></section></section>`;
+  $("#accountDetailsBtn")?.addEventListener("click", openAccount);
+  $("#accountAdminBtn")?.addEventListener("click", openAdmin);
+  $("#accountLogoutBtn")?.addEventListener("click", async () => {
+    try { await api("/api/auth/logout", { method: "POST" }); state.user = null; state.favorites = []; saveFavorites(); toast(ar ? "تم تسجيل الخروج." : "Logged out."); await navigate("/account"); }
+    catch (e) { toast(e.message); }
+  });
   $("[data-account-store]")?.addEventListener("click", (e) => { e.preventDefault(); navigate("/#store", "#store"); });
+  try {
+    const orders = await api("/api/orders");
+    const target = $("#accountOrders");
+    if (target) target.innerHTML = orders.length ? `<div class="table-wrap"><table class="admin-table"><thead><tr><th>${ar ? "رقم الطلب" : "Order"}</th><th>${ar ? "الحالة" : "Status"}</th><th>${ar ? "الإجمالي" : "Total"}</th><th>${ar ? "التاريخ" : "Date"}</th></tr></thead><tbody>${orders.map(o => `<tr><td><b>${escapeHTML(o.order_number || `#${o.id}`)}</b></td><td>${escapeHTML(o.status || o.fulfillment_status || "—")}</td><td>${money(o.total || 0)}</td><td>${escapeHTML(o.created_at || "—")}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">${ar ? "لا توجد طلبات حتى الآن." : "No orders yet."}</div>`;
+  } catch (e) { const target = $("#accountOrders"); if (target) target.innerHTML = `<div class="notice">${escapeHTML(e.message || (ar ? "تعذّر تحميل الطلبات." : "Could not load orders."))}</div>`; }
+}
+function renderAdminPage() {
+  document.body.classList.remove("product-route", "account-route");
+  document.body.classList.add("admin-route");
+  if (!state.user || state.user.role !== "admin") {
+    $("main").innerHTML = `<section class="account-page container"><div class="account-page-card"><h1>Admin access required</h1><p>Please sign in with an administrator account to open the dashboard.</p><button class="btn primary" id="adminPageLogin">Sign in</button><a class="btn ghost" href="/" data-admin-store>Back to store</a></div></section>`;
+    $("#adminPageLogin")?.addEventListener("click", openAccount);
+    return;
+  }
+  state.adminOpen = true;
+  $("main").innerHTML = `<section class="admin-page container"><div class="admin-page-head"><div><span class="eyebrow">KARDIVO MANAGEMENT</span><h1>Admin dashboard</h1></div><div class="modal-actions" style="margin:0"><a class="btn ghost" href="/account" id="adminAccountLink">Account</a><a class="btn ghost" href="/" id="adminStoreLink">Back to store</a></div></div><div class="admin-shell"><aside class="admin-side" id="adminSide">${ADMIN_TABS.map(([k, n]) => `<button data-tab="${k}">${n}<span class="badge red" data-badge="${k}" hidden></span></button>`).join("")}</aside><section class="admin-main" id="adminMain"></section></div></section>`;
+  $$("#adminSide button").forEach(b => b.onclick = () => { state.admin.tab = b.dataset.tab; renderAdminTab(); });
+  renderAdminTab().then(() => { if (state.admin.tab !== "dashboard") adminBadges(); });
 }
 async function route() {
   const path = location.pathname.replace(/\/$/, "") || "/";
   [["/account", "#accountBtn"], ["/cart", "#cartBtn"], ["/favorites", "#wishlistBtn"]].forEach(([p, selector]) => {
     const el = $(selector); if (el) { const active = path === p; el.classList.toggle("is-active", active); if (active) el.setAttribute("aria-current", "page"); else el.removeAttribute("aria-current"); }
   });
-  if (path === "/account") renderAccountPage();
+  if (path === "/account") await renderAccountPage();
+  else if (path === "/admin") renderAdminPage();
   else if (path === "/favorites") { if (state.user) await syncFavoritesWithAccount(false); renderFavoritesPage(); }
   else if (path === "/cart") renderCartPage();
   else if (isProductRoute())
@@ -3226,7 +3213,7 @@ async function adminCustomers(main) {
 $("#langBtn").onclick = () => setLang(state.lang === "ar" ? "en" : "ar");
 $("#currencyBtn").addEventListener("click", (event) => { event.preventDefault(); toggleCurrency(); });
 $("#cartBtn").onclick = () => navigate("/cart");
-$("#accountBtn").onclick = () => openAccount();
+$("#accountBtn").onclick = () => navigate("/account");
 $("#footerAccount").onclick = (e) => {
   e.preventDefault();
   navigate("/account");

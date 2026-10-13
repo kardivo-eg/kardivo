@@ -676,3 +676,6 @@ html[dir="rtl"] .product-card .product-image .stock{right:auto;left:10px}
 
 /* Fix: keep the hero brand logo fully opaque behind the featured product cards. */
 .hero-visual-products .hero-logo{opacity:1!important;}
+
+/* Dedicated account and admin pages */
+.admin-page{padding:34px 0 70px}.admin-page-head{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:18px}.admin-page-head h1{margin:6px 0 0;font-size:clamp(28px,4vw,42px)}.admin-page .admin-shell{min-height:calc(100vh - 220px);border:1px solid #29222f;border-radius:18px;overflow:hidden;background:#100e17}.admin-page .admin-main{min-width:0}.account-page-card{min-width:0}.account-page .admin-table{min-width:620px}@media(max-width:700px){.admin-page-head{align-items:flex-start;flex-direction:column}.admin-page .admin-shell{border-radius:12px}.admin-page .admin-main{padding:14px}}
