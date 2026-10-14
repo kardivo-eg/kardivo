@@ -24,7 +24,7 @@ EMAIL_FROM = "Kardivo <orders@yourdomain.com>"
 # Contact address shown to push services (mailto: or https: URL).
 # VAPID_SUBJECT = "mailto:you@yourdomain.com"
 # Optional: public site URL used in emails when it can't be detected.
-# PUBLIC_ORIGIN = "https://yourdomain.com"
+PUBLIC_ORIGIN = "https://kardivo.store"
 
 # Scheduled jobs: hourly. Releases expired reservations and checks low stock every hour,
 # and runs the daily database backup to R2 at 03:00 UTC.
