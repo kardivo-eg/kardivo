@@ -20,7 +20,7 @@ run_worker_first = ["/*", "!/styles.css", "!/app.js", "!/manifest.webmanifest", 
 [vars]
 DISCORD_USER_ID = "797626962494488636"
 # Sender for customer emails (password reset, delivery). Must be on a domain verified in Resend/Mailgun.
-# EMAIL_FROM = "Kardivo <orders@yourdomain.com>"
+EMAIL_FROM = "Kardivo <orders@yourdomain.com>"
 # Contact address shown to push services (mailto: or https: URL).
 # VAPID_SUBJECT = "mailto:you@yourdomain.com"
 # Optional: public site URL used in emails when it can't be detected.
