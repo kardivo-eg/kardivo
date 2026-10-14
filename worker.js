@@ -1107,6 +1107,31 @@ function adminAlert(env, ctx, { kind, title, body = "", url = "/", discord = nul
   })();
   if (ctx?.waitUntil) ctx.waitUntil(task);
   if (discord) notifyDiscord(env, ctx, title, discord, label);
+  notifyWhatsApp(env, ctx, kind, `${title}${body ? "\n" + body : ""}${url && env.PUBLIC_ORIGIN ? "\n" + String(env.PUBLIC_ORIGIN).replace(/\/$/, "") + url : ""}`);
+}
+// WhatsApp message to the owner's own number through CallMeBot (free personal-alert service; no Meta approval needed).
+// Setup: secrets CALLMEBOT_PHONE (your number, international) and CALLMEBOT_APIKEY. Optional var WA_ALERT_KINDS
+// ("all" or a comma list, default "order,proof,duplicate,message") picks which alerts are sent. Never throws.
+const whatsappReady = (env) => !!(clean(env.CALLMEBOT_PHONE) && clean(env.CALLMEBOT_APIKEY));
+async function sendWhatsAppAlert(env, text) {
+  const phone = String(env.CALLMEBOT_PHONE || "").replace(/[^\d]/g, "").replace(/^00/, "").replace(/^0(1\d{9})$/, "20$1");
+  const u = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent("+" + phone)}&text=${encodeURIComponent(String(text).slice(0, 900))}&apikey=${encodeURIComponent(clean(env.CALLMEBOT_APIKEY))}`;
+  try {
+    const r = await fetch(u),
+      detail = (await r.text()).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300);
+    if (!r.ok) console.error("whatsapp", r.status, detail);
+    return { ok: r.ok, status: r.status, detail };
+  } catch (e) {
+    console.error("whatsapp", e);
+    return { ok: false, status: 0, detail: String((e && e.message) || e) };
+  }
+}
+function notifyWhatsApp(env, ctx, kind, text) {
+  if (!whatsappReady(env)) return;
+  const want = String(env.WA_ALERT_KINDS || "order,proof,duplicate,message").toLowerCase().split(",").map((x) => x.trim());
+  if (!want.includes("all") && !want.includes(kind)) return;
+  const task = sendWhatsAppAlert(env, text);
+  if (ctx?.waitUntil) ctx.waitUntil(task);
 }
 async function logEvent(env, orderId, kind) {
   try {
@@ -3522,6 +3547,13 @@ async function api(req, env, url, ctx) {
       products,
       daily: daily.map((d) => ({ date: d.d, revenue: money(d.revenue), orders: Number(d.orders) })),
     });
+  }
+  if (path === "/api/admin/whatsapp-test" && method === "POST") {
+    if (!whatsappReady(env))
+      return json({ ok: false, error: "Not configured. Missing: " + [!clean(env.CALLMEBOT_PHONE) && "CALLMEBOT_PHONE", !clean(env.CALLMEBOT_APIKEY) && "CALLMEBOT_APIKEY"].filter(Boolean).join(", ") + " (add as secrets, then redeploy)" });
+    const r = await sendWhatsAppAlert(env, "Kardivo test: WhatsApp alerts are working.");
+    await audit(env, me, "whatsapp_test", "whatsapp", null, String(r.status));
+    return json(r);
   }
   if (path === "/api/admin/email-test" && method === "POST") {
     // Diagnostic: shows what the live worker sees and sends one test email, returning the provider's own error text.

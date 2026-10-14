@@ -23,6 +23,8 @@ DISCORD_USER_ID = "797626962494488636"
 EMAIL_FROM = "Kardivo <orders@kardivo.store>"
 # Contact address shown to push services (mailto: or https: URL).
 # VAPID_SUBJECT = "mailto:you@yourdomain.com"
+# Which alerts go to WhatsApp: "all" or a comma list of order,proof,duplicate,message,low_stock,restock (default: order,proof,duplicate,message).
+# WA_ALERT_KINDS = "order,proof,duplicate,message"
 # Optional: public site URL used in emails when it can't be detected.
 PUBLIC_ORIGIN = "https://kardivo.store"
 
@@ -36,6 +38,7 @@ crons = ["0 * * * *"]
 #   MAILGUN_API_KEY, MAILGUN_DOMAIN, MAILGUN_REGION (eu or empty)
 #   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY admin push notifications (node scripts/generate-vapid.mjs)
 #   DISCORD_WEBHOOK_URL                 as before
+#   CALLMEBOT_PHONE, CALLMEBOT_APIKEY   WhatsApp alerts to the owner's own number (see callmebot.com/blog/free-api-whatsapp-messages)
 
 # Backups and uploads need an R2 bucket. If you already have one bound (R2, MEDIA, PAYMENT_PROOFS
 # or PRODUCT_ASSETS) keep it as it is. Otherwise:
