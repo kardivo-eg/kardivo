@@ -290,6 +290,10 @@ const DEFAULTS = {
   referral_enabled: "1",
   referral_discount_percent: "10",
   referral_reward: "20",
+  loyalty_enabled: "1",
+  loyalty_points_per_egp: "1",
+  loyalty_redeem_points: "10",
+  loyalty_redeem_egp: "1",
   email_codes: "0",
   backup_keep: "14",
   testimonials_enabled: "1",
@@ -335,6 +339,7 @@ const COLUMN_ADDS = [
   ["order_items", "variant_name", "TEXT DEFAULT ''"],
   ["users", "credit", "REAL NOT NULL DEFAULT 0"],
   ["users", "referral_code", "TEXT"],
+  ["users", "points_redeemed", "INTEGER NOT NULL DEFAULT 0"],
   ["product_reviews", "photo_key", "TEXT"],
   ["product_reviews", "featured", "INTEGER NOT NULL DEFAULT 0"],
 ];
@@ -1257,6 +1262,34 @@ async function referralCodeFor(env, userId) {
   }
   return "";
 }
+// ---- reward points: points per EGP paid on delivered orders (refunds drop out automatically), redeemed in blocks for store credit ----
+function loyaltyCfg(s) {
+  return {
+    on: s.loyalty_enabled !== "0",
+    ppe: Math.max(1, Math.floor(Number(s.loyalty_points_per_egp) || 1)),
+    step: Math.max(1, Math.floor(Number(s.loyalty_redeem_points) || 1000)),
+    reward: Math.max(0, Number(s.loyalty_redeem_egp) || 0),
+  };
+}
+async function loyaltyFor(env, userId, s) {
+  const c = loyaltyCfg(s);
+  if (!c.on || !(c.reward > 0)) return null;
+  const r = await env.DB.prepare("SELECT COALESCE(SUM(CAST(total AS INTEGER)),0) n FROM orders WHERE user_id=? AND payment_status='paid' AND fulfillment_status='fulfilled'").bind(userId).first(),
+    u = await env.DB.prepare("SELECT points_redeemed p FROM users WHERE id=?").bind(userId).first(),
+    points = Math.max(0, Number(r?.n || 0) * c.ppe - Number(u?.p || 0)),
+    blocks = Math.floor(points / c.step);
+  return { points, ppe: c.ppe, step: c.step, reward: c.reward, redeemable: blocks * c.step, redeemable_egp: money(blocks * c.reward), to_next_egp: Math.ceil((c.step - (points % c.step)) / c.ppe) };
+}
+
+// Whole reward blocks (default 10 points = 1 EGP) that can pay for this cart.
+async function pointsFor(env, me, want, payable, s) {
+  const none = { egp: 0, pts: 0 };
+  if (!me || !want || !(payable > 0)) return none;
+  const L = await loyaltyFor(env, me.id, s);
+  if (!L) return none;
+  const blocks = Math.min(Math.floor(L.points / L.step), Math.floor(payable / L.reward));
+  return blocks > 0 ? { egp: money(blocks * L.reward), pts: blocks * L.step } : none;
+}
 // ---- discounts: percent / fixed, scoped to a product or category, first-order-only, minimum quantity, automatic bundle rules, referral codes ----
 const BAD_DISCOUNT =
   "This discount code is invalid, expired, or doesn't apply to your cart.";
@@ -2098,6 +2131,7 @@ async function api(req, env, url, ctx) {
       reward: Number(s.referral_reward) || 0,
       invited: Number(invited.n),
       ledger,
+      loyalty: await loyaltyFor(env, me.id, s),
     });
   }
   if (path === "/api/stock-subscribe" && method === "POST") {
@@ -2211,6 +2245,8 @@ async function api(req, env, url, ctx) {
     if (dc.error) return json({ error: dc.error }, 400);
     const afterDisc = money(cart.subtotal - dc.discount),
       credit = await creditFor(env, me, b.use_credit, afterDisc),
+      pts = await pointsFor(env, me, b.use_points, money(afterDisc - credit), s),
+      worth = me ? (await loyaltyFor(env, me.id, s))?.redeemable_egp || 0 : 0,
       bal = me ? Number((await env.DB.prepare("SELECT credit FROM users WHERE id=?").bind(me.id).first())?.credit || 0) : 0;
     return json({
       subtotal: cart.subtotal,
@@ -2219,7 +2255,9 @@ async function api(req, env, url, ctx) {
       discount_code: dc.code,
       credit,
       credit_available: money(bal),
-      total: money(afterDisc - credit),
+      points: pts.egp,
+      points_available_egp: worth,
+      total: money(afterDisc - credit - pts.egp),
     });
   }
   if (path === "/api/orders" && method === "POST") {
@@ -2252,7 +2290,9 @@ async function api(req, env, url, ctx) {
     const subtotal = cart.subtotal,
       discount = dc.discount,
       afterDisc = money(subtotal - discount),
-      creditUsed = await creditFor(env, me, b.use_credit, afterDisc),
+      creditOnly = await creditFor(env, me, b.use_credit, afterDisc),
+      pts = await pointsFor(env, me, b.use_points, money(afterDisc - creditOnly), s),
+      creditUsed = money(creditOnly + pts.egp),
       total = money(afterDisc - creditUsed),
       coveredByCredit = total <= 0;
     let pm = PAYMENT_METHODS.includes(b.payment_method) ? b.payment_method : "";
@@ -2335,6 +2375,13 @@ async function api(req, env, url, ctx) {
         .run();
       if (!(u.meta.changes > 0)) return abort(BAD_DISCOUNT, 400);
       claimed = true;
+    }
+    if (pts.egp > 0) {
+      // Reward points are turned into store credit right here, then spent through the normal credit path (so cancels and refunds return it as credit).
+      const cv = await env.DB.prepare("UPDATE users SET points_redeemed=points_redeemed+?,credit=credit+? WHERE id=? AND (SELECT COALESCE(SUM(CAST(total AS INTEGER)),0) FROM orders WHERE user_id=? AND payment_status='paid' AND fulfillment_status='fulfilled')*?-points_redeemed>=?")
+        .bind(pts.pts, pts.egp, me.id, me.id, loyaltyCfg(s).ppe, pts.pts).run();
+      if (!(cv.meta.changes > 0)) return abort("Your reward points changed. Review the total and try again.", 409);
+      await env.DB.prepare("INSERT INTO kd_credit_ledger(user_id,amount,reason,order_id) VALUES(?,?,'points_redeem',?)").bind(me.id, pts.egp, orderId).run();
     }
     if (creditUsed > 0) {
       const u = await env.DB.prepare(
@@ -3736,7 +3783,8 @@ async function api(req, env, url, ctx) {
         v = DEFAULTS.accent_color;
       if (["referral_discount_percent"].includes(key))
         v = String(Math.min(90, Math.max(0, Number(v) || 0)));
-      if (["referral_reward"].includes(key)) v = String(Math.max(0, Number(v) || 0));
+      if (["referral_reward", "loyalty_redeem_egp"].includes(key)) v = String(Math.max(0, Number(v) || 0));
+      if (["loyalty_points_per_egp", "loyalty_redeem_points"].includes(key)) v = String(Math.max(1, Math.floor(Number(v) || 1)));
       if (key === "auto_bundle_max_percent") v = String(Math.min(90, Math.max(0, Number(v) || 0)));
       if (key === "auto_bundle_max_egp") v = String(Math.max(0, Number(v) || 0));
       if (key === "auto_bundle_min_products")

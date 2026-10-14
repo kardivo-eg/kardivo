@@ -1196,3 +1196,6 @@ html[data-theme="light"] .coupon-note.ok{color:#15803d}html[data-theme="light"] 
 .order-done-actions{margin-top:22px;flex-wrap:wrap}
 @media(max-width:700px){.order-done{padding:30px 0 60px}.order-done-actions .btn{flex:1 1 100%;justify-content:center}}
 .line[hidden],.switch-row[hidden]{display:none}
+
+.loyalty-bar{height:8px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin:8px 0}.loyalty-bar i{display:block;height:100%;background:linear-gradient(90deg,#8b5cf6,#c6aaff);border-radius:inherit;transition:width .4s}
+:where(html[data-theme="light"]) .loyalty-bar{background:rgba(82,32,182,.12)}

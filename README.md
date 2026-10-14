@@ -1,3 +1,13 @@
+# Kardivo V41 — Reward points
+
+- Customers earn points on delivered, paid orders (default 1 point per EGP of the cash total, store credit used excluded) and spend them at checkout (default 10 points = 1 EGP) with a "Use reward points" switch next to "Use store credit". Whole blocks only, capped by what is left to pay. The account popup shows the balance and what it is worth. EN/AR.
+- When an order is placed, the points used are converted to store credit and spent through the normal credit path, so a cancelled or refunded order gets the value back as store credit (not points). The order shows it as "Store credit". Each conversion is written to `kd_credit_ledger` (reason `points_redeem`) and tracked in `users.points_redeemed` (added automatically).
+- Points are computed from orders, so refunded or cancelled orders drop out automatically. If an order is refunded after its points were spent, the credit stays.
+- Admin > Settings > Growth: `loyalty_enabled` (on by default), points per EGP, points per reward, credit per reward. Defaults are a 10% return, so check them against your margins.
+- Not covered: a real Worker/D1 run. `sw.js` cache v31, `?v=41`. Verify on staging: deliver an order, then check out with the points switch on, and cancel that order to see the credit come back.
+
+---
+
 # Kardivo V40 — Checkout polish: remembered choices, live coupons, copy buttons, proof compression, confirmation page
 
 - **Remembered on this device**: the last payment method used and an optional phone / WhatsApp number are saved in the browser (per signed-in account, key `kardivo_checkout_prefs:<user id>`) and pre-selected next time. The phone number is NOT sent to the server or stored on the order; it only prefills the field and is added to the prefilled WhatsApp "send proof" message.

@@ -261,6 +261,13 @@ const AR_V10 = {
   Cancel: "إلغاء",
   Submit: "ابعت",
   "Review submitted for approval.": "التقييم اتبعت للمراجعة.",
+  "Reward points": "نقاط المكافآت",
+  "You can redeem {0} points for {1} store credit.": "تقدر تستبدل {0} نقطة بـ {1} رصيد في المتجر.",
+  "You're {0} away from {1} store credit.": "فاضلك {0} وتاخد {1} رصيد في المتجر.",
+  "Use reward points": "استخدم نقاط المكافآت",
+  "Worth {0} at checkout.": "قيمتها {0} عند الدفع.",
+  "Earn {0} point for every 1 EGP on delivered orders.": "بتكسب {0} نقطة على كل 1 جنيه في الطلبات اللي بتتسلّم.",
+  "Points redeemed. Credit added to your account.": "تم الاستبدال. الرصيد اتضاف لحسابك.",
   "Invite friends, earn credit": "ادعو صحابك واكسب رصيد",
   "Friends get {0}% off their first order. You get {1} store credit when their order is delivered.": "صحابك ياخدوا خصم {0}% على أول طلب. وإنت بتاخد {1} رصيد في المتجر لما طلبهم يتسلّم.",
   "Copy link": "انسخ اللينك",
@@ -1880,7 +1887,7 @@ function openCheckout() {
   state.co = { total: subtotal };
   openModal(
     t("Checkout"),
-    `<div class="checkout-stepper"><span class="checkout-step active"><i>1</i><b>${t("Review your order")}</b></span><span class="checkout-step"><i>2</i><b>${t("Payment method")}</b></span><span class="checkout-step"><i>3</i><b>${t("Place order")}</b></span></div><div class="checkout-trust"><span>✓ ${t("Your total is confirmed by the store before the order is placed.")}</span><span>✓ ${t("Payment is reviewed manually when required.")}</span></div><div class="notice">${t("Checkout and payment remain in EGP.")}</div><div class="field"><label>${t("Discount code")}</label><div style="display:flex;gap:8px"><input id="discountCode" value="${escapeHTML(savedRef)}" placeholder="${t("Optional code")}" style="flex:1"><button type="button" class="btn ghost" id="applyDiscount">${t("Apply")}</button></div><small id="coNote" class="coupon-note" role="status" aria-live="polite"></small></div><label class="switch-row" id="creditRow" hidden><span>${t("Use store credit")} <b id="creditBal"></b></span><input class="switch" id="useCredit" type="checkbox"></label><div class="field"><label>${t("Phone / WhatsApp number")} <small>(${t("optional")})</small></label><input id="coPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" value="${escapeHTML(loadPrefs().phone || "")}"><small class="muted-note">${t("Remembered on this device")}</small></div><div class="form-grid"><div class="field"><label>${t("Transfer reference")} <small>(${t("optional")})</small></label><input id="payRef" placeholder="${t("Reference number from the transfer receipt")}"></div><div class="field"><label>${t("Payment proof")} <small>(${t("optional")})</small></label><input id="checkoutProof" type="file" accept="image/*"><div class="proof-preview" id="checkoutProofPreview" hidden></div></div></div><div class="checkout-summary"><div class="checkout-summary-title">${t("Review your order")}</div><div class="line"><span>${t("Subtotal")}</span><span id="coSubtotal">${moneyEGP(subtotal)}</span></div><div class="line"><span>${t("Discount")}</span><span id="coDiscount">${moneyEGP(0)}</span></div><div class="line" id="coCreditLine" hidden><span>${t("Store credit")}</span><span id="coCredit">${moneyEGP(0)}</span></div><div class="line total"><span>${t("Total")}</span><span><span id="coTotal">${moneyEGP(subtotal)}</span> ${copyBtn(copyAmount(subtotal), t("Copy exact total"), t("Copy"), true).replace("<button ", '<button id="coCopyTotal" ')}</span></div></div><div id="payWrap" style="margin-top:18px"><b>${t("Payment method")}</b><div class="payment-grid" id="payments"></div></div><div class="modal-actions"><button class="btn ghost" id="backCart">${t("Back")}</button><button class="btn primary" id="placeOrder">${t("Place order")}</button></div>`,
+    `<div class="checkout-stepper"><span class="checkout-step active"><i>1</i><b>${t("Review your order")}</b></span><span class="checkout-step"><i>2</i><b>${t("Payment method")}</b></span><span class="checkout-step"><i>3</i><b>${t("Place order")}</b></span></div><div class="checkout-trust"><span>✓ ${t("Your total is confirmed by the store before the order is placed.")}</span><span>✓ ${t("Payment is reviewed manually when required.")}</span></div><div class="notice">${t("Checkout and payment remain in EGP.")}</div><div class="field"><label>${t("Discount code")}</label><div style="display:flex;gap:8px"><input id="discountCode" value="${escapeHTML(savedRef)}" placeholder="${t("Optional code")}" style="flex:1"><button type="button" class="btn ghost" id="applyDiscount">${t("Apply")}</button></div><small id="coNote" class="coupon-note" role="status" aria-live="polite"></small></div><label class="switch-row" id="creditRow" hidden><span>${t("Use store credit")} <b id="creditBal"></b></span><input class="switch" id="useCredit" type="checkbox"></label><label class="switch-row" id="pointsRow" hidden><span>${t("Use reward points")} <b id="pointsBal"></b></span><input class="switch" id="usePoints" type="checkbox"></label><div class="field"><label>${t("Phone / WhatsApp number")} <small>(${t("optional")})</small></label><input id="coPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" value="${escapeHTML(loadPrefs().phone || "")}"><small class="muted-note">${t("Remembered on this device")}</small></div><div class="form-grid"><div class="field"><label>${t("Transfer reference")} <small>(${t("optional")})</small></label><input id="payRef" placeholder="${t("Reference number from the transfer receipt")}"></div><div class="field"><label>${t("Payment proof")} <small>(${t("optional")})</small></label><input id="checkoutProof" type="file" accept="image/*"><div class="proof-preview" id="checkoutProofPreview" hidden></div></div></div><div class="checkout-summary"><div class="checkout-summary-title">${t("Review your order")}</div><div class="line"><span>${t("Subtotal")}</span><span id="coSubtotal">${moneyEGP(subtotal)}</span></div><div class="line"><span>${t("Discount")}</span><span id="coDiscount">${moneyEGP(0)}</span></div><div class="line" id="coCreditLine" hidden><span>${t("Store credit")}</span><span id="coCredit">${moneyEGP(0)}</span></div><div class="line" id="coPointsLine" hidden><span>${t("Reward points")}</span><span id="coPoints">${moneyEGP(0)}</span></div><div class="line total"><span>${t("Total")}</span><span><span id="coTotal">${moneyEGP(subtotal)}</span> ${copyBtn(copyAmount(subtotal), t("Copy exact total"), t("Copy"), true).replace("<button ", '<button id="coCopyTotal" ')}</span></div></div><div id="payWrap" style="margin-top:18px"><b>${t("Payment method")}</b><div class="payment-grid" id="payments"></div></div><div class="modal-actions"><button class="btn ghost" id="backCart">${t("Back")}</button><button class="btn primary" id="placeOrder">${t("Place order")}</button></div>`,
   );
   $("#backCart").onclick = openCart;
   renderPaymentOptions();
@@ -1896,6 +1903,7 @@ function openCheckout() {
     await refreshTotals(true);
   };
   $("#useCredit").onchange = () => refreshTotals(false);
+  $("#usePoints").onchange = () => refreshTotals(false);
   refreshTotals(false);
 }
 // Asks the server what the cart costs: coupon, automatic bundle offers, referral codes and store credit are all decided there.
@@ -1911,6 +1919,7 @@ async function refreshTotals(announce, useCode = true, keepNote = false) {
         code,
         contact: String(state.user?.email || "").trim(),
         use_credit: !!$("#useCredit")?.checked,
+        use_points: !!$("#usePoints")?.checked,
       }),
     });
     if (seq !== totalsSeq || !$("#coTotal")) return;
@@ -1919,6 +1928,10 @@ async function refreshTotals(announce, useCode = true, keepNote = false) {
     $("#coDiscount").textContent = r.discount ? "− " + moneyEGP(r.discount) : moneyEGP(0);
     $("#coCredit").textContent = "− " + moneyEGP(r.credit);
     $("#coCreditLine").hidden = !(r.credit > 0);
+    $("#coPoints").textContent = "− " + moneyEGP(r.points || 0);
+    $("#coPointsLine").hidden = !(r.points > 0);
+    $("#pointsRow").hidden = !(state.user && r.points_available_egp > 0);
+    $("#pointsBal").textContent = `(${moneyEGP(r.points_available_egp || 0)})`;
     $("#coTotal").textContent = moneyEGP(r.total);
     $("#coCopyTotal")?.setAttribute("data-copy", copyAmount(r.total));
     $("#payWrap").hidden = r.total <= 0;
@@ -2014,6 +2027,7 @@ async function placeOrder() {
         guest_contact: "",
         discount_code: $("#discountCode").value,
         use_credit: !!$("#useCredit")?.checked,
+        use_points: !!$("#usePoints")?.checked,
         payment_ref: payRef,
         payment_method: free ? "" : state.selectedPayment,
       }),
@@ -2352,6 +2366,11 @@ function orderBlock(o) {
     : "";
   return `<div class="notice" style="margin-bottom:10px"><div class="line"><b>${escapeHTML(o.order_number)}</b><span>${money(o.total)}</span></div><small>${escapeHTML(o.item_summary || "")}</small><br><small>${t("Payment: {0} · Delivery: {1} · {2}", st(o.payment_status), st(o.fulfillment_status), escapeHTML(fmtTime(o.created_at)))}</small>${timelineHTML(o)}${o.delivery_message ? `<div class="notice success-text" style="margin-top:10px"><b>${t("Delivery message")}</b><br>${escapeHTML(o.delivery_message).replace(/\n/g, "<br>")}</div>` : ""}${(o.codes || []).length ? `<div style="margin-top:10px"><b>${t("Your codes")}</b>${o.codes.map((c) => `<div class="line"><span>${escapeHTML(c.product_name)}${c.variant_name ? ` — ${escapeHTML(c.variant_name)}` : ""}<br><code>${escapeHTML(c.code)}</code></span><span><button class="mini" data-copy="${escapeHTML(c.code)}">${t("Copy")}</button>${state.user ? ` <button class="mini" data-review-product="${c.product_id}" data-review-order="${o.id}">${t("Review")}</button>` : ""}</span></div>`).join("")}</div>` : ""}${proof}${reorderButton(o)}<details class="thread-box" data-thread="${o.id}"><summary>${t("Messages with support")}</summary><div class="thread-body" id="thread-${o.id}"></div></details>${orderWaButton(o.order_number)}</div>`;
 }
+function loyaltyCard(ref) {
+  const L = ref?.loyalty;
+  if (!L) return "";
+  return `<div class="notice loyalty-box" style="margin-top:12px"><div class="line"><b>${t("Reward points")}</b><b>${L.points.toLocaleString()}</b></div><small>${t("Worth {0} at checkout.", money(L.redeemable_egp))}</small> <small class="muted-note">${t("Earn {0} point for every 1 EGP on delivered orders.", L.ppe)}</small></div>`;
+}
 async function openUserAccount() {
   // Keep the admin account entry independent of customer-only account data.
   // If any customer account endpoint is slow or rejects for admins, the header
@@ -2393,7 +2412,7 @@ async function openUserAccount() {
     : "";
   openModal(
     t("Hi, {0}", escapeHTML(state.user.name)),
-    `<div class="notice"><b>${escapeHTML(state.user.email)}</b><br>${state.user.role === "admin" ? t("Administrator account") : t("Customer account")}</div>${
+    `<div class="notice"><b>${escapeHTML(state.user.email)}</b><br>${state.user.role === "admin" ? t("Administrator account") : t("Customer account")}</div>${loyaltyCard(ref)}${
       ref?.enabled && ref.code
         ? `<div class="notice referral-box" style="margin-top:12px"><b>${t("Invite friends, earn credit")}</b><br><small>${t("Friends get {0}% off their first order. You get {1} store credit when their order is delivered.", ref.discount_percent, money(ref.reward))}</small><div class="line"><code>${escapeHTML(ref.code)}</code><span><button class="mini" data-copy="${escapeHTML(ref.code)}">${t("Copy")}</button> <button class="mini" data-copy="${escapeHTML(link)}">${t("Copy link")}</button> <a class="mini" href="${escapeHTML(waShare)}" target="_blank" rel="noreferrer">WhatsApp</a></span></div><div>${t("Store credit")}: <b>${money(ref.credit)}</b> · ${t("Friends who ordered")}: <b>${ref.invited}</b></div></div>`
         : ref && ref.credit > 0
@@ -3835,6 +3854,10 @@ const SETTINGS_SCHEMA = [
       ["referral_enabled", "Referral codes (friend gets first-order discount, referrer gets store credit)", "toggle"],
       ["referral_discount_percent", "Friend's first-order discount (%)", "number"],
       ["referral_reward", "Store credit for the referrer (EGP)", "number"],
+      ["loyalty_enabled", "Reward points (earned on delivered, paid orders; redeemed for store credit)", "toggle"],
+      ["loyalty_points_per_egp", "Points earned per 1 EGP paid", "number"],
+      ["loyalty_redeem_points", "Points needed per reward", "number"],
+      ["loyalty_redeem_egp", "Store credit per reward (EGP)", "number"],
       ["email_codes", "Include the delivered codes in the delivery email", "toggle"],
       ["testimonials_enabled", "Show testimonials strip on the home page", "toggle"],
       ["auto_bundle_enabled", "Automatic bundle discount (cart with several different products, no code)", "toggle"],
