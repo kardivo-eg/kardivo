@@ -2487,7 +2487,7 @@ async function renderAdminTab() {
   if (!main) return;
   const tab = state.admin.tab;
   $$("#adminSide button").forEach((b) =>
-    b.classList.toggle("active", b.dataset.tab === tab),
+    b.classList.toggle("active", b.dataset.adminTab === tab),
   );
   main.innerHTML = `<div class="empty">Loading...</div>`;
   const pages = {
@@ -4075,8 +4075,8 @@ function renderAdminPage() {
     return;
   }
   state.adminOpen = true;
-  $("main").innerHTML = `<section class="admin-page container"><div class="admin-page-head"><div><span class="eyebrow">KARDIVO MANAGEMENT</span><h1>Admin dashboard</h1></div><div class="modal-actions" style="margin:0"><a class="btn ghost" href="/account" id="adminAccountLink">Account</a><a class="btn ghost" href="/" id="adminStoreLink">Back to store</a></div></div><div class="admin-shell"><aside class="admin-side" id="adminSide">${ADMIN_TABS.map(([k, n]) => `<button data-tab="${k}">${n}<span class="badge red" data-badge="${k}" hidden></span></button>`).join("")}</aside><section class="admin-main" id="adminMain"></section></div></section>`;
-  $$("#adminSide button").forEach(b => b.onclick = () => { state.admin.tab = b.dataset.tab; renderAdminTab(); });
+  $("main").innerHTML = `<section class="admin-page container"><div class="admin-page-head"><div><span class="eyebrow">KARDIVO MANAGEMENT</span><h1>Admin dashboard</h1></div><div class="modal-actions" style="margin:0"><a class="btn ghost" href="/account" id="adminAccountLink">Account</a><a class="btn ghost" href="/" id="adminStoreLink">Back to store</a></div></div><div class="admin-shell"><aside class="admin-side" id="adminSide">${ADMIN_TABS.map(([k, n]) => `<button data-admin-tab="${k}">${n}<span class="badge red" data-badge="${k}" hidden></span></button>`).join("")}</aside><section class="admin-main" id="adminMain"></section></div></section>`;
+  $$("#adminSide button").forEach(b => b.onclick = () => { state.admin.tab = b.dataset.adminTab; renderAdminTab(); });
   renderAdminTab().then(() => { if (state.admin.tab !== "dashboard") adminBadges(); });
 }
 async function route() {
@@ -4274,7 +4274,7 @@ boot();
 document.addEventListener("click", (event) => {
   if (event.target.closest("#wishlistBtn")) { navigate("/favorites"); return; }
   if (event.target.closest("[data-go-store]")) { closeModal(); navigate("/#store", "#store"); return; }
-  const tabBtn = event.target.closest("[data-tab]");
+  const tabBtn = event.target.closest('[data-tab^="/"]');
   if (tabBtn) {
     closeModal();
     const tp = tabBtn.dataset.tab;
