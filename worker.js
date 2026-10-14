@@ -1420,10 +1420,13 @@ async function calcDiscount(env, rawCode, cart, who, s) {
     s,
   );
   if (auto.discount > best.discount) best = { ...auto, referrer_id: null };
-  // Store-wide hard cap: no coupon, referral, automatic, or bundle offer may
-  // discount more than 5% of the original cart subtotal. Keep the calculation
-  // server-side so a modified browser cannot bypass the limit.
-  best.discount = money(Math.min(Math.max(0, Number(best.discount) || 0), cart.subtotal * 0.05));
+  // The 5% cap applies ONLY to the automatic bundle offer. Promo codes,
+  // referral discounts, and other admin-configured automatic offers keep the
+  // discount calculated by their own rules. Enforce this on the server.
+  best.discount = Math.max(0, Number(best.discount) || 0);
+  if (best.source === "auto_bundle") {
+    best.discount = money(Math.min(best.discount, cart.subtotal * 0.05));
+  }
   return best.discount > 0 ? best : { code: null, discount: 0, source: null, referrer_id: null };
 }
 // Store credit that may be applied to this cart (logged-in customers only).
@@ -1440,7 +1443,8 @@ async function bundleSuggestions(env, items, who, s) {
   const rows = (await env.DB.prepare("SELECT * FROM discounts WHERE active=1 AND auto_apply=1").all()).results;
   const first = rows.some((d) => Number(d.first_order_only)) ? await isFirstOrder(env, who) : true;
   const rawCur = bestAutoOffer(rows, cart, first, s);
-  const cur = { ...rawCur, discount: money(Math.min(rawCur.discount, cart.subtotal * 0.05)) };
+  const cur = { ...rawCur };
+  if (cur.source === "auto_bundle") cur.discount = money(Math.min(cur.discount, cart.subtotal * 0.05));
   const out = { discount: cur.discount, code: cur.code, source: cur.source, subtotal: cart.subtotal, suggestions: [] };
   const maxQty = Math.max(1, Number(s.max_qty) || 10);
   const inCart = new Set(cart.normalized.map((x) => x.product_id));
@@ -1490,7 +1494,8 @@ async function bundleSuggestions(env, items, who, s) {
     if (line && unit.variant && Number(line.variant_id) !== Number(unit.variant.id)) continue;
     const sim = simulate(p, unit);
     const rawNext = bestAutoOffer(rows, sim, first, s);
-    const next = { ...rawNext, discount: money(Math.min(rawNext.discount, sim.subtotal * 0.05)) };
+    const next = { ...rawNext };
+    if (next.source === "auto_bundle") next.discount = money(Math.min(next.discount, sim.subtotal * 0.05));
     const gain = money(next.discount - cur.discount);
     if (!(gain > 0)) continue;
     const rank =
