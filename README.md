@@ -1,4 +1,21 @@
-# Kardivo V41 — Reward points
+# Kardivo V50 — Balance, rewards, and checkout hardening
+
+## Changes in this build
+- Product cards and product detail pages preview estimated reward points and their proportional EGP value using the configured loyalty rules. Variant changes refresh the preview.
+- The customer account reward panel now includes available points, redemption value, lifetime points earned, points redeemed, and recent balance-ledger activity.
+- Points redemption can be limited by an admin-configurable percentage of the remaining order total (`loyalty_max_redeem_percent`, default 50%). The existing server-side points and store-credit calculation remains authoritative, and promo codes can be used in the same order as both.
+- All coupon, referral, automatic, and bundle discounts are capped server-side at 5% of cart subtotal. The admin Discounts page calls out the cap.
+- Fixed loyalty point arithmetic to preserve fractional EGP order totals instead of truncating each order to an integer.
+- Bumped the public asset versions and service-worker shell cache so clients fetch the updated UI.
+- No products, customers, orders, inventory, or payment records are deleted or rewritten by this update. The existing additive migration path remains in place.
+
+## Deployment verification
+- Run `node --check worker.js` and `node --check public/app.js`.
+- Deploy to staging first. Verify a coupon discount never exceeds 5% of subtotal, and verify checkout allows coupon + store credit + points together while respecting the configured points redemption cap.
+- Place and fulfil a paid test order, confirm the account shows earned points and ledger history, then cancel/refund a separate test order to validate the existing order/refund lifecycle.
+
+---
+
 
 - Customers earn points on delivered, paid orders (default 1 point per EGP of the cash total, store credit used excluded) and spend them at checkout (default 10 points = 1 EGP) with a "Use reward points" switch next to "Use store credit". Whole blocks only, capped by what is left to pay. The account popup shows the balance and what it is worth. EN/AR.
 - When an order is placed, the points used are converted to store credit and spent through the normal credit path, so a cancelled or refunded order gets the value back as store credit (not points). The order shows it as "Store credit". Each conversion is written to `kd_credit_ledger` (reason `points_redeem`) and tracked in `users.points_redeemed` (added automatically).

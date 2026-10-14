@@ -1199,3 +1199,11 @@ html[data-theme="light"] .coupon-note.ok{color:#15803d}html[data-theme="light"] 
 
 .loyalty-bar{height:8px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin:8px 0}.loyalty-bar i{display:block;height:100%;background:linear-gradient(90deg,#8b5cf6,#c6aaff);border-radius:inherit;transition:width .4s}
 :where(html[data-theme="light"]) .loyalty-bar{background:rgba(82,32,182,.12)}
+
+/* Loyalty/rewards are part of the existing product-card hierarchy, not a separate widget. */
+.reward-preview{display:block;margin-top:5px;color:var(--muted,#687386);font-size:.76rem;font-weight:600;line-height:1.35;white-space:normal}
+.price-row .price .reward-preview{flex-basis:100%;}
+.loyalty-box .line{gap:12px;padding:4px 0}
+.reward-history{margin-top:12px;padding-top:10px;border-top:1px solid var(--border,#e4e7ec)}
+.reward-history>.line{font-size:.86rem}
+#productPrice .reward-preview{margin-top:7px}

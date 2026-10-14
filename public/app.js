@@ -1390,6 +1390,17 @@ function openQuickView(id) {
   $("#qvMore").onclick = (e) => { e.preventDefault(); closeModal(); navigate(href); };
   $("#qvAdd").focus({ preventScroll: true });
 }
+function rewardPreview(price) {
+  const enabled = state.settings.loyalty_enabled !== false && String(state.settings.loyalty_enabled ?? "1") !== "0";
+  const ppe = Math.max(1, Math.floor(Number(state.settings.loyalty_points_per_egp) || 1));
+  const step = Math.max(1, Math.floor(Number(state.settings.loyalty_redeem_points) || 10));
+  const reward = Math.max(0, Number(state.settings.loyalty_redeem_egp) || 0);
+  if (!enabled || reward <= 0 || !(Number(price) > 0)) return "";
+  const pts = Math.floor(Number(price) * ppe);
+  const egp = (pts / step) * reward;
+  return `<small class="reward-preview">${t("Earn {0} points", pts.toLocaleString())}${egp > 0 ? ` · ${t("worth {0}", moneyEGP(egp))}` : ""}</small>`;
+}
+
 function renderProducts() {
   const el = $("#productGrid");
   if (!el) return;
@@ -1426,7 +1437,7 @@ function renderProducts() {
         href = "/" + encodeURIComponent(p.slug),
         name = pName(p),
         cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
-      return `<article class="product-card product-card-link"><div class="product-image">${stockImg(p.image_url, name, stockArtFor(p))}<a class="product-image-link" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"></a>${favoriteButton(p)}${quickViewButton(p)}${sale ? `<span class="sale">${escapeHTML(saveBadgeText(displayPrice, displayOld))}</span>` : ""}<span class="stock${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? " low" : ""}">${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? t("Only {0} left", totalStock) : badge}</span></div><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span><small class="save-line">${escapeHTML(t("You save {0}", moneyShort(displayOld - displayPrice)))}</small>` : ""}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
+      return `<article class="product-card product-card-link"><div class="product-image">${stockImg(p.image_url, name, stockArtFor(p))}<a class="product-image-link" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"></a>${favoriteButton(p)}${quickViewButton(p)}${sale ? `<span class="sale">${escapeHTML(saveBadgeText(displayPrice, displayOld))}</span>` : ""}<span class="stock${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? " low" : ""}">${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? t("Only {0} left", totalStock) : badge}</span></div><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span><small class="save-line">${escapeHTML(t("You save {0}", moneyShort(displayOld - displayPrice)))}</small>` : ""}${rewardPreview(displayPrice)}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
     })
     .join("");
   bindFavoriteButtons(el);
@@ -1471,7 +1482,7 @@ async function openProductPage(slug) {
       old = variants.length
         ? Number(first.old_price || 0)
         : Number(p.old_price || 0);
-    main.innerHTML = `<section class="product-page container"><div class="product-breadcrumb"><a href="/" data-home>${t("Store")}</a><span>/</span>${crumbCat(p)}<span>${escapeHTML(name)}</span></div><div class="product-detail"><div class="product-detail-media">${stockImg(p.image_url, name, stockArtFor(p))}</div><div class="product-detail-copy"><span class="eyebrow">${escapeHTML(cName({ name: p.category_name, name_ar: p.category_name_ar }) || t("DIGITAL PRODUCT"))}</span><h1>${escapeHTML(name)}</h1><div class="product-detail-price" id="productPrice">${money(price)} ${old > price ? `<del>${money(old)}</del>` : ""}</div><div class="product-detail-meta">${[
+    main.innerHTML = `<section class="product-page container"><div class="product-breadcrumb"><a href="/" data-home>${t("Store")}</a><span>/</span>${crumbCat(p)}<span>${escapeHTML(name)}</span></div><div class="product-detail"><div class="product-detail-media">${stockImg(p.image_url, name, stockArtFor(p))}</div><div class="product-detail-copy"><span class="eyebrow">${escapeHTML(cName({ name: p.category_name, name_ar: p.category_name_ar }) || t("DIGITAL PRODUCT"))}</span><h1>${escapeHTML(name)}</h1><div class="product-detail-price" id="productPrice">${money(price)} ${old > price ? `<del>${money(old)}</del>` : ""}${rewardPreview(price)}</div><div class="product-detail-meta">${[
       p.platform,
       p.region,
       p.delivery_type === "code"
@@ -1497,7 +1508,7 @@ async function openProductPage(slug) {
         pr = Number(o.dataset.price),
         ol = Number(o.dataset.old);
       $("#productPrice").innerHTML =
-        `${money(pr)} ${ol > pr ? `<del>${money(ol)}</del>` : ""}`;
+        `${money(pr)} ${ol > pr ? `<del>${money(ol)}</del>` : ""}${rewardPreview(pr)}`;
       const st = p.delivery_type === "code" && Number(o.dataset.stock) <= 0;
       $("#productAdd").disabled = st;
       $("#notifyBox").hidden = !st;
@@ -2369,7 +2380,7 @@ function orderBlock(o) {
 function loyaltyCard(ref) {
   const L = ref?.loyalty;
   if (!L) return "";
-  return `<div class="notice loyalty-box" style="margin-top:12px"><div class="line"><b>${t("Reward points")}</b><b>${L.points.toLocaleString()}</b></div><small>${t("Worth {0} at checkout.", money(L.redeemable_egp))}</small> <small class="muted-note">${t("Earn {0} point for every 1 EGP on delivered orders.", L.ppe)}</small></div>`;
+  return `<div class="notice loyalty-box" style="margin-top:12px"><div class="line"><b>${t("Kardivo Balance · Reward points")}</b><b>${Number(L.points || 0).toLocaleString()}</b></div><div class="line"><small>${t("Available redemption value")}</small><b>${money(L.redeemable_egp)}</b></div><div class="line"><small>${t("Lifetime points earned")}</small><b>${Number(L.lifetime_earned || 0).toLocaleString()}</b></div><div class="line"><small>${t("Points redeemed")}</small><b>${Number(L.points_redeemed || 0).toLocaleString()}</b></div><small class="muted-note">${t("Earn {0} point for every 1 EGP on delivered orders.", L.ppe)}</small>${(ref?.ledger || []).length ? `<div class="reward-history"><b>${t("Recent balance transactions")}</b>${ref.ledger.slice(0, 5).map((x) => `<div class="line"><span>${escapeHTML(String(x.reason || "Balance update").replaceAll("_", " "))}<br><small>${escapeHTML(fmtTime(x.created_at))}</small></span><b>${Number(x.amount) > 0 ? "+" : ""}${money(x.amount)}</b></div>`).join("")}</div>` : ""}</div>`;
 }
 async function openUserAccount() {
   // Keep the admin account entry independent of customer-only account data.
@@ -2878,7 +2889,7 @@ async function adminDiscounts(main) {
       .join(" · ");
   main.innerHTML =
     adminHeader("Discounts", "Add discount", "addDiscount") +
-    `<div class="notice" style="margin-bottom:12px">Offers can apply to one product or category, to first orders only, or automatically when the cart reaches a quantity (e.g. buy 3, get 10% off). Only the single best offer applies per order; offers never stack.</div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Code</th><th>Type</th><th>Amount</th><th>Rules</th><th>Used</th><th>Active</th><th>Expiry</th><th>Actions</th></tr></thead><tbody>${rows.map((d) => `<tr><td><b>${escapeHTML(d.code)}</b></td><td>${escapeHTML(d.type)}</td><td>${d.amount}${d.type === "percentage" ? "%" : ""}</td><td>${d.min_order ? "min " + money(d.min_order) + "<br>" : ""}<small>${escapeHTML(scope(d)) || "—"}</small></td><td>${d.used_count || 0}${d.max_uses != null ? ` / ${d.max_uses}` : ""}</td><td>${d.active ? "Yes" : "No"}</td><td>${escapeHTML(d.expires_at ? new Date(d.expires_at).toLocaleString() : "Never")}</td><td><button class="mini" data-edit-disc="${d.id}">Edit</button> <button class="mini danger" data-del-disc="${d.id}">Delete</button></td></tr>`).join("") || `<tr><td colspan="8" class="empty">No discounts.</td></tr>`}</tbody></table></div></div>`;
+    `<div class="notice" style="margin-bottom:12px">Offers can apply to one product or category, to first orders only, or automatically when the cart reaches a quantity. Only the single best offer applies per order; offers never stack. The server enforces a hard maximum discount of 5% of the cart subtotal.</div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Code</th><th>Type</th><th>Amount</th><th>Rules</th><th>Used</th><th>Active</th><th>Expiry</th><th>Actions</th></tr></thead><tbody>${rows.map((d) => `<tr><td><b>${escapeHTML(d.code)}</b></td><td>${escapeHTML(d.type)}</td><td>${d.amount}${d.type === "percentage" ? "%" : ""}</td><td>${d.min_order ? "min " + money(d.min_order) + "<br>" : ""}<small>${escapeHTML(scope(d)) || "—"}</small></td><td>${d.used_count || 0}${d.max_uses != null ? ` / ${d.max_uses}` : ""}</td><td>${d.active ? "Yes" : "No"}</td><td>${escapeHTML(d.expires_at ? new Date(d.expires_at).toLocaleString() : "Never")}</td><td><button class="mini" data-edit-disc="${d.id}">Edit</button> <button class="mini danger" data-del-disc="${d.id}">Delete</button></td></tr>`).join("") || `<tr><td colspan="8" class="empty">No discounts.</td></tr>`}</tbody></table></div></div>`;
   $("#addDiscount").onclick = () => discountForm();
   $$("[data-edit-disc]").forEach(
     (b) =>
@@ -3858,6 +3869,7 @@ const SETTINGS_SCHEMA = [
       ["loyalty_points_per_egp", "Points earned per 1 EGP paid", "number"],
       ["loyalty_redeem_points", "Points needed per reward", "number"],
       ["loyalty_redeem_egp", "Store credit per reward (EGP)", "number"],
+      ["loyalty_max_redeem_percent", "Maximum points redemption (% of remaining order total)", "number"],
       ["email_codes", "Include the delivered codes in the delivery email", "toggle"],
       ["testimonials_enabled", "Show testimonials strip on the home page", "toggle"],
       ["auto_bundle_enabled", "Automatic bundle discount (cart with several different products, no code)", "toggle"],
