@@ -244,6 +244,7 @@ const DEFAULTS = {
   support_text:
     "Send your payment screenshot and order number to Kardivo Support.",
   support_email: "",
+  order_eta: "",
   instagram: "",
   facebook: "",
   tiktok: "",
@@ -283,6 +284,7 @@ const DEFAULTS = {
   step3_text_ar:
     "حوّل المبلغ، وبعدها ابعت رقم الطلب وسكرين شوت التحويل لدعم Kardivo على واتساب.",
   support_text_ar: "ابعت سكرين شوت التحويل ورقم الطلب لدعم Kardivo.",
+  order_eta_ar: "",
   footer_tagline_ar: "منتجات رقمية من غير وجع دماغ.",
   footer_credit_ar: "تنفيذ 3ellwa",
   referral_enabled: "1",
@@ -291,8 +293,13 @@ const DEFAULTS = {
   email_codes: "0",
   backup_keep: "14",
   testimonials_enabled: "1",
+  // Automatic bundle discount: no code needed. Applies when the cart holds several different products.
+  auto_bundle_enabled: "1",
+  auto_bundle_max_percent: "10",
+  auto_bundle_max_egp: "100",
+  auto_bundle_min_products: "2",
 };
-const SCHEMA_VERSION = 13;
+const SCHEMA_VERSION = 15;
 // Columns added over time. Each is added only if missing (additive, never destructive).
 const COLUMN_ADDS = [
   ["discounts", "max_uses", "INTEGER"],
@@ -323,6 +330,7 @@ const COLUMN_ADDS = [
   ["categories", "name_ar", "TEXT DEFAULT ''"],
   ["inventory", "variant_id", "INTEGER"],
   ["inventory", "batch_id", "INTEGER"],
+  ["checkout_events", "product_id", "INTEGER"],
   ["order_items", "variant_id", "INTEGER"],
   ["order_items", "variant_name", "TEXT DEFAULT ''"],
   ["users", "credit", "REAL NOT NULL DEFAULT 0"],
@@ -341,7 +349,7 @@ const SCHEMA_TABLES = [
   "CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at)",
   "CREATE TABLE IF NOT EXISTS kd_user_favorites(user_id INTEGER NOT NULL,product_id INTEGER NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,product_id),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE)",
   "CREATE INDEX IF NOT EXISTS idx_kd_favorites_product ON kd_user_favorites(product_id)",
-  "CREATE TABLE IF NOT EXISTS checkout_events(id INTEGER PRIMARY KEY AUTOINCREMENT,event TEXT NOT NULL,session_key TEXT,order_id INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE TABLE IF NOT EXISTS checkout_events(id INTEGER PRIMARY KEY AUTOINCREMENT,event TEXT NOT NULL,session_key TEXT,order_id INTEGER,product_id INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
   "CREATE INDEX IF NOT EXISTS idx_checkout_events_created ON checkout_events(created_at,event)",
   "CREATE TABLE IF NOT EXISTS product_reviews(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,user_id INTEGER,order_id INTEGER,rating INTEGER NOT NULL,body TEXT DEFAULT '',approved INTEGER NOT NULL DEFAULT 0,photo_key TEXT,featured INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(product_id,order_id,user_id),FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE,FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL,FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE SET NULL)",
   "CREATE INDEX IF NOT EXISTS idx_reviews_product ON product_reviews(product_id,approved,created_at)",
@@ -364,6 +372,9 @@ const SCHEMA_TABLES = [
   "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral ON users(referral_code)",
   "CREATE TABLE IF NOT EXISTS kd_password_resets(token_hash TEXT PRIMARY KEY,user_id INTEGER NOT NULL,expires_at INTEGER NOT NULL)",
   "CREATE TABLE IF NOT EXISTS kd_push_subscriptions(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,endpoint TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE TABLE IF NOT EXISTS kd_customer_push(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,endpoint TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE INDEX IF NOT EXISTS idx_custpush_user ON kd_customer_push(user_id)",
+  "CREATE TABLE IF NOT EXISTS kd_push_outbox(id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,title TEXT NOT NULL,body TEXT NOT NULL DEFAULT '',url TEXT NOT NULL DEFAULT '/account',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
   "CREATE TABLE IF NOT EXISTS kd_admin_alerts(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,title TEXT NOT NULL,body TEXT DEFAULT '',url TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
   "CREATE TABLE IF NOT EXISTS kd_job_runs(job TEXT PRIMARY KEY,ran_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,ok INTEGER NOT NULL DEFAULT 1,detail TEXT DEFAULT '')",
   "CREATE INDEX IF NOT EXISTS idx_orders_hash ON orders(payment_proof_hash)",
@@ -383,7 +394,7 @@ async function ensureSchema(env) {
     return;
   }
   const have = new Map();
-  for (const t of ["discounts", "orders", "products", "categories", "inventory", "order_items", "users", "product_reviews"]) {
+  for (const t of ["discounts", "orders", "products", "categories", "inventory", "order_items", "users", "product_reviews", "checkout_events"]) {
     try {
       have.set(
         t,
@@ -666,7 +677,7 @@ async function audit(env, admin, action, targetType, targetId, details = "") {
     console.error("audit", e);
   }
 }
-async function customerNotify(env, userId, orderId, kind, title, message) {
+async function customerNotify(env, userId, orderId, kind, title, message, status = "") {
   if (!userId) return;
   try {
     await env.DB.prepare(
@@ -676,6 +687,54 @@ async function customerNotify(env, userId, orderId, kind, title, message) {
       .run();
   } catch (e) {
     console.error("notification", e);
+  }
+  await pushToCustomer(env, userId, orderId, kind, status);
+}
+// Short, lock-screen-safe wording (no codes, no amounts) in the order's language. null = no push for this event.
+function orderPushText(lang, num, kind, status) {
+  const ar = lang !== "en";
+  const T = {
+    "payment:paid": [["Payment confirmed", `Order ${num}: we received your payment and are preparing it.`], ["تم تأكيد الدفع", `طلب ${num}: استلمنا الدفع وبنجهّزه.`]],
+    "payment:failed": [["Payment not received", `Order ${num}: we couldn't confirm your payment. Open the order for details.`], ["الدفع ماتأكدش", `طلب ${num}: مقدرناش نتأكد من الدفع. افتح الطلب للتفاصيل.`]],
+    "payment:refunded": [["Refund issued", `Order ${num} was refunded.`], ["تم الاسترداد", `طلب ${num} اتعمله استرداد.`]],
+    "payment:proof_rejected": [["Payment proof needs to be re-sent", `Order ${num}: please upload a clearer screenshot.`], ["محتاجين إثبات الدفع تاني", `طلب ${num}: ابعت سكرين شوت أوضح لو سمحت.`]],
+    "fulfillment:processing": [["Order in progress", `Order ${num} is being prepared.`], ["طلبك قيد التجهيز", `طلب ${num} بيتجهّز دلوقتي.`]],
+    "fulfillment:fulfilled": [["Order delivered", `Order ${num} has been delivered. Open it to see the details.`], ["طلبك اتسلّم", `طلب ${num} اتسلّم. افتحه عشان تشوف التفاصيل.`]],
+    "fulfillment:cancelled": [["Order cancelled", `Order ${num} was cancelled.`], ["الطلب اتلغى", `طلب ${num} اتلغى.`]],
+    "support:": [["New reply from support", `Open order ${num} to read it.`], ["رد جديد من الدعم", `افتح طلب ${num} عشان تقراه.`]],
+  }[`${kind}:${status}`];
+  return T ? T[ar ? 1 : 0] : null;
+}
+// Web push to one customer's devices. Payload-less like the admin push: the service worker asks /api/me/push-latest what to show.
+async function pushToCustomer(env, userId, orderId, kind, status) {
+  if (!pushReady(env) || !userId || !orderId) return;
+  try {
+    const subs = (await env.DB.prepare("SELECT id,endpoint FROM kd_customer_push WHERE user_id=? LIMIT 5").bind(userId).all()).results;
+    if (!subs.length) return;
+    const o = await env.DB.prepare("SELECT order_number,lang FROM orders WHERE id=?").bind(orderId).first();
+    const text = o && orderPushText(o.lang, o.order_number, kind, status);
+    if (!text) return;
+    await env.DB.prepare("DELETE FROM kd_push_outbox WHERE created_at<datetime('now','-1 day')").run();
+    await env.DB.prepare("INSERT INTO kd_push_outbox(user_id,title,body,url) VALUES(?,?,?,'/account')").bind(userId, text[0], text[1]).run();
+    const jwts = new Map();
+    await Promise.all(
+      subs.map(async (sub) => {
+        try {
+          const aud = new URL(sub.endpoint).origin;
+          if (!jwts.has(aud)) jwts.set(aud, await vapidJwt(env, aud));
+          const r = await fetch(sub.endpoint, {
+            method: "POST",
+            headers: { Authorization: `vapid t=${jwts.get(aud)}, k=${env.VAPID_PUBLIC_KEY}`, TTL: "3600", Urgency: "high" },
+          });
+          if (r.status === 404 || r.status === 410)
+            await env.DB.prepare("DELETE FROM kd_customer_push WHERE id=?").bind(sub.id).run();
+        } catch (e) {
+          console.error("push", e);
+        }
+      }),
+    );
+  } catch (e) {
+    console.error("push", e);
   }
 }
 async function productStock(env, p) {
@@ -723,6 +782,16 @@ async function ordersWithCodes(env, where, ...binds) {
           .all()
       ).results
     : [];
+  // The items of each order, so the storefront can offer one-tap "Reorder".
+  const its = orders.length
+    ? (
+        await env.DB.prepare(
+          `SELECT order_id,product_id,variant_id,variant_name,product_name,quantity FROM order_items WHERE order_id IN (${orders.map(() => "?").join(",")}) ORDER BY id`,
+        )
+          .bind(...orders.map((o) => o.id))
+          .all()
+      ).results
+    : [];
   return orders.map(
     ({
       notes,
@@ -741,6 +810,7 @@ async function ordersWithCodes(env, where, ...binds) {
         ...o,
         codes: codes.filter((c) => c.order_id === o.id),
         payment_proof: !!payment_proof_key,
+        items: its.filter((i) => i.order_id === o.id).map(({ order_id, ...i }) => i),
       };
       out.timeline = buildTimeline(out, evs.filter((e) => e.order_id === o.id));
       return out;
@@ -1166,6 +1236,8 @@ async function referralCodeFor(env, userId) {
 const BAD_DISCOUNT =
   "This discount code is invalid, expired, or doesn't apply to your cart.";
 const FIRST_ONLY = "This code is only valid on your first order.";
+const EXPIRED_DISCOUNT = "This discount code has expired.";
+const USED_UP_DISCOUNT = "This discount code has reached its usage limit.";
 const OWN_REFERRAL = "You can't use your own referral code.";
 async function isFirstOrder(env, who) {
   const conds = [],
@@ -1189,11 +1261,12 @@ async function isFirstOrder(env, who) {
 function evalDiscount(d, cart, first) {
   if (d.expires_at) {
     const t = Date.parse(d.expires_at);
-    if (Number.isFinite(t) && t < Date.now()) return { error: BAD_DISCOUNT };
+    if (Number.isFinite(t) && t < Date.now()) return { error: EXPIRED_DISCOUNT };
   }
   if (d.max_uses != null && Number(d.used_count || 0) >= Number(d.max_uses))
-    return { error: BAD_DISCOUNT };
-  if (cart.subtotal < Number(d.min_order || 0)) return { error: BAD_DISCOUNT };
+    return { error: USED_UP_DISCOUNT };
+  if (cart.subtotal < Number(d.min_order || 0))
+    return { error: `This code needs an order of at least ${Number(d.min_order).toFixed(2)} EGP.` };
   let base = 0,
     qty = 0;
   for (const it of cart.normalized) {
@@ -1207,6 +1280,43 @@ function evalDiscount(d, cart, first) {
   if (Number(d.first_order_only) && !first) return { error: FIRST_ONLY };
   const raw = d.type === "fixed" ? Number(d.amount) : (base * Math.min(100, Number(d.amount))) / 100;
   return { discount: money(Math.max(0, Math.min(base, raw))) };
+}
+// ---- automatic bundle discount: no rule to create, no code to type ----
+// Applies when the cart holds several DIFFERENT products. The percentage grows with the number of distinct
+// products (half of the maximum at the minimum, the full maximum one product later), and is then limited by
+// BOTH caps from Settings: a maximum percentage (default 10%) and a maximum amount (default 100 EGP).
+// It also never takes a product below its cost price (when a cost is recorded), so it can't cause a loss.
+const AUTO_BUNDLE_CODE = "AUTO-BUNDLE";
+function autoBundleDiscount(cart, s) {
+  if (s.auto_bundle_enabled === "0") return 0;
+  const maxPct = Math.min(90, Math.max(0, Number(s.auto_bundle_max_percent ?? 10) || 0));
+  const maxEgp = Math.max(0, Number(s.auto_bundle_max_egp ?? 100) || 0);
+  const minProducts = Math.min(10, Math.max(2, Math.floor(Number(s.auto_bundle_min_products)) || 2));
+  const distinct = new Set(cart.normalized.map((x) => x.product_id)).size;
+  if (distinct < minProducts || !(maxPct > 0) || !(maxEgp > 0)) return 0;
+  const pct = maxPct * Math.min(1, (distinct - minProducts + 1) / 2);
+  let headroom = 0;
+  for (const it of cart.normalized) {
+    const p = cart.map.get(it.product_id);
+    const cost = Number(p?.cost_price);
+    headroom +=
+      !it.variant_id && Number.isFinite(cost) && cost > 0
+        ? Math.max(0, it.price - cost) * it.quantity
+        : it.price * it.quantity;
+  }
+  return money(Math.max(0, Math.min((cart.subtotal * pct) / 100, maxEgp, headroom)));
+}
+// The best automatic offer for a cart: admin-made automatic rules and the bundle discount compete, the larger wins (a rule wins a tie).
+function bestAutoOffer(rows, cart, first, s) {
+  let best = { code: null, discount: 0, source: null };
+  for (const d of rows) {
+    if (!Number(d.auto_apply)) continue;
+    const r = evalDiscount(d, cart, first);
+    if (!r.error && r.discount > best.discount) best = { code: d.code, discount: r.discount, source: "auto" };
+  }
+  const bd = autoBundleDiscount(cart, s);
+  if (bd > best.discount) best = { code: AUTO_BUNDLE_CODE, discount: bd, source: "auto_bundle" };
+  return best;
 }
 // `who` = { userId, email, contact }. A coupon the customer typed that is invalid is an error; automatic rules are silent and the larger discount wins (they never stack).
 async function calcDiscount(env, rawCode, cart, who, s) {
@@ -1241,12 +1351,13 @@ async function calcDiscount(env, rawCode, cart, who, s) {
       referrer_id: referrer.id,
     };
   }
-  for (const d of rows) {
-    if (!Number(d.auto_apply) || (coupon && d.id === coupon.id)) continue;
-    const r = evalDiscount(d, cart, first);
-    if (!r.error && r.discount > best.discount)
-      best = { code: d.code, discount: r.discount, source: "auto", referrer_id: null };
-  }
+  const auto = bestAutoOffer(
+    rows.filter((d) => !(coupon && d.id === coupon.id)),
+    cart,
+    first,
+    s,
+  );
+  if (auto.discount > best.discount) best = { ...auto, referrer_id: null };
   return best.discount > 0 ? best : { code: null, discount: 0, source: null, referrer_id: null };
 }
 // Store credit that may be applied to this cart (logged-in customers only).
@@ -1255,6 +1366,84 @@ async function creditFor(env, me, wantCredit, payable) {
   const u = await env.DB.prepare("SELECT credit FROM users WHERE id=?").bind(me.id).first();
   return money(Math.min(Number(u?.credit || 0), payable));
 }
+// ---- cart bundle suggestions: "add X and your automatic discount goes from A to B" ----
+// Every candidate is tried against the same engine that prices the order, so a suggestion is never a promise checkout won't keep.
+async function bundleSuggestions(env, items, who, s) {
+  const cart = await priceCart(env, items, s);
+  if (cart.error) return { discount: 0, code: null, source: null, subtotal: 0, suggestions: [] };
+  const rows = (await env.DB.prepare("SELECT * FROM discounts WHERE active=1 AND auto_apply=1").all()).results;
+  const first = rows.some((d) => Number(d.first_order_only)) ? await isFirstOrder(env, who) : true;
+  const cur = bestAutoOffer(rows, cart, first, s);
+  const out = { discount: cur.discount, code: cur.code, source: cur.source, subtotal: cart.subtotal, suggestions: [] };
+  const maxQty = Math.max(1, Number(s.max_qty) || 10);
+  const inCart = new Set(cart.normalized.map((x) => x.product_id));
+  const cartCats = new Set([...inCart].map((id) => cart.map.get(id)?.category_id).filter((x) => x != null));
+  const co = new Map();
+  try {
+    const r = (
+      await env.DB.prepare(
+        `SELECT oi2.product_id id,COUNT(*) n FROM order_items oi1 JOIN order_items oi2 ON oi2.order_id=oi1.order_id AND oi2.product_id<>oi1.product_id WHERE oi1.product_id IN (${[...inCart].map(() => "?").join(",")}) AND oi2.product_id IS NOT NULL GROUP BY oi2.product_id ORDER BY n DESC LIMIT 30`,
+      )
+        .bind(...inCart)
+        .all()
+    ).results;
+    for (const x of r) co.set(Number(x.id), Number(x.n));
+  } catch {
+    /* suggestions still work without purchase history */
+  }
+  const all = (await productList(env, true)).filter((p) => Number(p.active) === 1);
+  // The unit a suggestion would add: the product itself, or its cheapest option that is in stock.
+  const unitOf = (p) => {
+    const vs = (p.variants || []).filter((v) => Number(v.active) !== 0);
+    const ok = (stock) => p.delivery_type !== "code" || Number(stock) > 0;
+    if (!vs.length) return ok(p.stock) ? { variant: null, price: Number(p.price) } : null;
+    const live = vs.filter((v) => ok(v.stock)).sort((a, b) => Number(a.price) - Number(b.price))[0];
+    return live ? { variant: live, price: Number(live.price) } : null;
+  };
+  const simulate = (p, unit) => {
+    const normalized = cart.normalized.map((x) => ({ ...x }));
+    const vid = unit.variant ? Number(unit.variant.id) : null;
+    const line = normalized.find((x) => x.product_id === p.id && (x.variant_id || null) === vid);
+    if (line) line.quantity += 1;
+    else normalized.push({ product_id: p.id, variant_id: vid, quantity: 1, price: unit.price, variant_name: unit.variant?.name || "" });
+    const map = new Map(cart.map);
+    map.set(p.id, map.get(p.id) || p);
+    return { normalized, map, subtotal: money(cart.subtotal + unit.price) };
+  };
+  const found = [];
+  for (const p of all) {
+    const unit = unitOf(p);
+    if (!unit) continue;
+    const line = cart.normalized.find((x) => x.product_id === p.id);
+    if (line && line.quantity >= maxQty) continue;
+    if (line && p.delivery_type === "code") {
+      const left = unit.variant ? Number(unit.variant.stock) : Number(p.stock);
+      if (line.quantity >= left) continue;
+    }
+    if (line && unit.variant && Number(line.variant_id) !== Number(unit.variant.id)) continue;
+    const sim = simulate(p, unit);
+    const next = bestAutoOffer(rows, sim, first, s);
+    const gain = money(next.discount - cur.discount);
+    if (!(gain > 0)) continue;
+    const rank =
+      (co.get(p.id) || 0) * 10 + (Number(p.featured) ? 3 : 0) + (cartCats.has(p.category_id) ? 2 : 0) + (line ? 1 : 0);
+    found.push({
+      product_id: p.id,
+      variant_id: unit.variant ? Number(unit.variant.id) : null,
+      kind: line ? "more" : "add",
+      price: unit.price,
+      new_discount: next.discount,
+      gain,
+      percent: Math.round((next.discount / sim.subtotal) * 100),
+      source: next.source,
+      rank,
+    });
+  }
+  found.sort((a, b) => b.rank - a.rank || b.gain - a.gain);
+  out.suggestions = found.slice(0, 3).map(({ rank, ...x }) => x);
+  return out;
+}
+let trendingCache = { at: 0, ids: [] };
 // ---- low stock (per-product threshold, falls back to the global one) ----
 async function lowStockList(env, s) {
   const th = Number(s.low_stock_threshold) || 3;
@@ -1615,9 +1804,9 @@ async function applyOrderUpdate(env, ctx, admin, existing, want, origin) {
   }
   await audit(env, admin, "order_update", "order", id, `${existing.payment_status}/${existing.fulfillment_status} -> ${payment}/${fulfill}`);
   if (existing.user_id && payment !== existing.payment_status)
-    await customerNotify(env, existing.user_id, id, "payment", `Payment ${payment}`, `Order ${existing.order_number}: payment status is now ${payment}.`);
+    await customerNotify(env, existing.user_id, id, "payment", `Payment ${payment}`, `Order ${existing.order_number}: payment status is now ${payment}.`, payment);
   if (existing.user_id && fulfill !== existing.fulfillment_status)
-    await customerNotify(env, existing.user_id, id, "fulfillment", `Order ${fulfill}`, `Order ${existing.order_number}: delivery status is now ${fulfill}.${dm ? ` ${dm}` : ""}`);
+    await customerNotify(env, existing.user_id, id, "fulfillment", `Order ${fulfill}`, `Order ${existing.order_number}: delivery status is now ${fulfill}.${dm ? ` ${dm}` : ""}`, fulfill);
   if (fulfill === "fulfilled" && existing.fulfillment_status !== "fulfilled")
     await emailDelivered(env, ctx, order, origin);
   return { ok: true, payment, fulfill };
@@ -1944,6 +2133,48 @@ async function api(req, env, url, ctx) {
       return json({ error: "No order matches those details." }, 404);
     return json(list[0]);
   }
+  if (path === "/api/bundle-suggestions" && method === "POST") {
+    if (!(await throttle(env, `bundle:${ipOf(req)}`, 300)))
+      return json({ error: "Too many attempts. Try again later." }, 429);
+    const b = await readJson(req),
+      s = await allSettings(env);
+    return json(
+      await bundleSuggestions(env, b.items, { userId: me?.id, email: me?.email, contact: b.contact }, s),
+    );
+  }
+  if (path === "/api/trending" && method === "GET") {
+    // Real activity from the last days: product views and cart adds (from checkout_events) plus units sold. Cached 5 minutes per instance.
+    if (Date.now() - trendingCache.at > 300000) {
+      const score = new Map(),
+        add = (id, n) => score.set(Number(id), (score.get(Number(id)) || 0) + n);
+      const ev = (
+        await env.DB.prepare(
+          "SELECT product_id id,SUM(CASE event WHEN 'cart_added' THEN 3 ELSE 1 END) n FROM checkout_events WHERE product_id IS NOT NULL AND event IN ('product_viewed','cart_added') AND created_at>=datetime('now','-7 days') GROUP BY product_id",
+        ).all()
+      ).results;
+      for (const r of ev) add(r.id, Number(r.n));
+      const sold = (
+        await env.DB.prepare(
+          "SELECT oi.product_id id,SUM(oi.quantity) n FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE oi.product_id IS NOT NULL AND o.created_at>=datetime('now','-14 days') AND o.fulfillment_status<>'cancelled' AND o.payment_status NOT IN ('failed','refunded') GROUP BY oi.product_id",
+        ).all()
+      ).results;
+      for (const r of sold) add(r.id, Number(r.n) * 5);
+      const top = [...score.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map((x) => x[0]);
+      const live = top.length
+        ? new Set(
+            (
+              await env.DB.prepare(
+                `SELECT id FROM products WHERE active=1 AND id IN (${top.map(() => "?").join(",")})`,
+              )
+                .bind(...top)
+                .all()
+            ).results.map((r) => Number(r.id)),
+          )
+        : new Set();
+      trendingCache = { at: Date.now(), ids: top.filter((id) => live.has(id)).slice(0, 8) };
+    }
+    return json({ ids: trendingCache.ids });
+  }
   if (path === "/api/discount/check" && method === "POST") {
     const b = await readJson(req),
       s = await allSettings(env);
@@ -2071,7 +2302,7 @@ async function api(req, env, url, ctx) {
       return json({ error: message }, status);
     };
     // Claim one use of the discount atomically so max_uses can't be exceeded. Referral codes have no usage row.
-    if (dc.code && dc.source !== "referral") {
+    if (dc.code && dc.source !== "referral" && dc.source !== "auto_bundle") {
       const u = await env.DB.prepare(
         "UPDATE discounts SET used_count=COALESCE(used_count,0)+1 WHERE code=? AND active=1 AND (max_uses IS NULL OR COALESCE(used_count,0)<max_uses)",
       )
@@ -2247,9 +2478,16 @@ async function api(req, env, url, ctx) {
     if (!(await throttle(env, `event:${key}:${event}`, 20, 3600000)))
       return json({ ok: true });
     await env.DB.prepare(
-      "INSERT INTO checkout_events(event,session_key,order_id) VALUES(?,?,?)",
+      "INSERT INTO checkout_events(event,session_key,order_id,product_id) VALUES(?,?,?,?)",
     )
-      .bind(event, key, event === "checkout_completed" && b.order_id ? Number(b.order_id) : null)
+      .bind(
+        event,
+        key,
+        event === "checkout_completed" && b.order_id ? Number(b.order_id) : null,
+        ["product_viewed", "cart_added"].includes(event) && Number.isInteger(Number(b.product_id)) && Number(b.product_id) > 0
+          ? Number(b.product_id)
+          : null,
+      )
       .run();
     return json({ ok: true });
   }
@@ -2981,7 +3219,7 @@ async function api(req, env, url, ctx) {
       const why = clean(b.reason).slice(0, 300);
       const msg = why ? `Your payment proof for ${existing.order_number} could not be verified: ${why}. Please upload a clear screenshot of the transfer.` : `Your payment proof for ${existing.order_number} could not be verified. Please upload a clear screenshot of the transfer.`;
       await env.DB.prepare("INSERT INTO kd_order_messages(order_id,sender,body,read_by_admin) VALUES(?,'admin',?,1)").bind(id, msg).run();
-      await customerNotify(env, existing.user_id, id, "payment", "Payment proof needs to be re-sent", msg);
+      await customerNotify(env, existing.user_id, id, "payment", "Payment proof needs to be re-sent", msg, "proof_rejected");
       await audit(env, me, "proof_rejected", "order", id, why);
       return json({ ok: true });
     }
@@ -3380,6 +3618,24 @@ async function api(req, env, url, ctx) {
     );
     return json({ ok: true });
   }
+  // Customer order-update push (separate from the admin subscriptions, so admin alerts never reach customers).
+  if (path === "/api/me/push/subscribe" && method === "POST" && me) {
+    const b = await readJson(req),
+      ep = clean(b.endpoint);
+    if (!/^https:\/\//.test(ep) || ep.length > 1000) return json({ error: "Invalid subscription." }, 400);
+    await env.DB.prepare("INSERT INTO kd_customer_push(user_id,endpoint) VALUES(?,?) ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id").bind(me.id, ep).run();
+    await env.DB.prepare("DELETE FROM kd_customer_push WHERE user_id=? AND id NOT IN (SELECT id FROM kd_customer_push WHERE user_id=? ORDER BY id DESC LIMIT 5)").bind(me.id, me.id).run();
+    return json({ ok: true }, 201);
+  }
+  if (path === "/api/me/push/unsubscribe" && method === "POST" && me) {
+    const b = await readJson(req);
+    await env.DB.prepare("DELETE FROM kd_customer_push WHERE endpoint=? AND user_id=?").bind(clean(b.endpoint), me.id).run();
+    return json({ ok: true });
+  }
+  if (path === "/api/me/push-latest" && method === "GET" && me) {
+    const n = await env.DB.prepare("SELECT id,title,body,url FROM kd_push_outbox WHERE user_id=? AND created_at>datetime('now','-2 minutes') ORDER BY id DESC LIMIT 1").bind(me.id).first();
+    return json(n || {});
+  }
   if (path === "/api/notifications" && method === "GET" && me) {
     return json(
       (
@@ -3403,6 +3659,10 @@ async function api(req, env, url, ctx) {
       if (["referral_discount_percent"].includes(key))
         v = String(Math.min(90, Math.max(0, Number(v) || 0)));
       if (["referral_reward"].includes(key)) v = String(Math.max(0, Number(v) || 0));
+      if (key === "auto_bundle_max_percent") v = String(Math.min(90, Math.max(0, Number(v) || 0)));
+      if (key === "auto_bundle_max_egp") v = String(Math.max(0, Number(v) || 0));
+      if (key === "auto_bundle_min_products")
+        v = String(Math.min(10, Math.max(2, Math.floor(Number(v)) || 2)));
       if (key === "usd_exchange_rate") v = String(Math.min(1000, Math.max(0.01, Number(v) || Number(DEFAULTS[key]))));
       if (["backup_keep"].includes(key))
         v = String(Math.min(90, Math.max(1, Math.floor(Number(v)) || 14)));
@@ -3522,7 +3782,7 @@ async function htmlForProduct(env, request, url) {
   await ensureSchema(env);
   const slug = decodeURIComponent(url.pathname.slice(1)).replace(/\/$/, ""),
     p = await env.DB.prepare(
-      "SELECT p.id,p.name,p.name_ar,p.description,p.description_ar,p.image_url,p.price,p.delivery_type,p.slug,c.name category_name FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.slug=? AND p.active=1 LIMIT 1",
+      "SELECT p.id,p.name,p.name_ar,p.description,p.description_ar,p.image_url,p.price,p.delivery_type,p.slug,c.name category_name,c.name_ar category_name_ar,c.slug category_slug FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.slug=? AND p.active=1 LIMIT 1",
     )
       .bind(slug)
       .first();
@@ -3543,10 +3803,29 @@ async function htmlForProduct(env, request, url) {
       clean(p.description) ||
       (ar ? `${name} — منتج رقمي من ${store}.` : `${name} — digital product at ${store}.`),
     short = desc.replace(/\s+/g, " ").slice(0, 300);
-  const vmin = await env.DB.prepare("SELECT MIN(price) mp FROM product_variants WHERE product_id=? AND active=1").bind(p.id).first();
+  const vr = await env.DB.prepare("SELECT MIN(price) mp,MAX(price) xp,COUNT(*) n FROM product_variants WHERE product_id=? AND active=1").bind(p.id).first();
   let inStock = true;
   if (p.delivery_type === "code")
     inStock = Number((await env.DB.prepare("SELECT COUNT(*) n FROM inventory WHERE product_id=? AND status='available'").bind(p.id).first()).n) > 0;
+  // Only real, admin-approved reviews ever reach structured data.
+  let aggregateRating = null;
+  try {
+    const rv = await env.DB.prepare("SELECT COUNT(*) n,AVG(rating) a FROM product_reviews WHERE product_id=? AND approved=1").bind(p.id).first();
+    if (Number(rv?.n) > 0) aggregateRating = { "@type": "AggregateRating", ratingValue: Number(Number(rv.a).toFixed(1)), reviewCount: Number(rv.n), bestRating: 5, worstRating: 1 };
+  } catch {}
+  const currency = clean(s.store_currency) || "EGP",
+    pageUrl = new URL(url.pathname, url.origin).href,
+    availability = inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+    seller = { "@type": "Organization", name: store, url: url.origin },
+    low = String(money(vr?.mp ?? p.price)),
+    offers =
+      Number(vr?.n) > 1 && Number(vr?.xp) > Number(vr?.mp)
+        ? { "@type": "AggregateOffer", url: pageUrl, lowPrice: low, highPrice: String(money(vr.xp)), offerCount: Number(vr.n), priceCurrency: currency, availability, itemCondition: "https://schema.org/NewCondition", seller }
+        : { "@type": "Offer", url: pageUrl, price: low, priceCurrency: currency, availability, itemCondition: "https://schema.org/NewCondition", seller };
+  const catName = p.category_slug ? (ar && clean(p.category_name_ar)) || p.category_name : "";
+  const crumbs = [{ name: ar ? "الرئيسية" : "Home", item: url.origin + "/" }];
+  if (p.category_slug && catName) crumbs.push({ name: catName, item: `${url.origin}/c/${encodeURIComponent(p.category_slug)}` });
+  crumbs.push({ name, item: pageUrl });
   const head = seoHead({
     url,
     lang,
@@ -3554,23 +3833,81 @@ async function htmlForProduct(env, request, url) {
     desc: short,
     image: p.image_url,
     type: "product",
-    extra: jsonLd({
-      "@context": "https://schema.org",
-      "@type": "Product",
-      name,
-      description: short,
-      sku: p.slug,
-      ...(p.image_url ? { image: [new URL(p.image_url, url).href] } : {}),
-      offers: {
-        "@type": "Offer",
-        url: new URL(url.pathname, url.origin).href,
-        price: String(money(vmin?.mp ?? p.price)),
-        priceCurrency: clean(s.store_currency) || "EGP",
-        availability: inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-      },
-    }),
+    extra:
+      jsonLd({
+        "@context": "https://schema.org",
+        "@type": "Product",
+        name,
+        description: short,
+        sku: p.slug,
+        ...(p.image_url ? { image: [new URL(p.image_url, url).href] } : {}),
+        ...(catName ? { category: catName } : {}),
+        offers,
+        ...(aggregateRating ? { aggregateRating } : {}),
+      }) +
+      jsonLd({
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: crumbs.map((c, n) => ({ "@type": "ListItem", position: n + 1, name: c.name, item: c.item })),
+      }),
   });
   return new Response(applySeo(html, { lang, title, desc: short, head }), HTML_HEADERS());
+}
+async function htmlForCategory(env, request, url, slug) {
+  const res = await shellFetch(env, url, request);
+  if (!res.ok) return res;
+  await ensureSchema(env);
+  const html = await res.text(),
+    lang = pageLang(url),
+    ar = lang === "ar",
+    cat = await env.DB.prepare("SELECT id,name,name_ar,slug FROM categories WHERE slug=? LIMIT 1").bind(slug).first(),
+    rows = cat
+      ? (await env.DB.prepare("SELECT name,name_ar,slug,image_url FROM products WHERE category_id=? AND active=1 ORDER BY featured DESC,id DESC LIMIT 100").bind(cat.id).all()).results
+      : [];
+  if (!cat || !rows.length)
+    return new Response(
+      applySeo(html, { lang, title: "Not found", desc: "", head: '<meta name="robots" content="noindex">' }),
+      HTML_HEADERS(404, { "cache-control": "no-store" }),
+    );
+  const s = await allSettings(env),
+    store = s.store_name || "Kardivo",
+    cname = (ar && clean(cat.name_ar)) || cat.name,
+    title = `${cname} | ${store}`,
+    desc = ar
+      ? `تصفّح ${cname} من ${store}: ${rows.length} منتج رقمي وتسليم سريع.`
+      : `Browse ${rows.length} ${cname} products at ${store}. Digital delivery in Egypt.`,
+    pageUrl = `${url.origin}/c/${encodeURIComponent(cat.slug)}`,
+    image = (rows.find((r) => r.image_url) || {}).image_url || "",
+    head = seoHead({
+      url,
+      lang,
+      title,
+      desc,
+      image,
+      type: "website",
+      extra:
+        jsonLd({
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: ar ? "الرئيسية" : "Home", item: url.origin + "/" },
+            { "@type": "ListItem", position: 2, name: cname, item: pageUrl },
+          ],
+        }) +
+        jsonLd({
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          name: cname,
+          url: pageUrl,
+          mainEntity: {
+            "@type": "ItemList",
+            itemListElement: rows.map((r, n) => ({ "@type": "ListItem", position: n + 1, url: `${url.origin}/${encodeURIComponent(r.slug)}`, name: (ar && clean(r.name_ar)) || r.name })),
+          },
+        }),
+    });
+  // The same product links the page shows, for visitors and crawlers without JavaScript.
+  const noscript = `<noscript><main><h1>${htmlEsc(cname)}</h1><ul>${rows.map((r) => `<li><a href="/${encodeURIComponent(r.slug)}">${htmlEsc((ar && clean(r.name_ar)) || r.name)}</a></li>`).join("")}</ul></main></noscript>`;
+  return new Response(applySeo(html, { lang, title, desc, head }).replace(/<\/body>/i, noscript + "</body>"), HTML_HEADERS());
 }
 async function serveMedia(env, key, check) {
   const bucket = bucketOf(env);
@@ -3616,13 +3953,16 @@ export default {
     }
     if (url.pathname === "/robots.txt")
       return new Response(
-        `User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: ${url.origin}/sitemap.xml\n`,
+        `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /cart\nDisallow: /account\nDisallow: /admin\nDisallow: /favorites\nDisallow: /order-confirmed\nSitemap: ${url.origin}/sitemap.xml\n`,
         { headers: { "content-type": "text/plain; charset=utf-8" } },
       );
     if (url.pathname === "/sitemap.xml") {
       await ensureSchema(env);
       const rows = (
         await env.DB.prepare("SELECT slug,updated_at FROM products WHERE active=1 ORDER BY id").all()
+      ).results;
+      const catRows = (
+        await env.DB.prepare("SELECT c.slug slug,MAX(p.updated_at) updated_at FROM categories c JOIN products p ON p.category_id=c.id AND p.active=1 GROUP BY c.id ORDER BY c.id").all()
       ).results;
       const entry = (path, lastmod) => {
         const ar = url.origin + path,
@@ -3632,7 +3972,7 @@ export default {
         return `<url><loc>${htmlEsc(ar)}</loc>${lm}${alt}</url><url><loc>${htmlEsc(en)}</loc>${lm}${alt}</url>`;
       };
       return new Response(
-        `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${entry("/")}${rows.map((p) => entry("/" + encodeURIComponent(p.slug), p.updated_at)).join("")}</urlset>`,
+        `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${entry("/")}${catRows.map((c) => entry("/c/" + encodeURIComponent(c.slug), c.updated_at)).join("")}${rows.map((p) => entry("/" + encodeURIComponent(p.slug), p.updated_at)).join("")}</urlset>`,
         {
           headers: {
             "content-type": "application/xml; charset=utf-8",
@@ -3656,6 +3996,13 @@ export default {
           const html = await shell.text();
           return new Response(applySeo(html, { lang: pageLang(url), title: "Your Account | Kardivo", desc: "Access your Kardivo account and order history." }), HTML_HEADERS());
         }
+        if (pagePath === "/cart" || pagePath === "/favorites" || pagePath === "/admin" || pagePath === "/order-confirmed") {
+          const shell = await shellFetch(env, url, request);
+          if (!shell.ok) return shell;
+          const html = await shell.text();
+          return new Response(applySeo(html, { lang: pageLang(url), title: "Kardivo", desc: "", head: '<meta name="robots" content="noindex,nofollow">' }), HTML_HEADERS(200, { "cache-control": "no-store" }));
+        }
+        if (pagePath.startsWith("/c/")) return await htmlForCategory(env, request, url, decodeURIComponent(pagePath.slice(3)));
         return await htmlForProduct(env, request, url);
       } catch (e) {
         console.error("seo", e);

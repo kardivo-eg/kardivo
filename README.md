@@ -1,3 +1,41 @@
+# Kardivo V40 — Checkout polish: remembered choices, live coupons, copy buttons, proof compression, confirmation page
+
+- **Remembered on this device**: the last payment method used and an optional phone / WhatsApp number are saved in the browser (per signed-in account, key `kardivo_checkout_prefs:<user id>`) and pre-selected next time. The phone number is NOT sent to the server or stored on the order; it only prefills the field and is added to the prefilled WhatsApp "send proof" message.
+- **Live coupon feedback**: the code is checked about 0.65 s after typing stops (one request per code, stale answers are ignored). A valid code shows "Code applied. You save X" and updates the total; a bad code shows the reason under the field and the total goes back to the price without it. The Worker now tells apart *expired*, *usage limit reached* and *minimum order not met* (all three used to say "invalid, expired, or doesn't apply"). Unknown codes and codes that don't fit the cart keep the old message. Arabic included.
+- **Copy buttons**: next to the checkout total, and on the confirmation page for the order number, exact total and payment number. Totals copy as a plain number (`900` or `900.50`, no currency or separators). Works on plain-HTTP/in-app browsers through a fallback, and only says "Copied" if it worked. Delivery codes keep the old behaviour (the value is not echoed in the toast).
+- **Payment proof**: phone screenshots over 400 KB are redrawn as JPEG (longest side 2000 px, quality 0.82) in the browser before upload; GIFs are left alone; HEIC is converted where the browser can decode it. A thumbnail shows the file name and "Reduced from 7.2 MB to 885 KB" with a remove button. Applies to checkout and to the proof upload in the account popup. The 8 MB server limit is unchanged.
+- **Order confirmation page** `/order-confirmed` (replaces the "Order placed" popup; kept in `sessionStorage`, so a refresh keeps it; `noindex`): order number, exact amount and where to pay, estimated wait, next steps, a WhatsApp button prefilled with the order number (amount, method and phone too when no proof has been uploaded yet), and a "Track order" button to /account.
+- **New setting** `order_eta` (+ `order_eta_ar`) in Admin > Settings > Support & footer: the estimated wait shown on the confirmation page. When empty it shows the existing "Usually delivered in 5–15 min after payment confirmed."
+- Also fixed: the "Store credit − 0.00" row (and credit switch) showed in the checkout summary even when hidden.
+- No schema or migration changes. `sw.js` cache v30; `?v=40` on app.js and styles.css. Root-level legacy copies were left alone as before.
+- Not covered by tests here: a real Cloudflare Worker with D1/R2. The frontend was exercised in Chromium against a mocked API (EN/AR, phone viewport, secure and non-secure context) and `evalDiscount` was run directly. Verify on staging: place an order with a coupon, with and without a proof, then open /order-confirmed after a refresh.
+- Rate limit note: `/api/discount/check` allows 60 requests per IP per 15 minutes. Live checking adds about one request per code typed, which is fine for single users but worth watching for customers behind shared mobile IPs.
+
+---
+
+# Kardivo V39 — Quick view, savings badges, trending search, cart bundles, save for later, reorder
+
+- **Quick view**: eye button on every product card opens a small dialog with price, options (denominations), stock and Add to cart, without leaving the grid.
+- **Savings badge**: cards with an old price show "Save 15%" (or "Save 50 EGP" when the amount reads bigger) plus a "You save X" line. Arabic included.
+- **Search chips**: under the search box before typing: recent searches (with Clear) and **Trending now**, built from real views, cart adds and sales of the last days. Falls back to featured products/categories until there is activity.
+- **Cart bundle suggestions**: "Add X, your discount becomes Y". Each suggestion is tested against the same engine that prices the order. The cart also shows the automatic discount and an estimated total.
+- **Automatic bundles (no rule to create)**: a cart with 2+ different products gets a discount automatically: half of the maximum with 2 products, the full maximum with 3+. Capped by BOTH Settings > Growth: maximum % (default 10) and maximum amount (default 100 EGP), and never below a product's cost price when one is recorded. An automatic offer you create yourself still wins if it gives more. Switch off or change in Admin > Settings > Growth & email.
+- **Save for later**: moves a cart item to favorites; a "Saved for later" strip under the cart brings it back.
+- **Reorder**: button in Account > order history; puts the items back in the cart using current stock and options.
+- Schema version 15 adds one nullable column (`checkout_events.product_id`) and four settings; no existing data is touched.
+
+---
+
+# Kardivo V35 — Customer order push + "Message us about this order"
+
+- Customers can turn on **order notifications** on /account. They get a push when payment is confirmed, the order is in progress, delivered, cancelled, refunded, when a payment proof must be re-sent, and when support replies. Texts follow the order's language and never include codes or amounts. Needs the existing VAPID keys (`node scripts/generate-vapid.mjs`).
+- Customer subscriptions live in their own table (`kd_customer_push`), separate from the admin ones, so admin alerts never reach customers. Schema version 14 creates the tables automatically on first request.
+- **Message us about this order**: a WhatsApp link with the order number prefilled, in the order history on /account and in the account popup. It uses the "WhatsApp number" setting and is hidden when that is empty.
+- Restored `orderBlock()` in `public/app.js`; the account popup referenced it but it only existed in the old root `app.js`.
+- Automatic WhatsApp status messages are NOT included: that needs the WhatsApp Business Cloud API (Meta account, approved message templates, an access-token secret).
+
+---
+
 # Kardivo V14 — Hero, Checkout & Currency Correction
 
 - Removed the floating product cards from the hero; the original logo asset remains intact and fully opaque.
@@ -192,3 +230,17 @@ The Worker creates only additive compatibility tables/columns at runtime. It doe
 
 ### Data-safety guarantee
 No DROP/TRUNCATE/reset/mass migration is included. Existing `schema.sql` and `wrangler.toml` remain unchanged. The Worker only creates additive support tables (`variant_sources`, `audit_logs`, `checkout_events`, `product_reviews`, `customer_notifications`) when they do not exist. Existing products, inventory codes, orders, customers, discounts and settings are not automatically modified.
+
+## V37 notes: discovery and SEO
+- Category landing pages live at `/c/<category-slug>` (server-rendered title, description, canonical, hreflang, BreadcrumbList and ItemList JSON-LD). They are in `sitemap.xml`, and the home category cards link to them.
+- Product JSON-LD now has AggregateOffer for multi-variant products, itemCondition, seller, category, a BreadcrumbList, and an AggregateRating built only from approved reviews.
+- `/cart`, `/favorites` and `/admin` are `noindex` and disallowed in robots.txt.
+- Search folds Arabic spelling variants, matches Arabic and English names, tolerates small typos, and shows recent and popular searches (popular = featured products and the biggest categories, not analytics).
+- "Recently viewed" and "You may also like" also appear on the home page once the visitor has opened a product.
+
+## V38 notes: accessibility
+- Light theme: every text colour now meets 4.5:1 (greys, greens and ambers darkened), the brand purple is darker in light mode so white text on buttons/badges passes, and the focus ring is darker.
+- `.sale` badge, red count badge and add-to-cart hover use purples/reds that keep white text above 4.5:1 in both themes.
+- Live regions: `#toast` is `role="status"`, and a hidden `#a11yLive` announces cart count and quantity changes. Focus stays on the quantity button after a change.
+- Modals are `role="dialog"` with a labelled close button, focus moved in and restored, and Tab trapped inside.
+- Hearts have a 44px hit area; quantity buttons, add buttons, chips and close buttons are at least 44px on touch screens. Star ratings read as "N out of 5 stars".

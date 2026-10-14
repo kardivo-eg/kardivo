@@ -1,5 +1,5 @@
 // Kardivo service worker: installable shell, offline fallback, and admin push notifications.
-const CACHE = "kardivo-shell-v20";
+const CACHE = "kardivo-shell-v30";
 const SHELL = ["/offline.html", "/icons/icon-192.png"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -18,7 +18,18 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET" || url.origin !== location.origin) return;
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/media/")) return; // never cache data
   if (req.mode === "navigate") {
-    e.respondWith(fetch(req).catch(() => caches.match("/offline.html")));
+    // Network-first. Remember the SPA shell so the cart still opens offline; offline.html is the last resort.
+    e.respondWith(
+      fetch(req)
+        .then((r) => {
+          if (r.ok && url.pathname === "/") {
+            const copy = r.clone();
+            caches.open(CACHE).then((c) => c.put("/", copy));
+          }
+          return r;
+        })
+        .catch(async () => (url.pathname.startsWith("/admin") ? null : await caches.match("/")) || caches.match("/offline.html")),
+    );
     return;
   }
   if (/\.(css|js|png|svg|webmanifest)$/.test(url.pathname)) {
@@ -38,21 +49,24 @@ self.addEventListener("fetch", (e) => {
     );
   }
 });
-// The push carries no payload. Ask the server what happened (works because the admin is logged in on this device).
+// Pushes carry no payload; ask the server what happened. A customer's order update (last 2 minutes) wins;
+// otherwise this is an admin alert (works because the admin is logged in on this device).
 self.addEventListener("push", (e) => {
-  e.waitUntil(
-    fetch("/api/admin/push-latest", { credentials: "include" })
+  const get = (u) =>
+    fetch(u, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : {}))
-      .catch(() => ({}))
-      .then((a) =>
-        self.registration.showNotification(a.title || "Kardivo", {
-          body: a.body || "New activity in your store.",
-          icon: "/icons/icon-192.png",
-          badge: "/icons/icon-192.png",
-          tag: a.id ? "kardivo-" + a.id : "kardivo",
-          data: { url: a.url || "/" },
-        }),
-      ),
+      .catch(() => ({}));
+  e.waitUntil(
+    Promise.all([get("/api/me/push-latest"), get("/api/admin/push-latest")]).then(([mine, adm]) => {
+      const n = mine && mine.id ? { ...mine, tag: "kardivo-order-" + mine.id } : adm && adm.id ? { ...adm, tag: "kardivo-" + adm.id } : null;
+      return self.registration.showNotification(n ? n.title : "Kardivo", {
+        body: n ? n.body || "" : "You have a new update.",
+        icon: "/icons/icon-192.png",
+        badge: "/icons/icon-192.png",
+        tag: n ? n.tag : "kardivo",
+        data: { url: (n && n.url) || "/" },
+      });
+    }),
   );
 });
 self.addEventListener("notificationclick", (e) => {
