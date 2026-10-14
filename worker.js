@@ -3523,6 +3523,52 @@ async function api(req, env, url, ctx) {
       daily: daily.map((d) => ({ date: d.d, revenue: money(d.revenue), orders: Number(d.orders) })),
     });
   }
+  if (path === "/api/admin/email-test" && method === "POST") {
+    // Diagnostic: shows what the live worker sees and sends one test email, returning the provider's own error text.
+    const b = await readJson(req),
+      to = clean(b.to).toLowerCase(),
+      provider = env.RESEND_API_KEY ? "resend" : env.MAILGUN_API_KEY && env.MAILGUN_DOMAIN ? "mailgun" : "none",
+      config = {
+        email_from: !!clean(env.EMAIL_FROM),
+        email_from_value: clean(env.EMAIL_FROM) || null,
+        resend_key: !!env.RESEND_API_KEY,
+        mailgun_key: !!env.MAILGUN_API_KEY,
+        mailgun_domain: !!env.MAILGUN_DOMAIN,
+        provider,
+        ready: emailReady(env),
+      };
+    if (!looksEmail(to)) return json({ ok: false, config, error: "Enter a valid email address to send the test to." });
+    if (!config.ready) {
+      const missing = [];
+      if (!config.email_from) missing.push("EMAIL_FROM (set in wrangler.toml [vars], then redeploy)");
+      if (provider === "none") missing.push("RESEND_API_KEY secret (or the Mailgun key + domain)");
+      return json({ ok: false, config, error: "Not configured. Missing: " + missing.join("; ") });
+    }
+    try {
+      let r;
+      const subject = "Kardivo email test",
+        text = "This is a test email from your Kardivo store. If you can read this, email sending works.";
+      if (provider === "resend")
+        r = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
+          body: JSON.stringify({ from: env.EMAIL_FROM, to: [to], subject, text }),
+        });
+      else {
+        const host = String(env.MAILGUN_REGION || "").toLowerCase() === "eu" ? "api.eu.mailgun.net" : "api.mailgun.net";
+        r = await fetch(`https://${host}/v3/${env.MAILGUN_DOMAIN}/messages`, {
+          method: "POST",
+          headers: { authorization: "Basic " + btoa("api:" + env.MAILGUN_API_KEY) },
+          body: new URLSearchParams({ from: env.EMAIL_FROM, to, subject, text }),
+        });
+      }
+      const detail = (await r.text()).slice(0, 400);
+      await audit(env, me, "email_test", "email", null, `${provider} ${r.status}`);
+      return json({ ok: r.ok, status: r.status, provider, config, detail });
+    } catch (e) {
+      return json({ ok: false, config, error: "Could not reach the email provider: " + String(e && e.message || e) });
+    }
+  }
   if (path === "/api/admin/backups" && method === "GET") {
     const bucket = bucketOf(env);
     if (!bucket) return json({ configured: false, backups: [] });

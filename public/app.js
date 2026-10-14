@@ -2542,7 +2542,8 @@ async function adminDashboard(main) {
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Top products & profit</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Units</th><th>Revenue</th><th>Cost</th><th>Profit</th></tr></thead><tbody>${r.products.map((p) => `<tr><td>${escapeHTML(p.name)}</td><td>${p.units}</td><td>${money(p.revenue)}</td><td>${p.cost == null ? "—" : money(p.cost)}</td><td>${p.profit == null ? "—" : money(p.profit)}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">No sales yet.</td></tr>`}</tbody></table></div></div>
   ${d.low_stock.length ? `<div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Low stock</h3></div><div class="modal-body">${d.low_stock.map((x) => `<div class="line"><span>${escapeHTML(x.name)}${x.variant_name ? " — " + escapeHTML(x.variant_name) : ""}</span><b>${x.stock} left <small>(alert at ${x.threshold ?? "default"})</small></b></div>`).join("")}</div></div>` : ""}
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Automatic jobs</h3></div><div class="modal-body">${(d.jobs || []).map((j) => `<div class="line"><span>${escapeHTML(JOB_NAMES[j.job] || j.job)}</span><span><span class="tag ${j.ok ? "green" : "red"}">${j.ok ? "OK" : "FAILED"}</span> <small>${escapeHTML(fmtTime(j.ran_at))} ${escapeHTML(j.detail || "")}</small></span></div>`).join("") || `<small>No scheduled run recorded yet. Jobs run from the Cloudflare cron trigger in wrangler.toml.</small>`}<div class="modal-actions"><button class="btn ghost" id="cleanupReservations">Release expired reservations now</button><button class="btn ghost" id="sendLowStock">Send low-stock alert now</button></div></div></div>
-  <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Database backups</h3></div><div class="modal-body">${bk.configured ? `<div class="modal-actions" style="margin:0 0 8px"><button class="btn ghost" id="runBackup">Back up now</button></div>${bk.backups.map((b) => `<div class="line"><span><code>${escapeHTML(b.key.slice(8))}</code> <small>${fmtBytes(b.size)}</small></span><a class="mini" href="/api/admin/backups/download?key=${encodeURIComponent(b.key)}">Download</a></div>`).join("") || `<small>No backups yet.</small>`}` : `<small>No R2 bucket is bound, so backups are unavailable.</small>`}</div></div>`;
+  <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Database backups</h3></div><div class="modal-body">${bk.configured ? `<div class="modal-actions" style="margin:0 0 8px"><button class="btn ghost" id="runBackup">Back up now</button></div>${bk.backups.map((b) => `<div class="line"><span><code>${escapeHTML(b.key.slice(8))}</code> <small>${fmtBytes(b.size)}</small></span><a class="mini" href="/api/admin/backups/download?key=${encodeURIComponent(b.key)}">Download</a></div>`).join("") || `<small>No backups yet.</small>`}` : `<small>No R2 bucket is bound, so backups are unavailable.</small>`}</div></div>
+  <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Email check</h3></div><div class="modal-body"><small>Sends a real test email and shows exactly what the provider answers.</small><div class="modal-actions" style="margin:8px 0"><input id="emailTestTo" type="email" placeholder="you@example.com" style="flex:1;min-width:180px"><button class="btn ghost" id="emailTestBtn">Send test</button></div><pre id="emailTestOut" style="white-space:pre-wrap;font-size:12px;margin:0"></pre></div></div>`;
   $("#repDays").onchange = (e) => {
     state.admin.days = Number(e.target.value);
     renderAdminTab();
@@ -2571,6 +2572,23 @@ async function adminDashboard(main) {
   act("#cleanupReservations", "/api/admin/maintenance/cleanup", (x) => `Expired ${x.expired} reservation(s).`);
   act("#sendLowStock", "/api/admin/low-stock/notify", (x) => `Low-stock alert sent for ${x.count} product(s).`);
   act("#runBackup", "/api/admin/backups/run", (x) => `Backup saved (${x.rows} rows).`);
+  $("#emailTestBtn")?.addEventListener("click", async (e) => {
+    const out = $("#emailTestOut"), btn = e.currentTarget;
+    btn.disabled = true;
+    out.textContent = "Sending...";
+    try {
+      const r = await api("/api/admin/email-test", { method: "POST", body: JSON.stringify({ to: $("#emailTestTo").value }) });
+      const c = r.config || {};
+      out.textContent =
+        `Sender (EMAIL_FROM): ${c.email_from ? c.email_from_value : "NOT SET"}\n` +
+        `Provider: ${c.provider}  (Resend key: ${c.resend_key ? "yes" : "no"})\n` +
+        (r.error ? `Result: ${r.error}` : `Result: ${r.ok ? "SENT" : "FAILED"} (HTTP ${r.status})\n${r.detail || ""}`);
+    } catch (err) {
+      out.textContent = "Request failed: " + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
 }
 function waLink(contact, text) {
   let d = String(contact || "").replace(/[^\d+]/g, "");
