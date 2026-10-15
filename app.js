@@ -649,9 +649,59 @@ const KD_ACCENT_NEUTRAL = {primary:"#827b91",secondary:"#a39aae",tertiary:"#5b53
 function kdAccentMarkup(p){return `data-product-accent="${Number(p?.id)||0}"`;}
 function kdHex(rgb){return "#"+rgb.map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,"0")).join("");}
 function kdRgbDistance(a,b){return Math.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2);}
-function kdSamplePalette(url){
- if(kdAccentCache.has(url))return kdAccentCache.get(url);
- const task=new Promise(resolve=>{const img=new Image();img.onload=()=>{try{const c=document.createElement("canvas"),ctx=c.getContext("2d",{willReadFrequently:true});if(!ctx)throw 0;c.width=c.height=64;ctx.drawImage(img,0,0,64,64);const px=ctx.getImageData(0,0,64,64).data,bins=new Map();let valid=0,chroma=0;for(let i=0;i<px.length;i+=4){if(px[i+3]<150)continue;const rgb=[px[i],px[i+1],px[i+2]],mx=Math.max(...rgb),mn=Math.min(...rgb),sat=mx?(mx-mn)/mx:0;valid++;if(sat>=.16)chroma++;const q=rgb.map(v=>Math.min(255,Math.round(v/16)*16)),key=q.join(","),b=bins.get(key)||{rgb:q,count:0,satSum:0};b.count++;b.satSum+=sat;bins.set(key,b);}if(!valid)throw 0;const all=[...bins.values()].map(b=>({...b,sat:b.satSum/b.count})),colorful=all.filter(b=>b.sat>=.16),useColor=chroma/valid>=.035&&colorful.length>0,rank=(useColor?colorful:all).map(b=>({...b,score:b.count*(1+b.sat*2.25)})).sort((a,b)=>b.score-a.score),chosen=[];for(const b of rank){if(!chosen.length||chosen.every(x=>kdRgbDistance(x.rgb,b.rgb)>48))chosen.push(b);if(chosen.length===3)break;}if(!chosen.length)throw 0;const a=chosen[0].rgb,b=chosen[1]?.rgb||(useColor?a.map(v=>v*.78+Math.max(...a)*.22):a.map(v=>v*.72+255*.28)),d=chosen[2]?.rgb||(useColor?a.map(v=>v*.72):a.map(v=>v*.55));resolve({primary:kdHex(a),secondary:kdHex(b),tertiary:kdHex(d)});}catch{resolve(null);}};img.onerror=()=>resolve(null);img.src=url.startsWith("/")?url:(/^https:\/\//i.test(url)?"/api/palette-image?url="+encodeURIComponent(url):url);});kdAccentCache.set(url,task);return task;
+function kdSamplePalette(url) {
+  if (kdAccentCache.has(url)) return kdAccentCache.get(imageUrl);
+  const task = new Promise(resolve => {
+    const img = new Image();
+    if (!url.startsWith("/")) img.crossOrigin = "anonymous";
+    img.decoding = "async";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", {willReadFrequently:true});
+        if (!ctx) throw new Error("Canvas unavailable");
+        canvas.width = canvas.height = 72;
+        ctx.drawImage(img, 0, 0, 72, 72);
+        const px = ctx.getImageData(0, 0, 72, 72).data;
+        const bins = new Map(); let valid = 0, chromaticPixels = 0;
+        for (let i=0; i<px.length; i+=4) {
+          if (px[i+3] < 150) continue;
+          const rgb=[px[i],px[i+1],px[i+2]], mx=Math.max(...rgb), mn=Math.min(...rgb);
+          if (mx < 12) continue;
+          const sat = mx ? (mx-mn)/mx : 0;
+          // Ignore near-white background pixels, but keep dark saturated artwork.
+          if (mx > 247 && mn > 226 && sat < .14) continue;
+          valid++;
+          if (sat >= .13 && mx-mn >= 24) chromaticPixels++;
+          // Fine quantization preserves more of the artwork's actual hues.
+          const q=rgb.map(v=>Math.min(255,Math.round(v/12)*12)), key=q.join(",");
+          const b=bins.get(key)||{rgb:q,count:0,satSum:0};
+          b.count++; b.satSum+=sat; bins.set(key,b);
+        }
+        if (!valid || !bins.size) throw new Error("No usable pixels");
+        const all=[...bins.values()].map(b=>({...b,sat:b.satSum/b.count}));
+        // If the image contains real color, rank chromatic bins separately so a gray
+        // background cannot outvote the colored product art. Monochrome art stays neutral.
+        const useColor = chromaticPixels / valid >= .012;
+        const candidates = useColor ? all.filter(b=>b.sat >= .13 && Math.max(...b.rgb)-Math.min(...b.rgb) >= 24) : all;
+        const ranked=candidates.map(b=>({...b,score:b.count*(.45+b.sat*4.2)*(b.sat>=.13?1.35:1)})).sort((a,b)=>b.score-a.score);
+        const chosen=[];
+        for (const c of ranked) {
+          if (!chosen.length || chosen.every(x=>kdRgbDistance(x.rgb,c.rgb)>42)) chosen.push(c);
+          if (chosen.length===3) break;
+        }
+        if (!chosen.length) throw new Error("No palette candidates");
+        const a=chosen[0].rgb;
+        const b=chosen[1]?.rgb || (useColor ? a.map(v=>v*.76+Math.max(...a)*.24) : a.map(v=>v*.72+255*.28));
+        const c=chosen[2]?.rgb || (useColor ? a.map(v=>v*.68) : a.map(v=>v*.55));
+        resolve({primary:kdHex(a),secondary:kdHex(b),tertiary:kdHex(c)});
+      } catch { resolve(null); }
+    };
+    img.onerror=()=>resolve(null);
+    img.src=url.startsWith("/")?url:(/^https:\/\//i.test(url)?"/api/palette-image?url="+encodeURIComponent(url):url);
+  });
+  kdAccentCache.set(url,task);
+  return task;
 }
 async function kdAccentPalette(p){for(const url of [p?.image_url,...(p?.images||[]),...(p?.gallery||[])].filter(x=>typeof x==="string"&&(/^(https?:\/\/|\/)/i).test(x))){const v=await kdSamplePalette(url);if(v)return v;}return KD_ACCENT_NEUTRAL;}
 async function kdApplyProductAccents(root=document){for(const el of (root.querySelectorAll?root.querySelectorAll("[data-product-accent]"):[])){if(el.dataset.accentReady==="1")continue;const p=(state.products||[]).find(x=>Number(x.id)===Number(el.dataset.productAccent));if(!p)continue;el.dataset.accentReady="1";const c=await kdAccentPalette(p);if(!el.isConnected)continue;el.style.setProperty("--product-accent",c.primary);el.style.setProperty("--product-accent-2",c.secondary);el.style.setProperty("--product-accent-3",c.tertiary);el.style.setProperty("--product-accent-glow",`color-mix(in srgb,${c.primary} 48%,transparent)`);el.classList.add("has-product-accent");}}

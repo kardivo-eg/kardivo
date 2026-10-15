@@ -1654,45 +1654,55 @@ function kdSamplePalette(imageUrl) {
   if (kdAccentCache.has(imageUrl)) return kdAccentCache.get(imageUrl);
   const task = new Promise(resolve => {
     const img = new Image();
-    // Preserve the original V63 loading path: do not route every remote image through
-    // a restrictive proxy host allowlist. Same-origin uploads and CORS-enabled CDNs work.
     if (!imageUrl.startsWith("/")) img.crossOrigin = "anonymous";
     img.decoding = "async";
     img.onload = () => {
       try {
-        const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d", {willReadFrequently:true});
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", {willReadFrequently:true});
         if (!ctx) throw new Error("Canvas unavailable");
-        const size=56; canvas.width=size; canvas.height=size;
-        ctx.drawImage(img,0,0,size,size);
-        const pixels=ctx.getImageData(0,0,size,size).data, bins=new Map();
-        // Restore the earlier working multi-colour ranking; do not force neutral colours.
-        for(let i=0;i<pixels.length;i+=4){
-          const a=pixels[i+3]; if(a<150) continue;
-          const rgb=[pixels[i],pixels[i+1],pixels[i+2]], max=Math.max(...rgb), min=Math.min(...rgb), sat=max ? (max-min)/max : 0;
-          if(max>248 && min>228) continue;
-          if(max<22) continue;
-          const q=rgb.map(v=>Math.min(255,Math.round(v/24)*24)), key=q.join(",");
-          const lum=(0.2126*q[0]+0.7152*q[1]+0.0722*q[2])/255;
-          const weight=1 + sat*1.8 + (lum>.12 && lum<.88 ? .25 : 0);
-          const b=bins.get(key)||{rgb:q,count:0,weight:0,sat:0}; b.count++; b.weight+=weight; b.sat+=sat; bins.set(key,b);
+        canvas.width = canvas.height = 72;
+        ctx.drawImage(img, 0, 0, 72, 72);
+        const px = ctx.getImageData(0, 0, 72, 72).data;
+        const bins = new Map(); let valid = 0, chromaticPixels = 0;
+        for (let i=0; i<px.length; i+=4) {
+          if (px[i+3] < 150) continue;
+          const rgb=[px[i],px[i+1],px[i+2]], mx=Math.max(...rgb), mn=Math.min(...rgb);
+          if (mx < 12) continue;
+          const sat = mx ? (mx-mn)/mx : 0;
+          // Ignore near-white background pixels, but keep dark saturated artwork.
+          if (mx > 247 && mn > 226 && sat < .14) continue;
+          valid++;
+          if (sat >= .13 && mx-mn >= 24) chromaticPixels++;
+          // Fine quantization preserves more of the artwork's actual hues.
+          const q=rgb.map(v=>Math.min(255,Math.round(v/12)*12)), key=q.join(",");
+          const b=bins.get(key)||{rgb:q,count:0,satSum:0};
+          b.count++; b.satSum+=sat; bins.set(key,b);
         }
-        const ranked=[...bins.values()].map(b=>({...b,score:b.weight*(.62+Math.min(1,b.sat/Math.max(1,b.count))*.65)})).sort((a,b)=>b.score-a.score);
+        if (!valid || !bins.size) throw new Error("No usable pixels");
+        const all=[...bins.values()].map(b=>({...b,sat:b.satSum/b.count}));
+        // If the image contains real color, rank chromatic bins separately so a gray
+        // background cannot outvote the colored product art. Monochrome art stays neutral.
+        const useColor = chromaticPixels / valid >= .012;
+        const candidates = useColor ? all.filter(b=>b.sat >= .13 && Math.max(...b.rgb)-Math.min(...b.rgb) >= 24) : all;
+        const ranked=candidates.map(b=>({...b,score:b.count*(.45+b.sat*4.2)*(b.sat>=.13?1.35:1)})).sort((a,b)=>b.score-a.score);
         const chosen=[];
-        for(const candidate of ranked){
-          if(!chosen.length || chosen.every(c=>kdRgbDistance(c.rgb,candidate.rgb)>62)) chosen.push(candidate);
-          if(chosen.length===3) break;
+        for (const c of ranked) {
+          if (!chosen.length || chosen.every(x=>kdRgbDistance(x.rgb,c.rgb)>42)) chosen.push(c);
+          if (chosen.length===3) break;
         }
-        if(!chosen.length) throw new Error("No usable colours");
-        const first=chosen[0].rgb;
-        const second=chosen[1]?.rgb || first.map(v=>v*.72+255*.28);
-        const third=chosen[2]?.rgb || first.map(v=>v*.55);
-        resolve({primary:kdHex(first),secondary:kdHex(second),tertiary:kdHex(third)});
+        if (!chosen.length) throw new Error("No palette candidates");
+        const a=chosen[0].rgb;
+        const b=chosen[1]?.rgb || (useColor ? a.map(v=>v*.76+Math.max(...a)*.24) : a.map(v=>v*.72+255*.28));
+        const c=chosen[2]?.rgb || (useColor ? a.map(v=>v*.68) : a.map(v=>v*.55));
+        resolve({primary:kdHex(a),secondary:kdHex(b),tertiary:kdHex(c)});
       } catch { resolve(null); }
     };
     img.onerror=()=>resolve(null);
     img.src=imageUrl;
   });
-  kdAccentCache.set(imageUrl,task); return task;
+  kdAccentCache.set(imageUrl,task);
+  return task;
 }
 async function kdAccentPalette(p) {
   const urls=kdAccentImages(p);
