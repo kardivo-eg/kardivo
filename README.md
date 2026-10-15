@@ -1,3 +1,18 @@
+# Kardivo V61 — "Feel" upgrades, hero lights removed
+
+- **Removed**: the V59 string of lights over the hero (code and CSS). The sparkles on the hero picture, the category ticker, the glow and the particles are untouched.
+- **Page transitions** (View Transitions API): home, product, cart, category, favorites and confirmation cross-fade; header, tab bar and toast stay put. Tapping a product card makes its picture grow into the product page (the product page shows the card picture instantly while the details load). Browsers without the API, and people who ask for reduced motion, get the old behaviour. Account/admin routes are left as before. The browser Back button is not animated on purpose (it avoids a double animation with iOS swipe-back).
+- **Haptics and sound**: a short vibration on add-to-cart, favourite and order placed; an optional soft tone (off by default). Two small toggles in the footer (Haptics / Sound), saved in `localStorage` (`kardivo_fx`). Android/Chrome uses `navigator.vibrate`. iOS Safari has no vibrate API, so a hidden `<input type="checkbox" switch>` is toggled for a light tick (iOS 17.4+, best effort, untested on a real iPhone).
+- **Order-placed celebration**: purple/gold confetti and sparkles plus an animated check on the confirmation screen, once per order (a refresh does not replay it). Off for reduced motion and data-saver.
+- **Swipe gestures (touch only)**: swipe a cart item left or right to remove it (with an **Undo** toast); drag-down handle on bottom sheets (drag the handle or the title bar). Product photos already swipe (scroll-snap) and are unchanged.
+- **Skeletons**: popular products, category page and favorites while loading; the cart's "complete your bundle" box (only if the answer takes over 350 ms, so it never flickers); the account orders list; card, cart and saved-item pictures now fade in over a shimmer.
+- New code is the "V61 FEEL LAYER" block at the end of `public/app.js` and `public/styles.css`. Small hooks were added to `navigate`, `route`, `addToCart`, `toggleFavorite`, `renderCartPage`, `renderOrderConfirmed`, `openModal`, `showBootSkeleton`, `loadCartBundles`.
+- No server, schema or API changes. `sw.js` cache v38, `app.js?v=54`, `styles.css?v=47`.
+- Tested in headless Chromium against a mocked API (44 checks: transitions used, no leftover transition names, vibrate calls, toggle, confetti paints and cleans up, no replay, reduced motion, boot skeletons, touch swipe short/long/vertical, undo, sheet drag small/large, no JS errors). Not tested: real iPhone/Android hardware (haptics, sound, swipe feel), Safari, real Cloudflare.
+- Note: the files in the project root (`app.js`, `styles.css`, `index.html`, `sw.js`) are older copies; the live site serves `public/` (see `wrangler.toml`), and only `public/` was changed.
+
+---
+
 # Kardivo V57 — Flash-sale countdown + richer WhatsApp sharing
 
 - **Flash-sale countdown (display only)**: Admin > Settings > "Flash-sale countdown". Set "Sale ends at" (your local time), a label (Arabic version in the Arabic section), and whether to show it on the homepage campaign banner and on product pages. A product page shows the timer only when the selected option has an old (crossed-out) price, and it follows the option picker. Empty date = no countdown. **Prices never change when the sale ends**: the timer just disappears, so remove the old prices yourself afterwards (Bulk edit > price % helps).
@@ -337,3 +352,14 @@ Visual only (no order, price, payment or API code touched). CSS is the last bloc
 - Phones (<=700px): dialogs are bottom sheets, category and filter chips are single-row swipe lists, 44px touch targets, 16px inputs (no focus zoom), full-width hero buttons, press feedback on touch, no text selection or long-press callout on UI chrome (inputs and delivered codes stay selectable).
 - To allow zoom again, restore the old viewport meta and delete the V60 blocks in `styles.css` and `app.js`.
 - Asset versions: `styles.css?v=46`, `app.js?v=53`.
+
+
+## V63 — Per-product image-reactive accent glow
+
+- Product image palettes are sampled into three separated colours (primary, secondary, tertiary) and cached by image URL.
+- The same palette is applied across product cards, featured/popular placements, favorites, search suggestions, quick view, cart, saved-for-later, bundles and product detail views.
+- Multi-layer ambient gradients create an RGB-backlight effect while keeping the site's global purple branding on non-product UI.
+- Product uploads served from the same origin can be sampled directly. Third-party image hosts must permit canvas CORS; if they block it, the frontend intentionally uses a neutral fallback instead of falsely tinting the product purple.
+- Static asset versions and service-worker cache version were bumped to prevent stale CSS/JS from hiding the update.
+
+Validation: `node --check public/app.js` and `node --check app.js`. Live Cloudflare Worker/D1/R2 deployment and real product-image CORS behavior still require staging verification.

@@ -376,6 +376,7 @@ async function toggleFavorite(id) {
   id = Number(id);
   if (!id) return;
   const had = isFavorite(id);
+  window.kdFx?.fav(!had);
   state.favorites = had ? state.favorites.filter(x => x !== id) : [...state.favorites, id];
   saveFavorites();
   if (state.user) {
@@ -398,7 +399,7 @@ function renderFavoritesPage() {
   document.body.classList.remove("product-route"); document.body.classList.add("account-route");
   const products = state.favorites.map(id => state.products.find(p => Number(p.id) === Number(id))).filter(Boolean);
   const guestNote = !state.user ? `<div class="notice favorite-account-note"><b>${t("Sign in to save your favorites to your account.")}</b><p>${t("You must sign in to sync favorites across devices.")}</p><button class="btn primary" id="favoritesLogin">${t("Log in")}</button></div>` : `<div class="notice favorite-account-note">${t("Saved to your account")}</div>`;
-  $("main").innerHTML = `<section class="collection-page container"><div class="collection-hero"><div><span class="eyebrow">KARDIVO · ${t("Favorites")}</span><h1>${t("Your favorites")}</h1><p>${t("Your saved products")}</p></div><a class="btn ghost" href="/#store" data-collection-store>${t("Browse products")}</a></div>${guestNote}<div class="collection-grid">${products.length ? products.map(p => `<article class="collection-product">${favoriteButton(p)}<a class="collection-product-link" href="/${encodeURIComponent(p.slug || p.id)}"><div class="collection-product-image">${stockImg(p.image_url,pName(p),stockArtFor(p))}</div><div class="collection-product-info"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML([p.platform,p.region].filter(Boolean).join(" · ") || dlv(p))}</small><strong>${money(Number(p.price || 0))}</strong></div></a><button class="btn ghost collection-add" type="button" data-fav-add="${Number(p.id)}">${t("Add to cart")}</button></article>`).join("") : `${emptyState("favorites")}`}</div></section>`;
+  $("main").innerHTML = `<section class="collection-page container"><div class="collection-hero"><div><span class="eyebrow">KARDIVO · ${t("Favorites")}</span><h1>${t("Your favorites")}</h1><p>${t("Your saved products")}</p></div><a class="btn ghost" href="/#store" data-collection-store>${t("Browse products")}</a></div>${guestNote}<div class="collection-grid">${products.length ? products.map(p => `<article class="collection-product" ${kdAccentMarkup(p)}>${favoriteButton(p)}<a class="collection-product-link" href="/${encodeURIComponent(p.slug || p.id)}"><div class="collection-product-image">${stockImg(p.image_url,pName(p),stockArtFor(p))}</div><div class="collection-product-info"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML([p.platform,p.region].filter(Boolean).join(" · ") || dlv(p))}</small><strong>${money(Number(p.price || 0))}</strong></div></a><button class="btn ghost collection-add" type="button" data-fav-add="${Number(p.id)}">${t("Add to cart")}</button></article>`).join("") : `${emptyState("favorites")}`}</div></section>`;
   $("#favoritesLogin")?.addEventListener("click", openAuth);
   $("[data-collection-store]")?.addEventListener("click",e=>{e.preventDefault();navigate("/#store","#store")});
   $$('[data-fav-add]').forEach(b=>b.addEventListener('click',()=>{addToCart(Number(b.dataset.favAdd));toast(t("Added to cart."));}));
@@ -1108,16 +1109,20 @@ async function api(path, options = {}) {
   if (path === "/api/settings/public" && body && body.server_time) state.timeOffset = Number(body.server_time) - Date.now();
   return body;
 }
-const skProductHTML = () => `<section class="product-page container sk-page" aria-busy="true" aria-label="${escapeHTML(t("Loading product..."))}"><div class="sk sk-line w40" style="margin:0 0 18px"></div><div class="product-detail"><div class="sk sk-hero-img"></div><div class="sk-stack"><div class="sk sk-line w40"></div><div class="sk sk-title"></div><div class="sk sk-line w80"></div><div class="sk sk-line w60"></div><div class="sk sk-block"></div><div class="sk sk-btn"></div></div></div></section>`;
+const skProductHTML = (seed = "") => `<section class="product-page container sk-page" aria-busy="true" aria-label="${escapeHTML(t("Loading product..."))}"><div class="sk sk-line w40" style="margin:0 0 18px"></div><div class="product-detail">${seed ? `<div class="sk-seed"><img src="${escapeHTML(seed)}" alt="" draggable="false"></div>` : `<div class="sk sk-hero-img"></div>`}<div class="sk-stack"><div class="sk sk-line w40"></div><div class="sk sk-title"></div><div class="sk sk-line w80"></div><div class="sk sk-line w60"></div><div class="sk sk-block"></div><div class="sk sk-btn"></div></div></div></section>`;
 const skCartHTML = () => `<section class="collection-page container cart-page sk-page" aria-busy="true"><div class="sk sk-title" style="width:min(260px,60%);margin-bottom:22px"></div>${Array.from({ length: 3 }, () => `<div class="sk-cart-row"><div class="sk sk-thumb"></div><div class="sk-stack"><div class="sk sk-line w80"></div><div class="sk sk-line w40"></div></div></div>`).join("")}<div class="sk sk-btn" style="margin-top:20px"></div></section>`;
 const skGridHTML = () => Array.from({ length: 8 }, () => `<div class="product-card skeleton-card" aria-hidden="true"><div class="sk sk-img"></div><div class="sk sk-line w40"></div><div class="sk sk-line w80"></div><div class="sk sk-line w60"></div></div>`).join("");
 function showBootSkeleton() {
   const path = location.pathname.replace(/\/$/, "") || "/";
   const m = $("main");
   if (path === "/cart") { document.body.classList.add("account-route"); m.innerHTML = skCartHTML(); return; }
+  if (path.startsWith("/c/")) { m.innerHTML = skCategoryHTML(); return; }
+  if (path === "/favorites") { document.body.classList.add("account-route"); m.innerHTML = skCategoryHTML(true); return; }
   if (isProductRoute()) { document.body.classList.add("product-route"); m.innerHTML = skProductHTML(); return; }
   const g = $("#productGrid");
   if (g) g.innerHTML = skGridHTML();
+  const pp = $("#popularProducts");
+  if (pp && !pp.children.length) pp.innerHTML = skPopularHTML();
 }
 // Offline banner. The cart lives in localStorage, and the last good catalog is kept as a snapshot
 // so /cart still renders when the network is gone.
@@ -1479,7 +1484,7 @@ function renderSearchSuggestions() {
   if (!q && document.activeElement === input) { renderPopularSearches(box); return; }
   if (q.length < 2) { box.hidden = true; box.innerHTML = ""; return; }
   const matches = state.products.map(p => ({ p, score: searchScore(p, q) })).filter(x => x.score >= 0).sort((a, b) => b.score - a.score || Number(b.p.featured || 0) - Number(a.p.featured || 0)).slice(0, 5).map(x => x.p);
-  box.innerHTML = matches.map((p) => `<a class="search-suggestion" href="/${encodeURIComponent(p.slug || p.id)}" data-suggestion-product="${p.id}">${stockImg(p.image_url, "", stockArtFor(p))}<span class="suggestion-copy"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</small></span><strong>${money(Number(p.price || 0))}</strong></a>`).join("") || `<div class="search-suggestion-empty">${state.lang === "ar" ? "مفيش نتائج مطابقة. جرّب اسم تاني." : "No matching products. Try another search."}</div>`;
+  box.innerHTML = matches.map((p) => `<a class="search-suggestion" ${kdAccentMarkup(p)} href="/${encodeURIComponent(p.slug || p.id)}" data-suggestion-product="${p.id}">${stockImg(p.image_url, "", stockArtFor(p))}<span class="suggestion-copy"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</small></span><strong>${money(Number(p.price || 0))}</strong></a>`).join("") || `<div class="search-suggestion-empty">${state.lang === "ar" ? "مفيش نتائج مطابقة. جرّب اسم تاني." : "No matching products. Try another search."}</div>`;
   box.hidden = false;
 }
 function renderCategoryCards() {
@@ -1510,7 +1515,7 @@ function renderPopularProducts() {
     const name = pName(p);
     const cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
     const img = stockImg(p.image_url, name, stockArtFor(p));
-    return `<article class="popular-product-wrap">${favoriteButton(p)}<a class="popular-product" href="/${encodeURIComponent(p.slug || p.id)}"><div class="popular-product-image">${img}</div><div class="popular-product-copy"><span class="popular-product-category">${escapeHTML(cat || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</span><span class="popular-product-name">${escapeHTML(name)}</span><span class="popular-product-price">${money(price)}${old > price ? `<del>${money(old)}</del>` : ""}</span></div></a></article>`;
+    return `<article class="popular-product-wrap" ${kdAccentMarkup(p)}>${favoriteButton(p)}<a class="popular-product" href="/${encodeURIComponent(p.slug || p.id)}"><div class="popular-product-image">${img}</div><div class="popular-product-copy"><span class="popular-product-category">${escapeHTML(cat || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</span><span class="popular-product-name">${escapeHTML(name)}</span><span class="popular-product-price">${money(price)}${old > price ? `<del>${money(old)}</del>` : ""}</span></div></a></article>`;
   }).join("");
   bindFavoriteButtons(el);
   const section = $("#popularSection");
@@ -1596,7 +1601,7 @@ function openQuickView(id) {
     const sel = $("#qvVariant");
     return sel ? variants.find((v) => Number(v.id) === Number(sel.value)) || null : null;
   };
-  const body = `<div class="qv"><div class="qv-media">${stockImg(p.image_url, name, stockArtFor(p))}</div><div class="qv-info">${cat ? `<span class="product-cat">${escapeHTML(cat)}</span>` : ""}<div class="qv-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div><div class="qv-price" id="qvPrice"></div>${variants.length ? `<div class="field qv-field"><label for="qvVariant">${t("Choose option")}</label><select id="qvVariant">${variants.map((v) => `<option value="${v.id}" ${startV && Number(startV.id) === Number(v.id) ? "selected" : ""} ${stockOf(v) <= 0 ? "disabled" : ""}>${escapeHTML(v.name)} — ${money(Number(v.price))}${isCode && showStock ? ` · ${stockOf(v) > 0 ? t("{0} left", stockOf(v)) : t("Sold out")}` : ""}</option>`).join("")}</select></div>` : ""}<p class="qv-stock" id="qvStock" aria-live="polite"></p>${short ? `<p class="qv-desc">${escapeHTML(short)}</p>` : ""}<div class="qv-actions"><button type="button" class="btn primary" id="qvAdd">${t("Add to cart")}</button><a class="btn ghost" id="qvMore" href="${href}">${t("Full details")}</a></div></div></div>`;
+  const body = `<div class="qv" ${kdAccentMarkup(p)}><div class="qv-media">${stockImg(p.image_url, name, stockArtFor(p))}</div><div class="qv-info">${cat ? `<span class="product-cat">${escapeHTML(cat)}</span>` : ""}<div class="qv-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div><div class="qv-price" id="qvPrice"></div>${variants.length ? `<div class="field qv-field"><label for="qvVariant">${t("Choose option")}</label><select id="qvVariant">${variants.map((v) => `<option value="${v.id}" ${startV && Number(startV.id) === Number(v.id) ? "selected" : ""} ${stockOf(v) <= 0 ? "disabled" : ""}>${escapeHTML(v.name)} — ${money(Number(v.price))}${isCode && showStock ? ` · ${stockOf(v) > 0 ? t("{0} left", stockOf(v)) : t("Sold out")}` : ""}</option>`).join("")}</select></div>` : ""}<p class="qv-stock" id="qvStock" aria-live="polite"></p>${short ? `<p class="qv-desc">${escapeHTML(short)}</p>` : ""}<div class="qv-actions"><button type="button" class="btn primary" id="qvAdd">${t("Add to cart")}</button><a class="btn ghost" id="qvMore" href="${href}">${t("Full details")}</a></div></div></div>`;
   openModal(escapeHTML(name), body);
   const refresh = () => {
     const v = cur(),
@@ -1629,6 +1634,99 @@ function rewardPreview(price) {
   const pts = Math.floor(Number(price) * ppe);
   const egp = (pts / step) * reward;
   return `<small class="reward-preview">${t("Earn {0} points", pts.toLocaleString())}${egp > 0 ? ` · ${t("worth {0}", moneyEGP(egp))}` : ""}</small>`;
+}
+
+
+// V63 — image-reactive, multi-colour product lighting.
+// Cache the full palette by image URL so cards, quick view, cart and product pages stay in sync.
+const kdAccentCache = new Map();
+const KD_ACCENT_NEUTRAL = { primary: "#827b91", secondary: "#a39aae", tertiary: "#5b536b" };
+function kdAccentMarkup(p) { return `data-product-accent="${Number(p?.id)||0}"`; }
+function kdAccentImages(p) {
+  return [...new Set([p?.image_url, ...(Array.isArray(p?.images) ? p.images : []), ...(Array.isArray(p?.gallery) ? p.gallery : [])].map(v => String(v || "").trim()).filter(v => /^https?:\/\//i.test(v) || v.startsWith("/")))];
+}
+function kdHex(rgb) { return "#" + rgb.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2,"0")).join(""); }
+function kdRgbDistance(a,b) { return Math.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2); }
+function kdSamplePalette(imageUrl) {
+  if (kdAccentCache.has(imageUrl)) return kdAccentCache.get(imageUrl);
+  const task = new Promise(resolve => {
+    const img = new Image();
+    // Same-origin Kardivo product uploads are readable; external hosts must explicitly allow CORS.
+    if (!imageUrl.startsWith("/")) img.crossOrigin = "anonymous";
+    img.decoding = "async";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d", {willReadFrequently:true});
+        if (!ctx) throw new Error("Canvas unavailable");
+        const size=56; canvas.width=size; canvas.height=size;
+        ctx.drawImage(img,0,0,size,size);
+        const pixels=ctx.getImageData(0,0,size,size).data, bins=new Map();
+        // Quantized colour histogram; discount white/black/transparent pixels and weight vivid colours.
+        for(let i=0;i<pixels.length;i+=4){
+          const a=pixels[i+3]; if(a<150) continue;
+          const rgb=[pixels[i],pixels[i+1],pixels[i+2]], max=Math.max(...rgb), min=Math.min(...rgb), sat=max ? (max-min)/max : 0;
+          if(max>248 && min>228) continue;
+          if(max<22) continue;
+          const q=rgb.map(v=>Math.min(255,Math.round(v/24)*24)), key=q.join(",");
+          const lum=(0.2126*q[0]+0.7152*q[1]+0.0722*q[2])/255;
+          const weight=1 + sat*1.8 + (lum>.12 && lum<.88 ? .25 : 0);
+          const b=bins.get(key)||{rgb:q,count:0,weight:0,sat:0}; b.count++; b.weight+=weight; b.sat+=sat; bins.set(key,b);
+        }
+        const ranked=[...bins.values()].map(b=>({...b,score:b.weight*(.62+Math.min(1,b.sat/Math.max(1,b.count))*0.65)})).sort((a,b)=>b.score-a.score);
+        const chosen=[];
+        for(const candidate of ranked){
+          if(!chosen.length || chosen.every(c=>kdRgbDistance(c.rgb,candidate.rgb)>62)) chosen.push(candidate);
+          if(chosen.length===3) break;
+        }
+        if(!chosen.length) throw new Error("No usable colours");
+        // If artwork is mostly monochrome, derive tasteful neighbours from the strongest sampled colour.
+        const first=chosen[0].rgb;
+        const second=chosen[1]?.rgb || first.map(v=>v*.72+255*.28);
+        const third=chosen[2]?.rgb || first.map(v=>v*.55);
+        resolve({primary:kdHex(first),secondary:kdHex(second),tertiary:kdHex(third)});
+      } catch { resolve(null); }
+    };
+    img.onerror=()=>resolve(null);
+    img.src=imageUrl;
+  });
+  kdAccentCache.set(imageUrl,task); return task;
+}
+async function kdAccentPalette(p) {
+  const urls=kdAccentImages(p);
+  for(const url of urls){ const palette=await kdSamplePalette(url); if(palette) return palette; }
+  // Neutral fallback is deliberate: a blocked external image must not turn every product purple.
+  return KD_ACCENT_NEUTRAL;
+}
+async function kdApplyProductAccents(root=document) {
+  const nodes=root.querySelectorAll ? root.querySelectorAll("[data-product-accent]") : [];
+  for(const el of nodes){
+    if(el.dataset.accentReady==="1") continue;
+    const p=(state.products||[]).find(x=>Number(x.id)===Number(el.dataset.productAccent));
+    if(!p) continue;
+    el.dataset.accentReady="1";
+    const palette=await kdAccentPalette(p);
+    if(!el.isConnected) continue;
+    el.style.setProperty("--product-accent",palette.primary);
+    el.style.setProperty("--product-accent-2",palette.secondary);
+    el.style.setProperty("--product-accent-3",palette.tertiary);
+    el.style.setProperty("--product-accent-soft",`color-mix(in srgb, ${palette.primary} 12%, var(--surface, #17141f))`);
+    el.style.setProperty("--product-accent-glow",`color-mix(in srgb, ${palette.primary} 52%, transparent)`);
+    el.classList.add("has-product-accent");
+  }
+}
+if(typeof document!=="undefined"){
+  const kdAccentStart=()=>{
+    if(!document.body) return;
+    let queued=false;
+    const observer=new MutationObserver(records=>{
+      if(!records.some(r=>r.addedNodes&&r.addedNodes.length)||queued) return;
+      queued=true; requestAnimationFrame(()=>{queued=false;kdApplyProductAccents(document);});
+    });
+    observer.observe(document.body,{childList:true,subtree:true});
+    kdApplyProductAccents(document);
+  };
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",kdAccentStart,{once:true});
+  else kdAccentStart();
 }
 
 function renderProducts() {
@@ -1667,7 +1765,7 @@ function renderProducts() {
         href = "/" + encodeURIComponent(p.slug),
         name = pName(p),
         cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
-      return `<article class="product-card product-card-link"><div class="product-image">${stockImg(p.image_url, name, stockArtFor(p))}<a class="product-image-link" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"></a>${favoriteButton(p)}${quickViewButton(p)}${sale ? `<span class="sale">${escapeHTML(saveBadgeText(displayPrice, displayOld))}</span>` : ""}<span class="stock${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? " low" : ""}">${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? t("Only {0} left", totalStock) : badge}</span></div><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span><small class="save-line">${escapeHTML(t("You save {0}", moneyShort(displayOld - displayPrice)))}</small>` : ""}${rewardPreview(displayPrice)}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
+      return `<article class="product-card product-card-link" ${kdAccentMarkup(p)}><div class="product-image">${stockImg(p.image_url, name, stockArtFor(p))}<a class="product-image-link" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"></a>${favoriteButton(p)}${quickViewButton(p)}${sale ? `<span class="sale">${escapeHTML(saveBadgeText(displayPrice, displayOld))}</span>` : ""}<span class="stock${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? " low" : ""}">${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? t("Only {0} left", totalStock) : badge}</span></div><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span><small class="save-line">${escapeHTML(t("You save {0}", moneyShort(displayOld - displayPrice)))}</small>` : ""}${rewardPreview(displayPrice)}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
     })
     .join("");
   bindFavoriteButtons(el);
@@ -1691,7 +1789,7 @@ async function openProductPage(slug) {
   stickyAtcObs = null;
   document.body.classList.add("product-route");
   const main = $("main");
-  main.innerHTML = skProductHTML();
+  { const sp = state.products.find((x) => x.slug === slug); main.innerHTML = skProductHTML(sp && sp.image_url ? sp.image_url : ""); }
   window.scrollTo(0, 0);
   try {
     const p = await api(`/api/products/${encodeURIComponent(slug)}`),
@@ -1712,7 +1810,7 @@ async function openProductPage(slug) {
       old = variants.length
         ? Number(first.old_price || 0)
         : Number(p.old_price || 0);
-    main.innerHTML = `<section class="product-page container"><div class="product-breadcrumb"><a href="/" data-home>${t("Store")}</a><span>/</span>${crumbCat(p)}<span>${escapeHTML(name)}</span></div><div class="product-detail">${productGalleryHTML(p, name)}<div class="product-detail-copy"><span class="eyebrow">${escapeHTML(cName({ name: p.category_name, name_ar: p.category_name_ar }) || t("DIGITAL PRODUCT"))}</span><h1>${escapeHTML(name)}</h1><div class="product-detail-price" id="productPrice">${money(price)} ${old > price ? `<del>${money(old)}</del>` : ""}${rewardPreview(price)}</div>${saleActive() && String(state.settings.sale_on_products) !== "0" ? saleBlockHTML("productSale", !(old > price)) : ""}<div class="product-detail-meta">${[
+    main.innerHTML = `<section class="product-page container" ${kdAccentMarkup(p)}><div class="product-breadcrumb"><a href="/" data-home>${t("Store")}</a><span>/</span>${crumbCat(p)}<span>${escapeHTML(name)}</span></div><div class="product-detail">${productGalleryHTML(p, name)}<div class="product-detail-copy"><span class="eyebrow">${escapeHTML(cName({ name: p.category_name, name_ar: p.category_name_ar }) || t("DIGITAL PRODUCT"))}</span><h1>${escapeHTML(name)}</h1><div class="product-detail-price" id="productPrice">${money(price)} ${old > price ? `<del>${money(old)}</del>` : ""}${rewardPreview(price)}</div>${saleActive() && String(state.settings.sale_on_products) !== "0" ? saleBlockHTML("productSale", !(old > price)) : ""}<div class="product-detail-meta">${[
       p.platform,
       p.region,
       p.delivery_type === "code"
@@ -1830,7 +1928,7 @@ function recentList() {
 function miniCard(p) {
   const vs = (p.variants || []).filter((v) => Number(v.active) !== 0),
     price = vs.length ? Math.min(...vs.map((v) => Number(v.price))) : Number(p.price);
-  return `<div class="mini-card-wrap">${favoriteButton(p)}<a class="mini-card" href="/${encodeURIComponent(p.slug)}"><div class="mini-img">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span>K</span>`}</div><b>${escapeHTML(pName(p))}</b><small>${vs.length ? t("From") + " " : ""}${money(price)}</small></a></div>`;
+  return `<div class="mini-card-wrap" ${kdAccentMarkup(p)}>${favoriteButton(p)}<a class="mini-card" href="/${encodeURIComponent(p.slug)}"><div class="mini-img">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span>K</span>`}</div><b>${escapeHTML(pName(p))}</b><small>${vs.length ? t("From") + " " : ""}${money(price)}</small></a></div>`;
 }
 // "Recently viewed" comes from this browser; "You may also like" scores category and platform matches among in-stock products.
 function renderRecommendations(cur) {
@@ -1912,6 +2010,7 @@ function addToCart(id, variant_id = null) {
       quantity: 1,
     });
   saveCart();
+  window.kdFx?.tap();
   trackMarketingEvent("cart_added", { product_id: Number(p.id) });
   renderAbandonedCartNudge();
   cartToast(p);
@@ -1971,9 +2070,10 @@ function renderCartCount() {
 function openModal(title, body, wide = false) {
   if (!$("#modalRoot").innerHTML) state.modalOpener = document.activeElement;
   $("#modalRoot").innerHTML =
-    `<div class="modal-backdrop" id="backdrop"><div class="modal ${wide ? "wide" : ""}" role="dialog" aria-modal="true" aria-labelledby="modalTitle" ${state.adminOpen ? 'dir="ltr"' : ""}><div class="modal-head"><h2 id="modalTitle">${title}</h2><button type="button" class="close" id="closeModal" aria-label="${escapeHTML(t("Close"))}">×</button></div><div class="modal-body">${body}</div></div></div>`;
+    `<div class="modal-backdrop" id="backdrop"><div class="modal ${wide ? "wide" : ""}" role="dialog" aria-modal="true" aria-labelledby="modalTitle" ${state.adminOpen ? 'dir="ltr"' : ""}><div class="sheet-grip" aria-hidden="true"></div><div class="modal-head"><h2 id="modalTitle">${title}</h2><button type="button" class="close" id="closeModal" aria-label="${escapeHTML(t("Close"))}">×</button></div><div class="modal-body">${body}</div></div></div>`;
   $("#closeModal").onclick = closeModal;
   $("#closeModal").focus({ preventScroll: true });
+  kdSheetInit($("#backdrop"));
   $("#backdrop").onclick = (e) => {
     if (e.target.id === "backdrop") closeModal();
   };
@@ -2002,7 +2102,7 @@ function renderCartPage() {
   document.body.classList.remove("product-route"); document.body.classList.add("account-route");
   const items = cartItems();
   const subtotal = items.reduce((sum, i) => sum + Number(i.p.variants?.find(v => Number(v.id) === Number(i.variant_id))?.price ?? i.p.price) * i.quantity, 0);
-  $("main").innerHTML = `<section class="collection-page container cart-page"><div class="collection-hero"><div><span class="eyebrow">KARDIVO · ${t("Cart")}</span><h1>${t("Your cart")}</h1><p>${items.length} ${state.lang === "ar" ? "منتج في سلتك" : "items in your cart"}</p></div><a class="btn ghost" href="/#store" data-collection-store>${t("Continue shopping")}</a></div>${items.length ? `<div class="cart-page-layout"><div class="cart-page-items">${items.map(i=>{const v=i.p.variants?.find(x=>Number(x.id)===Number(i.variant_id));const price=Number(v?.price ?? i.p.price);return `<article class="cart-page-item"><div class="cart-page-image">${stockImg(i.p.image_url,pName(i.p),stockArtFor(i.p))}</div><div class="cart-page-item-info"><b>${escapeHTML(pName(i.p))}</b>${v?`<small>${escapeHTML(v.name)}</small>`:""}<small>${money(price)} ${t("each")}</small><div class="cart-quantity"><button type="button" class="mini" data-minus="${escapeHTML(cartKey(i))}" aria-label="Decrease quantity">−</button><b>${i.quantity}</b><button type="button" class="mini" data-plus="${escapeHTML(cartKey(i))}" aria-label="Increase quantity">+</button><button type="button" class="mini" data-save-later="${escapeHTML(cartKey(i))}">${t("Save for later")}</button><button type="button" class="mini danger" data-remove="${escapeHTML(cartKey(i))}">${t("Remove")}</button></div></div><strong class="cart-line-total">${money(price*i.quantity)}</strong></article>`}).join("")}<div id="cartBundles" class="cart-bundles" hidden></div>${savedForLaterHTML()}</div><aside class="cart-page-summary"><span class="eyebrow">${t("Order summary")}</span><h2>${t("Subtotal")}</h2><div class="line"><span>${t("Subtotal")}</span><b>${money(subtotal)}</b></div><div class="line cart-auto" id="cartAuto" hidden><span id="cartAutoLabel"></span><b id="cartAutoAmt"></b></div><div class="line cart-est" id="cartEst" hidden><span>${t("Estimated total")}</span><b id="cartEstAmt"></b></div><p>${t("Shipping and final discounts are confirmed at checkout.")}</p><button class="btn primary cart-checkout" id="checkoutBtn">${t("Continue to checkout")}</button><a class="btn ghost cart-back" href="/#store" data-collection-store>${t("Continue shopping")}</a></aside></div>` : `${emptyState("cart")}`}</section>`;
+  $("main").innerHTML = `<section class="collection-page container cart-page"><div class="collection-hero"><div><span class="eyebrow">KARDIVO · ${t("Cart")}</span><h1>${t("Your cart")}</h1><p>${items.length} ${state.lang === "ar" ? "منتج في سلتك" : "items in your cart"}</p></div><a class="btn ghost" href="/#store" data-collection-store>${t("Continue shopping")}</a></div>${items.length ? `<div class="cart-page-layout"><div class="cart-page-items">${items.map(i=>{const v=i.p.variants?.find(x=>Number(x.id)===Number(i.variant_id));const price=Number(v?.price ?? i.p.price);return `<article class="cart-page-item" ${kdAccentMarkup(i.p)}><div class="cart-page-image">${stockImg(i.p.image_url,pName(i.p),stockArtFor(i.p))}</div><div class="cart-page-item-info"><b>${escapeHTML(pName(i.p))}</b>${v?`<small>${escapeHTML(v.name)}</small>`:""}<small>${money(price)} ${t("each")}</small><div class="cart-quantity"><button type="button" class="mini" data-minus="${escapeHTML(cartKey(i))}" aria-label="Decrease quantity">−</button><b>${i.quantity}</b><button type="button" class="mini" data-plus="${escapeHTML(cartKey(i))}" aria-label="Increase quantity">+</button><button type="button" class="mini" data-save-later="${escapeHTML(cartKey(i))}">${t("Save for later")}</button><button type="button" class="mini danger" data-remove="${escapeHTML(cartKey(i))}">${t("Remove")}</button></div></div><strong class="cart-line-total">${money(price*i.quantity)}</strong></article>`}).join("")}<div id="cartBundles" class="cart-bundles" hidden></div>${savedForLaterHTML()}</div><aside class="cart-page-summary"><span class="eyebrow">${t("Order summary")}</span><h2>${t("Subtotal")}</h2><div class="line"><span>${t("Subtotal")}</span><b>${money(subtotal)}</b></div><div class="line cart-auto" id="cartAuto" hidden><span id="cartAutoLabel"></span><b id="cartAutoAmt"></b></div><div class="line cart-est" id="cartEst" hidden><span>${t("Estimated total")}</span><b id="cartEstAmt"></b></div><p>${t("Shipping and final discounts are confirmed at checkout.")}</p><button class="btn primary cart-checkout" id="checkoutBtn">${t("Continue to checkout")}</button><a class="btn ghost cart-back" href="/#store" data-collection-store>${t("Continue shopping")}</a></aside></div>` : `${emptyState("cart")}`}</section>`;
   $("[data-collection-store]")?.addEventListener("click",e=>{e.preventDefault();navigate("/#store","#store")});
   $$('[data-minus]').forEach(b=>b.onclick=()=>changeQty(b.dataset.minus,-1));
   $$('[data-plus]').forEach(b=>b.onclick=()=>changeQty(b.dataset.plus,1));
@@ -2011,13 +2111,14 @@ function renderCartPage() {
   $$("[data-save-later]").forEach((b) => (b.onclick = () => saveForLater(b.dataset.saveLater)));
   $$("[data-unsave]").forEach((b) => (b.onclick = () => { addToCart(Number(b.dataset.unsave)); renderCartPage(); }));
   if (items.length) loadCartBundles();
+  kdEnhanceCartSwipe();
 }
 // Items parked with "Save for later" are simply the customer's favorites that are not in the cart right now.
 function savedForLaterHTML() {
   const inCart = new Set(state.cart.map((x) => x.product_id));
   const list = (state.favorites || []).map((id) => state.products.find((p) => Number(p.id) === Number(id))).filter((p) => p && !inCart.has(p.id)).slice(0, 4);
   if (!list.length) return "";
-  return `<section class="saved-later" aria-labelledby="savedLaterH"><h2 id="savedLaterH">${t("Saved for later")}</h2>${list.map((p) => { const soldOut = p.delivery_type === "code" && !(p.variants?.length ? p.variants.some((v) => Number(v.stock) > 0) : Number(p.stock) > 0); return `<div class="saved-later-item"><span class="saved-later-img">${stockImg(p.image_url, pName(p), stockArtFor(p))}</span><span class="saved-later-name"><b>${escapeHTML(pName(p))}</b><small>${p.variants?.length ? t("From") + " " : ""}${money(Math.min(...(p.variants?.length ? p.variants.map((v) => Number(v.price)) : [Number(p.price)])))}</small></span><button type="button" class="mini" data-unsave="${Number(p.id)}" ${soldOut || p.variants?.length ? "disabled" : ""}>${soldOut ? t("Out of stock") : t("Move to cart")}</button></div>`; }).join("")}</section>`;
+  return `<section class="saved-later" aria-labelledby="savedLaterH"><h2 id="savedLaterH">${t("Saved for later")}</h2>${list.map((p) => { const soldOut = p.delivery_type === "code" && !(p.variants?.length ? p.variants.some((v) => Number(v.stock) > 0) : Number(p.stock) > 0); return `<div class="saved-later-item" ${kdAccentMarkup(p)}><span class="saved-later-img">${stockImg(p.image_url, pName(p), stockArtFor(p))}</span><span class="saved-later-name"><b>${escapeHTML(pName(p))}</b><small>${p.variants?.length ? t("From") + " " : ""}${money(Math.min(...(p.variants?.length ? p.variants.map((v) => Number(v.price)) : [Number(p.price)])))}</small></span><button type="button" class="mini" data-unsave="${Number(p.id)}" ${soldOut || p.variants?.length ? "disabled" : ""}>${soldOut ? t("Out of stock") : t("Move to cart")}</button></div>`; }).join("")}</section>`;
 }
 function saveForLater(key) {
   const row = state.cart.find((x) => cartKey(x) === key);
@@ -2037,10 +2138,14 @@ function saveForLater(key) {
 let bundleReqId = 0;
 async function loadCartBundles() {
   const my = ++bundleReqId;
+  // V61: only show a skeleton when the answer is slow, so a quick reply never flickers.
+  const skT = setTimeout(() => { const b = $("#cartBundles"); if (b && my === bundleReqId && b.hidden) { b.hidden = false; b.dataset.sk = "1"; b.innerHTML = skBundleHTML(); } }, 350);
   let r;
   try {
     r = await api("/api/bundle-suggestions", { method: "POST", body: JSON.stringify({ items: state.cart }) });
-  } catch { return; }
+  } catch { clearTimeout(skT); const b = $("#cartBundles"); if (b && b.dataset.sk) { b.hidden = true; b.innerHTML = ""; delete b.dataset.sk; } return; }
+  clearTimeout(skT);
+  { const b = $("#cartBundles"); if (b) delete b.dataset.sk; }
   if (my !== bundleReqId || !$("#cartBundles")) return;
   const subtotal = Number(r.subtotal || 0), disc = Number(r.discount || 0);
   const auto = $("#cartAuto"), est = $("#cartEst");
@@ -2057,7 +2162,7 @@ async function loadCartBundles() {
     if (!p) return "";
     const v = p.variants?.find((x) => Number(x.id) === Number(s.variant_id));
     const title = s.kind === "more" ? t("Add one more {0}", pName(p)) : t("Add {0}", pName(p));
-    return `<div class="bundle-card"><span class="bundle-img">${stockImg(p.image_url, pName(p), stockArtFor(p))}</span><span class="bundle-copy"><b>${escapeHTML(title)}${v ? ` <small>(${escapeHTML(v.name)})</small>` : ""}</b><small>${escapeHTML(t("Your discount becomes {0} ({1}% off)", moneyShort(s.new_discount), s.percent))}</small></span><button type="button" class="btn primary bundle-add" data-bundle-add="${Number(s.product_id)}:${Number(s.variant_id || 0)}">${t("Add")} · ${moneyShort(s.price)}</button></div>`;
+    return `<div class="bundle-card" ${kdAccentMarkup(p)}><span class="bundle-img">${stockImg(p.image_url, pName(p), stockArtFor(p))}</span><span class="bundle-copy"><b>${escapeHTML(title)}${v ? ` <small>(${escapeHTML(v.name)})</small>` : ""}</b><small>${escapeHTML(t("Your discount becomes {0} ({1}% off)", moneyShort(s.new_discount), s.percent))}</small></span><button type="button" class="btn primary bundle-add" data-bundle-add="${Number(s.product_id)}:${Number(s.variant_id || 0)}">${t("Add")} · ${moneyShort(s.price)}</button></div>`;
   }).filter(Boolean);
   const box = $("#cartBundles");
   box.hidden = !cards.length;
@@ -2345,7 +2450,7 @@ function renderOrderConfirmed() {
       ];
   const wa = !o.paid && !o.proof_ok ? proofWaLink(o) : orderWaLink(o.order_number);
   const waLabel = !o.paid && !o.proof_ok ? t("Send proof on WhatsApp") : t("Message us about this order");
-  $("main").innerHTML = `<section class="collection-page container order-done"><div class="collection-hero"><div><span class="eyebrow">KARDIVO · ${t("Order received")}</span><h1>${o.paid ? t("Your order is confirmed") : t("Order received")}</h1><p>${t("Order <b>{0}</b> created. Save this number.", escapeHTML(o.order_number))} ${copyBtn(o.order_number, t("Copy order number"), t("Copy"), true)}</p></div></div>
+  $("main").innerHTML = `<section class="collection-page container order-done"><div class="collection-hero"><div><div class="od-check" aria-hidden="true"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M15 27l8 8 14-16"/></svg></div><span class="eyebrow">KARDIVO · ${t("Order received")}</span><h1>${o.paid ? t("Your order is confirmed") : t("Order received")}</h1><p>${t("Order <b>{0}</b> created. Save this number.", escapeHTML(o.order_number))} ${copyBtn(o.order_number, t("Copy order number"), t("Copy"), true)}</p></div></div>
 <div class="order-done-grid"><article class="account-page-card"><span class="eyebrow">${t("Payment")}</span>
 <div class="line"><span>${t("Total to pay")}</span><span><b>${moneyEGP(o.total)}</b>${o.paid ? "" : " " + copyBtn(copyAmount(o.total), t("Copy exact total"), t("Copy"), true)}</span></div>
 ${o.credit_used > 0 ? `<div class="line"><span>${t("Store credit")}</span><b>− ${moneyEGP(o.credit_used)}</b></div>` : ""}
@@ -2356,6 +2461,7 @@ ${o.support_text ? `<p class="muted-note">${escapeHTML(o.support_text)}</p>` : "
   bindCopy();
   $("#trackOrderBtn").onclick = () => navigate("/account");
   document.title = `${t("Order received")} | Kardivo`;
+  celebrateOrder(o);
 }
 function openAccount() {
   if (state.user) openUserAccount();
@@ -5051,6 +5157,7 @@ async function renderAccountPage() {
     catch (e) { toast(e.message); }
   });
   $("[data-account-store]")?.addEventListener("click", (e) => { e.preventDefault(); navigate("/#store", "#store"); });
+  { const sk = $("#accountOrders"); if (sk) sk.innerHTML = skRowsHTML(); }
   try {
     const orders = await api("/api/orders");
     const target = $("#accountOrders");
@@ -5072,7 +5179,7 @@ function renderAdminPage() {
 }
 async function route() {
   const path = location.pathname.replace(/\/$/, "") || "/";
-  { const m = $("main"); if (m) { m.classList.remove("page-enter"); void m.offsetWidth; m.classList.add("page-enter"); } }
+  { const m = $("main"); if (m) { m.classList.remove("page-enter"); void m.offsetWidth; if (!document.documentElement.classList.contains("vt-active")) m.classList.add("page-enter"); } }
   [["/account", "#accountBtn"], ["/cart", "#cartBtn"], ["/favorites", "#wishlistBtn"]].forEach(([p, selector]) => {
     const el = $(selector); if (el) { const active = path === p; el.classList.toggle("is-active", active); if (active) el.setAttribute("aria-current", "page"); else el.removeAttribute("aria-current"); }
   });
@@ -5084,7 +5191,7 @@ async function route() {
   });
   if (path === "/account") await renderAccountPage();
   else if (path === "/admin") renderAdminPage();
-  else if (path === "/favorites") { if (state.user) await syncFavoritesWithAccount(false); renderFavoritesPage(); }
+  else if (path === "/favorites") { if (state.user) { document.body.classList.add("account-route"); $("main").innerHTML = skCategoryHTML(true); await syncFavoritesWithAccount(false); } renderFavoritesPage(); }
   else if (path === "/cart") renderCartPage();
   else if (path === "/order-confirmed") renderOrderConfirmed();
   else if (path.startsWith("/c/")) renderCategoryPage(decodeURIComponent(path.slice(3)));
@@ -5095,8 +5202,10 @@ async function route() {
   else showHome();
 }
 function navigate(path, scrollTo) {
-  history.pushState({}, "", path);
-  route().then(() => {
+  const go = () => { history.pushState({}, "", path); return route(); };
+  // V61: View Transitions where the browser has them (cross-fade, product picture grows into its page).
+  if (kdTransition(path, go, scrollTo)) return;
+  go().then(() => {
     if (scrollTo) setTimeout(() => $(scrollTo)?.scrollIntoView(), 30);
     else window.scrollTo(0, 0);
   });
@@ -5278,7 +5387,7 @@ document.addEventListener("click", (event) => {
 window.addEventListener("DOMContentLoaded", () => { renderAbandonedCartNudge(); });
 
 
-// V59 festival layer: glow, particles, string lights, category ticker, card spotlight, scroll reveal.
+// V59 festival layer: glow, particles, category ticker, card spotlight, scroll reveal. (The V59 string of lights over the hero was removed in V61.)
 // Purely visual. It never touches orders, prices, payments or API calls, and any failure just leaves the plain site.
 (() => {
   if (window.__kardivoFest) return;
@@ -5439,22 +5548,6 @@ window.addEventListener("DOMContentLoaded", () => { renderAbandonedCartNudge(); 
   }
 
   // ---------- hero pieces ----------
-  const COLS = ["139,92,246", "217,70,239", "129,140,248", "253,224,71", "192,132,252", "244,114,182"];
-  function buildLights() {
-    const N = 28, W = 1000, H = 46, swags = 3;
-    const y = (x) => 5 + 20 * Math.sin(Math.PI * ((x * swags) % 1));
-    let d = "", bulbs = "";
-    for (let i = 0; i <= 120; i++) { const x = i / 120; d += (i ? "L" : "M") + (x * W).toFixed(1) + " " + y(x).toFixed(1) + " "; }
-    for (let i = 0; i < N; i++) {
-      const x = (i + 0.5) / N;
-      bulbs += '<i class="fest-bulb" style="left:' + (x * 100).toFixed(2) + "%;top:" + (y(x) + 1).toFixed(1) + "px;--c:" + COLS[i % COLS.length] + ";--d:" + (-((i * 0.53) % 3.6)).toFixed(2) + 's"></i>';
-    }
-    const el = doc.createElement("div");
-    el.className = "fest-lights";
-    el.setAttribute("aria-hidden", "true");
-    el.innerHTML = '<div class="fest-lights-in"><svg class="fest-wire" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none"><path d="' + d + '" fill="none" stroke="currentColor" stroke-width="1" vector-effect="non-scaling-stroke"/></svg>' + bulbs + "</div>";
-    return el;
-  }
   const star = (pos, s, c, t, d) => '<svg class="fest-spark" style="' + pos + ";--s:" + s + "px;--c:" + c + ";--t:" + t + "s;--d:" + d + 's" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0c1 8 4 11 12 12-8 1-11 4-12 12-1-8-4-11-12-12 8-1 11-4 12-12z"/></svg>';
   const SPARKS = star("top:2%;left:-1%", 22, "196,168,255", 4.2, "0s") + star("top:20%;right:-2%", 14, "244,114,182", 3.6, "-1.4s") + star("bottom:14%;left:3%", 16, "253,224,71", 5, "-2.6s") + star("bottom:4%;right:12%", 20, "232,121,249", 4.6, "-0.8s") + star("top:-3%;right:34%", 12, "129,140,248", 3.9, "-3.1s");
 
@@ -5492,7 +5585,6 @@ window.addEventListener("DOMContentLoaded", () => { renderAbandonedCartNudge(); 
     });
     const hero = doc.querySelector("section.hero");
     if (hero) {
-      if (!(hero.previousElementSibling && hero.previousElementSibling.classList.contains("fest-lights"))) hero.before(buildLights());
       const vis = hero.querySelector(".hero-visual");
       if (vis && !vis.querySelector(".fest-spark")) vis.insertAdjacentHTML("beforeend", SPARKS);
       syncMarquee(hero);
@@ -5533,4 +5625,362 @@ window.addEventListener("DOMContentLoaded", () => { renderAbandonedCartNudge(); 
   }, { passive: false });
   // belt and braces: if anything ever pushes the page sideways, snap back
   addEventListener("scroll", () => { if (scrollX) scrollTo(0, scrollY); }, { passive: true });
+})();
+
+
+// ======================================================================
+// V61 FEEL LAYER: page transitions, haptics + sound, order celebration,
+// swipe gestures and extra skeletons.
+// UX only. It never touches prices, orders, payments or API calls, and each
+// piece falls back to the previous behaviour when the browser can't do it.
+// ======================================================================
+Object.entries({
+  "Undo": "\u062a\u0631\u0627\u062c\u0639",
+  "Haptics": "\u0627\u0644\u0627\u0647\u062a\u0632\u0627\u0632",
+  "Sound": "\u0627\u0644\u0635\u0648\u062a",
+  "On": "\u064a\u0639\u0645\u0644",
+  "Off": "\u0645\u062a\u0648\u0642\u0641",
+  "Drag down to close": "\u0627\u0633\u062d\u0628 \u0644\u0623\u0633\u0641\u0644 \u0644\u0644\u0625\u063a\u0644\u0627\u0642",
+  "Loading...": "\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u062d\u0645\u064a\u0644...",
+}).forEach(([k, v]) => { if (!(k in AR)) AR[k] = v; });
+
+const kdReduced = () => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
+
+// ---------- 1. page transitions (View Transitions API) ----------
+// A product card's picture grows into the product page; every other route change is a short cross-fade.
+let vtTap = null;
+document.addEventListener("click", (e) => {
+  if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const a = e.target.closest && e.target.closest("a[href]");
+  const card = a && a.closest(".product-card, .popular-product-wrap");
+  const img = card && card.querySelector(".product-image img, .popular-product-image img");
+  if (!img) return;
+  try { vtTap = { img, path: new URL(a.href, location.origin).pathname, t: Date.now() }; } catch { vtTap = null; }
+}, true);
+function kdTransition(path, update, scrollTo) {
+  const doc = document, rt = doc.documentElement;
+  if (!doc.startViewTransition || kdReduced()) return false;
+  const norm = (p) => { try { return decodeURIComponent(String(p).split(/[?#]/)[0]).replace(/\/$/, "") || "/"; } catch { return "/"; } };
+  const cur = norm(location.pathname), dest = norm(path);
+  if (dest === cur || cur === "/admin" || dest === "/admin" || dest === "/account") return false;
+  const tap = vtTap; vtTap = null;
+  const hero = tap && Date.now() - tap.t < 2000 && tap.img.isConnected && norm(tap.path) === dest ? tap.img : null;
+  rt.classList.add("vt-active");
+  if (hero) hero.style.viewTransitionName = "product-hero";
+  let vt;
+  try {
+    vt = doc.startViewTransition(async () => {
+      const p = update();
+      // Wait for the first render only (skeleton or page), never for the network.
+      await Promise.race([p.catch((err) => console.error(err)), new Promise((r) => setTimeout(r, 70))]);
+      if (hero) {
+        hero.style.viewTransitionName = "";
+        const tgt = doc.querySelector("main .sk-seed img, main .pgal-slide img");
+        if (tgt) tgt.style.viewTransitionName = "product-hero";
+      }
+      if (scrollTo) $(scrollTo)?.scrollIntoView({ behavior: "instant" });
+      else window.scrollTo({ top: 0, behavior: "instant" });
+    });
+  } catch { rt.classList.remove("vt-active"); if (hero) hero.style.viewTransitionName = ""; return false; }
+  const done = () => {
+    rt.classList.remove("vt-active");
+    doc.querySelectorAll("[style*='view-transition-name']").forEach((el) => { el.style.viewTransitionName = ""; });
+  };
+  vt.finished.then(done, done);
+  return true;
+}
+
+// ---------- 2. haptics and sound ----------
+// Android/Chrome: navigator.vibrate. iOS Safari has no vibrate API, so a hidden <input type=checkbox switch> gives
+// a light tick when toggled inside a tap (iOS 17.4+, best effort). Sound is a tiny WebAudio blip, off by default.
+window.kdFx = (() => {
+  const KEY = "kardivo_fx";
+  const prefs = { haptics: true, sound: false };
+  try { Object.assign(prefs, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch {} };
+  let sw = null, ac = null;
+  const iosTick = () => {
+    try {
+      if (!sw) {
+        sw = document.createElement("label");
+        sw.setAttribute("aria-hidden", "true");
+        sw.style.cssText = "position:fixed;left:-99px;top:0;width:1px;height:1px;opacity:0;pointer-events:none";
+        sw.innerHTML = '<input type="checkbox" switch tabindex="-1">';
+        document.body.append(sw);
+      }
+      sw.click();
+    } catch {}
+  };
+  const buzz = (pattern) => {
+    if (!prefs.haptics) return;
+    try { if (typeof navigator.vibrate === "function") { navigator.vibrate(pattern); return; } } catch {}
+    iosTick();
+  };
+  const tone = (freqs, dur = 0.09, vol = 0.045) => {
+    if (!prefs.sound) return;
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === "suspended") ac.resume();
+      const t0 = ac.currentTime;
+      freqs.forEach((f, i) => {
+        const o = ac.createOscillator(), g = ac.createGain(), s = t0 + i * 0.075;
+        o.type = "sine"; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, s);
+        g.gain.exponentialRampToValueAtTime(vol, s + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001, s + dur);
+        o.connect(g); g.connect(ac.destination);
+        o.start(s); o.stop(s + dur + 0.03);
+      });
+    } catch {}
+  };
+  return {
+    prefs,
+    set(k, v) { prefs[k] = !!v; save(); },
+    tap() { buzz(12); tone([880], 0.06); },
+    fav(on) { buzz(on ? [10, 40, 18] : 8); tone(on ? [660, 990] : [520], 0.08); },
+    success() { buzz([16, 50, 16, 50, 34]); tone([523, 659, 784, 1047], 0.14); },
+    warn() { buzz([30, 40, 30]); },
+  };
+})();
+// Two tiny toggles in the footer so sound can be turned on (and haptics off).
+(() => {
+  const host = document.querySelector(".footer-bottom");
+  if (!host) return;
+  const box = document.createElement("span");
+  box.className = "fx-toggles";
+  host.append(box);
+  const label = (k, name) => `${t(name)}: ${t(window.kdFx.prefs[k] ? "On" : "Off")}`;
+  const paint = () => {
+    box.innerHTML = [["haptics", "Haptics"], ["sound", "Sound"]].map(([k, n]) => `<button type="button" class="fx-btn" data-fx="${k}" aria-pressed="${window.kdFx.prefs[k]}">${escapeHTML(label(k, n))}</button>`).join("");
+  };
+  box.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-fx]");
+    if (!b) return;
+    const k = b.dataset.fx;
+    window.kdFx.set(k, !window.kdFx.prefs[k]);
+    paint();
+    if (window.kdFx.prefs[k]) window.kdFx.tap();
+  });
+  paint();
+  new MutationObserver(paint).observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+})();
+
+// ---------- 3. order-placed celebration ----------
+function celebrateOrder(o) {
+  try {
+    const key = "kd_celebrated_" + o.order_number;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+  } catch {}
+  window.kdFx?.success();
+  if (kdReduced() || (navigator.connection && navigator.connection.saveData)) return;
+  const c = document.createElement("canvas");
+  c.className = "kd-confetti";
+  c.setAttribute("aria-hidden", "true");
+  document.body.append(c);
+  const ctx = c.getContext("2d");
+  if (!ctx) { c.remove(); return; }
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  let W = 0, H = 0;
+  const size = () => { W = innerWidth; H = innerHeight; c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
+  size();
+  const COLORS = ["#8b5cf6", "#a78bfa", "#c4a8ff", "#d946ef", "#e879f9", "#6366f1", "#818cf8", "#fde047"];
+  const weak = innerWidth < 700 || (navigator.hardwareConcurrency || 4) <= 2;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const h1 = document.querySelector(".order-done h1");
+  const r = h1 ? h1.getBoundingClientRect() : null;
+  const ox = r ? r.left + Math.min(r.width, 360) / 2 : W / 2, oy = r ? r.top + r.height / 2 : H * 0.3;
+  const ps = [];
+  const burst = (n, x, y, spread, power) => {
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + rnd(-spread, spread), v = rnd(power * 0.45, power);
+      ps.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, w: rnd(6, 11), h: rnd(4, 7), rot: rnd(0, 6.28), vr: rnd(-0.3, 0.3), col: COLORS[(Math.random() * COLORS.length) | 0], star: Math.random() < 0.22, life: 0, max: rnd(1900, 2900) });
+    }
+  };
+  const N = weak ? 55 : 95;
+  burst(N, ox, oy, 1.15, 15);
+  setTimeout(() => { burst(Math.round(N * 0.45), W * 0.12, H * 0.8, 0.5, 21); burst(Math.round(N * 0.45), W * 0.88, H * 0.8, 0.5, 21); }, 260);
+  let last = performance.now(), raf = 0;
+  const step = (now) => {
+    const dt = Math.min((now - last) / 16.67, 3); last = now;
+    ctx.clearRect(0, 0, W, H);
+    let alive = 0;
+    for (const p of ps) {
+      p.life += dt * 16.67;
+      if (p.life > p.max || p.y > H + 30) continue;
+      alive++;
+      p.vy += 0.34 * dt; p.vx *= 0.985; p.vy *= 0.985;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+      const fade = Math.min(1, (p.max - p.life) / 500);
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, fade);
+      ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.fillStyle = p.col;
+      if (p.star) {
+        const R = p.w * 0.7, q = R * 0.22;
+        ctx.beginPath();
+        ctx.moveTo(0, -R); ctx.quadraticCurveTo(q, -q, R, 0); ctx.quadraticCurveTo(q, q, 0, R); ctx.quadraticCurveTo(-q, q, -R, 0); ctx.quadraticCurveTo(-q, -q, 0, -R);
+        ctx.fill();
+      } else {
+        ctx.scale(1, Math.abs(Math.cos(p.rot * 1.7)) * 0.8 + 0.2);
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      }
+      ctx.restore();
+    }
+    if (alive && !document.hidden) raf = requestAnimationFrame(step);
+    else { cancelAnimationFrame(raf); c.remove(); removeEventListener("resize", size); }
+  };
+  addEventListener("resize", size, { passive: true });
+  raf = requestAnimationFrame(step);
+  setTimeout(() => { if (c.isConnected) { cancelAnimationFrame(raf); c.remove(); } }, 6000);
+}
+
+// ---------- 4a. swipe a cart item to remove it (touch only) ----------
+function kdUndoToast(row, idx, name) {
+  const el = $("#toast");
+  if (!el) return;
+  el.innerHTML = `<span class="toast-rich"><span class="toast-msg">${escapeHTML(t("{0} removed from cart.", name))}</span><button type="button" class="toast-link" id="toastUndo">${escapeHTML(t("Undo"))}</button></span>`;
+  $("#toastUndo").onclick = () => {
+    el.classList.remove("show");
+    if (!state.cart.some((x) => cartKey(x) === cartKey(row))) state.cart.splice(Math.min(idx, state.cart.length), 0, row);
+    saveCart();
+    if ((location.pathname.replace(/\/$/, "") || "/") === "/cart") renderCartPage();
+    window.kdFx?.tap();
+  };
+  el.classList.add("show");
+  clearTimeout(window.__toast);
+  window.__toast = setTimeout(() => el.classList.remove("show"), 5000);
+}
+function kdEnhanceCartSwipe() {
+  const list = document.querySelector(".cart-page-items");
+  const touch = "ontouchstart" in window || (navigator.maxTouchPoints || 0) > 0;
+  if (!list || !touch || list.dataset.swipe) return;
+  list.dataset.swipe = "1";
+  const trash = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v5M14 11v5"/></svg>';
+  list.querySelectorAll(".cart-page-item").forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "swipe-row";
+    row.innerHTML = `<div class="swipe-bg" aria-hidden="true"><span>${trash} ${escapeHTML(t("Remove"))}</span><span>${escapeHTML(t("Remove"))} ${trash}</span></div>`;
+    item.before(row);
+    row.append(item);
+    let id = null, sx = 0, sy = 0, dx = 0, lock = "", t0 = 0, dragged = false;
+    const reset = () => { item.style.transition = "transform .25s cubic-bezier(.2,.8,.2,1)"; item.style.transform = ""; row.classList.remove("is-dragging"); row.style.removeProperty("--swp"); };
+    item.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" || id !== null) return;
+      id = e.pointerId; sx = e.clientX; sy = e.clientY; dx = 0; lock = ""; t0 = performance.now(); dragged = false;
+      item.style.transition = "none";
+    });
+    item.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== id) return;
+      const mx = e.clientX - sx, my = e.clientY - sy;
+      if (!lock) {
+        if (Math.abs(mx) < 9 && Math.abs(my) < 9) return;
+        lock = Math.abs(mx) > Math.abs(my) * 1.2 ? "x" : "y";
+        if (lock === "x") { try { item.setPointerCapture(id); } catch {} row.classList.add("is-dragging"); }
+      }
+      if (lock !== "x") return;
+      dragged = true;
+      const w = item.offsetWidth || 300;
+      dx = Math.sign(mx) * Math.min(Math.abs(mx), w * 0.9);
+      item.style.transform = `translateX(${dx}px)`;
+      row.style.setProperty("--swp", Math.min(1, Math.abs(dx) / (w * 0.3)).toFixed(2));
+    });
+    const end = (e) => {
+      if (e.pointerId !== id) return;
+      id = null;
+      if (lock !== "x") return;
+      const w = item.offsetWidth || 300, v = Math.abs(dx) / Math.max(1, performance.now() - t0);
+      if (Math.abs(dx) > w * 0.38 || (v > 0.6 && Math.abs(dx) > 70)) {
+        window.kdFx?.warn();
+        const key = item.querySelector("[data-remove]")?.dataset.remove;
+        const gone = state.cart.find((x) => cartKey(x) === key);
+        const idx = gone ? state.cart.indexOf(gone) : -1;
+        const p = gone && state.products.find((x) => x.id === gone.product_id);
+        item.style.transition = "transform .18s ease-in";
+        item.style.transform = `translateX(${Math.sign(dx) * (w + 40)}px)`;
+        row.style.transition = "height .2s ease, margin .2s ease, opacity .2s ease";
+        row.style.height = row.offsetHeight + "px";
+        setTimeout(() => {
+          row.style.height = "0px"; row.style.marginBottom = "-12px"; row.style.opacity = "0";
+          setTimeout(() => {
+            dragged = false; // let the programmatic press through the click guard below
+            item.querySelector("[data-remove]")?.click();
+            if (gone && idx >= 0) kdUndoToast(gone, idx, p ? pName(p) : "");
+          }, 200);
+        }, 170);
+      } else reset();
+    };
+    item.addEventListener("pointerup", end);
+    item.addEventListener("pointercancel", (e) => { if (e.pointerId === id) { id = null; reset(); } });
+    // a swipe that started on a button must not also press it
+    item.addEventListener("click", (e) => { if (dragged) { e.preventDefault(); e.stopPropagation(); dragged = false; } }, true);
+  });
+}
+
+// ---------- 4b. drag-down handle on bottom sheets (phones) ----------
+function kdSheetInit(backdrop) {
+  const modal = backdrop && backdrop.querySelector(".modal");
+  if (!modal) return;
+  const grip = modal.querySelector(".sheet-grip"), head = modal.querySelector(".modal-head");
+  if (grip) grip.title = t("Drag down to close");
+  let id = null, sy = 0, dy = 0, t0 = 0, handle = null;
+  const sheetMode = () => { try { return matchMedia("(max-width:700px)").matches; } catch { return false; } };
+  const down = (e) => {
+    if (!sheetMode() || id !== null || e.button || e.target.closest("button,a,input,select,textarea")) return;
+    id = e.pointerId; sy = e.clientY; dy = 0; t0 = performance.now(); handle = e.currentTarget;
+    try { handle.setPointerCapture(id); } catch {}
+    modal.style.animation = "none"; modal.style.transition = "none";
+  };
+  const move = (e) => {
+    if (e.pointerId !== id) return;
+    dy = Math.max(0, e.clientY - sy);
+    modal.style.transform = `translateY(${dy}px)`;
+    backdrop.style.opacity = String(Math.max(0.15, 1 - dy / (modal.offsetHeight * 0.9)));
+  };
+  const up = (e) => {
+    if (e.pointerId !== id) return;
+    id = null;
+    const v = dy / Math.max(1, performance.now() - t0);
+    modal.style.transition = "transform .22s cubic-bezier(.2,.8,.2,1)";
+    backdrop.style.transition = "opacity .22s ease";
+    if (dy > 110 || (v > 0.55 && dy > 40)) {
+      modal.style.transform = "translateY(105%)"; backdrop.style.opacity = "0";
+      setTimeout(closeModal, 200);
+    } else { modal.style.transform = ""; backdrop.style.opacity = ""; }
+  };
+  [grip, head].forEach((h) => { if (!h) return; h.addEventListener("pointerdown", down); h.addEventListener("pointermove", move); h.addEventListener("pointerup", up); h.addEventListener("pointercancel", up); });
+}
+
+// ---------- 5. skeletons ----------
+function skCategoryHTML(fav) {
+  return `<section class="collection-page container category-page sk-page" aria-busy="true" aria-label="${escapeHTML(t("Loading..."))}"><div class="sk sk-line w40" style="margin:0 0 16px;width:min(220px,50%)"></div><div class="sk sk-title" style="width:min(300px,70%);margin:6px 0 10px"></div><div class="sk sk-line w40" style="margin:0 0 26px;width:min(140px,40%)"></div><div class="product-grid">${skGridHTML()}</div></section>`;
+}
+function skPopularHTML() {
+  return Array.from({ length: 4 }, () => `<div class="sk-pop-card" aria-hidden="true"><div class="sk sk-pop-img"></div><div class="sk sk-line w40"></div><div class="sk sk-line w80"></div><div class="sk sk-line w60"></div></div>`).join("");
+}
+function skBundleHTML() {
+  return `<div class="sk-bundle" aria-hidden="true">${Array.from({ length: 2 }, () => `<div class="sk-cart-row"><div class="sk sk-thumb"></div><div class="sk-stack"><div class="sk sk-line w80"></div><div class="sk sk-line w40"></div></div></div>`).join("")}</div>`;
+}
+function skRowsHTML() {
+  return `<div class="sk-rows" aria-busy="true" aria-label="${escapeHTML(t("Loading..."))}">${Array.from({ length: 3 }, () => `<div class="sk sk-row"></div>`).join("")}</div>`;
+}
+// Pictures fade in over a shimmer instead of popping in. The class is only added once this script is running,
+// and a 5 second failsafe makes sure a picture is never left hidden.
+(() => {
+  const IMG = [".product-image", ".popular-product-image", ".cart-page-image", ".saved-later-img", ".bundle-img"].map((s) => s + " img").join(",");
+  const mark = (img) => img.classList.add("img-loaded");
+  const scan = (root) => {
+    const list = root.matches && root.matches(IMG) ? [root] : [];
+    if (root.querySelectorAll) root.querySelectorAll(IMG).forEach((i) => list.push(i));
+    list.forEach((img) => {
+      if (img.classList.contains("img-loaded") || img.__kdw) return;
+      img.__kdw = 1;
+      if (img.complete) mark(img); else setTimeout(() => mark(img), 5000);
+    });
+  };
+  document.addEventListener("load", (e) => { if (e.target && e.target.tagName === "IMG") mark(e.target); }, true);
+  document.addEventListener("error", (e) => { if (e.target && e.target.tagName === "IMG") mark(e.target); }, true);
+  new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) scan(n); }).observe(document.body, { childList: true, subtree: true });
+  scan(document.body);
+  document.documentElement.classList.add("kd-imgfx");
 })();

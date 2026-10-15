@@ -1270,7 +1270,7 @@ body.zlb-open{overflow:hidden}
 .gal-item .gal-bar button{flex:1;padding:2px 0;font-size:13px;border:0;border-radius:6px;cursor:pointer}
 
 /* ==== V59 FESTIVAL LAYER ====
-   Slow glow, drifting light, particles, a string of lights, a category ticker and spotlight cards.
+   Slow glow, drifting light, particles, a category ticker and spotlight cards.
    Purely visual: every effect is pointer-events:none or a hover state. JS lives at the end of app.js.
    Motion is removed for people who ask for reduced motion. */
 @property --fest-ang{syntax:"<angle>";inherits:false;initial-value:0deg}
@@ -1312,15 +1312,6 @@ html[dir="rtl"] .fest-progress{transform-origin:100% 50%}
 @keyframes festShine{0%{background-position:100% 0}55%,100%{background-position:0 0}}
 .fest-spark{position:absolute;z-index:3;width:var(--s,16px);height:var(--s,16px);fill:rgb(var(--c,var(--fest-a)));filter:drop-shadow(0 0 8px rgba(var(--c,var(--fest-a)),.9));pointer-events:none;animation:festTwinkle var(--t,4.2s) ease-in-out infinite;animation-delay:var(--d,0s)}
 @keyframes festTwinkle{0%,100%{opacity:.35;transform:scale(.65) rotate(0)}50%{opacity:1;transform:scale(1.1) rotate(45deg)}}
-
-/* string of festival lights over the hero */
-.fest-lights{position:relative;height:0;z-index:2;pointer-events:none}
-.fest-lights-in{position:absolute;left:0;right:0;top:0;height:46px;overflow:hidden;color:rgba(var(--fest-a),.5)}
-.fest-wire{position:absolute;inset:0;width:100%;height:100%}
-.fest-bulb{position:absolute;width:8px;height:12px;margin-left:-4px;border-radius:50% 50% 55% 55%/40% 40% 60% 60%;background:rgb(var(--c));box-shadow:0 0 10px 2px rgba(var(--c),.75),0 0 24px 6px rgba(var(--c),.28);animation:festBulb 3.6s ease-in-out infinite;animation-delay:var(--d,0s)}
-@keyframes festBulb{0%,100%{opacity:.4}50%{opacity:1}}
-@media(max-width:700px){.fest-bulb:nth-of-type(even){display:none}.fest-lights+.hero{padding-top:52px}}
-@media(max-width:950px){.fest-lights+.hero{padding-top:max(52px,6vw)}}
 
 /* ticker of category names */
 .fest-marquee{position:relative;overflow:hidden;margin:-26px 0 18px;padding:13px 0;border-block:1px solid rgba(var(--fest-a),.2);background:linear-gradient(90deg,rgba(var(--fest-a),.1),rgba(var(--fest-b),.09),rgba(var(--fest-c),.1));-webkit-mask-image:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent);mask-image:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent)}
@@ -1399,7 +1390,7 @@ html[data-theme="light"] .product-card:hover{box-shadow:0 18px 40px rgba(60,40,1
 .toast{border-color:rgba(var(--fest-a),.6);box-shadow:var(--shadow),0 0 28px rgba(var(--fest-a),.22)}
 
 @media(prefers-reduced-motion:reduce){
-  .fest-blob,.fest-bulb,.fest-spark,.fest-track,.hero-visual::before,.hero-visual::after,.popular-section::before,.hero h1,.category-card:before,.fest-rim,.site-header::after,.ts-icon,.sale,main .btn.primary,main .eyebrow::before,.popular-product-wrap.fest-in,.fest-in{animation:none!important}
+  .fest-blob,.fest-spark,.fest-track,.hero-visual::before,.hero-visual::after,.popular-section::before,.hero h1,.category-card:before,.fest-rim,.site-header::after,.ts-icon,.sale,main .btn.primary,main .eyebrow::before,.popular-product-wrap.fest-in,.fest-in{animation:none!important}
   .fest-canvas,.fest-section-canvas,.fest-cursor{display:none}
   .fest-marquee{overflow-x:auto}
 }
@@ -1448,3 +1439,147 @@ input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:tex
 }
 @keyframes appSheet{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
 @media(prefers-reduced-motion:reduce){.modal,.modal.wide{animation:none}}
+
+
+/* ==== V61 FEEL LAYER ====
+   Page transitions, order celebration, swipe-to-remove, sheet handle, extra skeletons, footer toggles.
+   Everything motion-related is switched off for people who ask for reduced motion. */
+
+/* page transitions: header and tab bar stay put, the page cross-fades, a product picture grows into its page */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root),::view-transition-new(root){animation-duration:.24s;animation-timing-function:cubic-bezier(.2,.7,.2,1)}
+  html.vt-active .site-header{view-transition-name:kd-header}
+  html.vt-active .bottom-bar{view-transition-name:kd-tabs}
+  html.vt-active .toast{view-transition-name:kd-toast}
+  ::view-transition-group(product-hero){animation-duration:.46s;animation-timing-function:cubic-bezier(.2,.8,.2,1);z-index:5}
+  ::view-transition-old(product-hero),::view-transition-new(product-hero){width:100%;height:100%;object-fit:cover;overflow:clip}
+}
+.sk-seed{aspect-ratio:1/1;max-height:520px;width:100%;border-radius:20px;overflow:hidden;background:var(--panel2)}
+.sk-seed img{display:block;width:100%;height:100%;object-fit:cover}
+
+/* pictures fade in over a shimmer */
+html.kd-imgfx .product-image img,html.kd-imgfx .popular-product-image img,html.kd-imgfx .cart-page-image img,html.kd-imgfx .saved-later-img img,html.kd-imgfx .bundle-img img{transition:opacity .35s ease,transform .3s ease}
+html.kd-imgfx .product-image img:not(.img-loaded),html.kd-imgfx .popular-product-image img:not(.img-loaded),html.kd-imgfx .cart-page-image img:not(.img-loaded),html.kd-imgfx .saved-later-img img:not(.img-loaded),html.kd-imgfx .bundle-img img:not(.img-loaded){opacity:0}
+html.kd-imgfx .product-image:has(img:not(.img-loaded)),html.kd-imgfx .popular-product-image:has(img:not(.img-loaded)),html.kd-imgfx .cart-page-image:has(img:not(.img-loaded)){background:linear-gradient(90deg,#ffffff08 0,#ffffff18 50%,#ffffff08 100%) 0 0/600px 100%;animation:kdShimmer 1.3s linear infinite}
+:root[data-theme="light"].kd-imgfx .product-image:has(img:not(.img-loaded)),:root[data-theme="light"].kd-imgfx .popular-product-image:has(img:not(.img-loaded)),:root[data-theme="light"].kd-imgfx .cart-page-image:has(img:not(.img-loaded)){background:linear-gradient(90deg,rgba(40,25,90,.05) 0,rgba(40,25,90,.15) 50%,rgba(40,25,90,.05) 100%) 0 0/600px 100%}
+
+/* extra skeleton shapes */
+.sk-pop-card{border:1px solid #ffffff14;border-radius:18px;padding:0 0 14px;overflow:hidden;background:linear-gradient(150deg,#171220,#0c0a11)}
+.sk-pop-img{aspect-ratio:1.55;border-radius:0;margin-bottom:14px}
+:root[data-theme="light"] .sk-pop-card{border-color:rgba(40,25,90,.157);background:linear-gradient(150deg,#f9f8fb,#f4f3f8)}
+.sk-bundle{display:grid;gap:12px}
+.sk-rows{display:grid;gap:10px;padding:6px 0}
+.sk-row{height:46px;border-radius:12px}
+
+/* order confirmation: animated check */
+.od-check{width:64px;height:64px;margin:0 0 14px;color:#c4a8ff;filter:drop-shadow(0 0 14px rgba(139,92,246,.7))}
+.od-check svg{display:block;width:100%;height:100%;overflow:visible}
+.od-check circle{fill:rgba(139,92,246,.16);stroke:currentColor;stroke-width:2.5;stroke-dasharray:151;stroke-dashoffset:151;animation:kdDraw .7s ease-out .05s forwards}
+.od-check path{fill:none;stroke:currentColor;stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:36;stroke-dashoffset:36;animation:kdDraw .45s ease-out .6s forwards}
+@keyframes kdDraw{to{stroke-dashoffset:0}}
+:root[data-theme="light"] .od-check{color:#6d3fe8;filter:drop-shadow(0 0 10px rgba(109,63,232,.35))}
+.kd-confetti{position:fixed;inset:0;width:100%;height:100%;z-index:300;pointer-events:none}
+@media (prefers-reduced-motion: reduce) {
+  .od-check circle,.od-check path{animation:none;stroke-dashoffset:0}
+  .kd-confetti{display:none}
+}
+
+/* swipe to remove a cart item (touch) */
+.swipe-row{position:relative;border-radius:16px;overflow:hidden}
+.swipe-bg{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 22px;background:linear-gradient(90deg,#b4232a,#8f1d24);color:#fff;font-size:13px;font-weight:800;opacity:0;pointer-events:none}
+.swipe-bg span{display:inline-flex;align-items:center;gap:8px}
+.swipe-row.is-dragging .swipe-bg{opacity:var(--swp,0)}
+.swipe-row .cart-page-item{position:relative;touch-action:pan-y;will-change:transform}
+html[dir="rtl"] .swipe-bg{flex-direction:row-reverse}
+
+/* drag handle on bottom sheets */
+.sheet-grip{display:none}
+@media (max-width:700px) {
+  .sheet-grip{display:block;position:relative;height:22px;margin:0;touch-action:none;cursor:grab}
+  .sheet-grip::after{content:"";position:absolute;left:50%;top:9px;width:42px;height:5px;margin-left:-21px;border-radius:99px;background:rgba(255,255,255,.26)}
+  .modal-head{touch-action:none}
+  .modal-body{touch-action:pan-y}
+  :root[data-theme="light"] .sheet-grip::after{background:rgba(40,25,90,.26)}
+}
+
+/* footer sound / haptics toggles */
+.fx-toggles{display:inline-flex;gap:8px;flex-wrap:wrap}
+.fx-btn{border:1px solid #ffffff1f;background:transparent;color:var(--muted);border-radius:999px;padding:5px 12px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.fx-btn[aria-pressed="true"]{color:#d5c4ff;border-color:#8b5cf666;background:#8b5cf61a}
+:root[data-theme="light"] .fx-btn{border-color:rgba(40,25,90,.2)}
+:root[data-theme="light"] .fx-btn[aria-pressed="true"]{color:#4b20b6}
+
+
+/* V63 — Kardivo image-reactive ambient lighting. Site-wide brand purple remains unchanged. */
+[data-product-accent].has-product-accent {
+  --product-accent: #827b91;
+  --product-accent-2: #a39aae;
+  --product-accent-3: #5b536b;
+  --product-accent-soft: color-mix(in srgb, var(--product-accent) 12%, var(--surface, #17141f));
+  --product-accent-glow: color-mix(in srgb, var(--product-accent) 52%, transparent);
+}
+.product-card.has-product-accent,
+.popular-product-wrap.has-product-accent,
+.collection-product.has-product-accent,
+.mini-card-wrap.has-product-accent {
+  position: relative;
+  isolation: isolate;
+  background: linear-gradient(145deg, color-mix(in srgb,var(--product-accent) 11%,var(--panel,#17141f)), color-mix(in srgb,var(--product-accent-2) 7%,var(--panel2,#100e16)) 54%, color-mix(in srgb,var(--product-accent-3) 8%,var(--panel,#17141f)));
+  border-color: color-mix(in srgb,var(--product-accent) 40%,var(--line,#34303e));
+  box-shadow: 0 8px 24px -17px var(--product-accent-glow), inset 0 0 0 1px color-mix(in srgb,var(--product-accent) 8%,transparent);
+  transition: border-color .24s ease,box-shadow .24s ease,background .24s ease,transform .24s ease;
+}
+.product-card.has-product-accent::before,
+.popular-product-wrap.has-product-accent::before,
+.collection-product.has-product-accent::before,
+.mini-card-wrap.has-product-accent::before,
+.cart-page-item.has-product-accent::before,
+.saved-later-item.has-product-accent::before,
+.bundle-card.has-product-accent::before {
+  content:""; position:absolute; inset:12% 8% -3%; z-index:-1; pointer-events:none; border-radius:inherit;
+  background:radial-gradient(ellipse at 18% 8%,var(--product-accent-glow),transparent 52%),radial-gradient(ellipse at 88% 82%,color-mix(in srgb,var(--product-accent-2) 35%,transparent),transparent 56%),radial-gradient(ellipse at 52% 110%,color-mix(in srgb,var(--product-accent-3) 28%,transparent),transparent 58%);
+  filter:blur(19px); opacity:.56; transition:opacity .24s ease,filter .24s ease;
+}
+.product-card.has-product-accent:hover,
+.popular-product-wrap.has-product-accent:hover,
+.collection-product.has-product-accent:hover,
+.mini-card-wrap.has-product-accent:hover {
+  border-color:color-mix(in srgb,var(--product-accent) 72%,var(--line,#34303e));
+  box-shadow:0 15px 34px -15px var(--product-accent-glow),0 0 25px -13px var(--product-accent-2),inset 0 0 0 1px color-mix(in srgb,var(--product-accent) 22%,transparent);
+  transform:translateY(-2px);
+}
+.product-card.has-product-accent:hover::before,.popular-product-wrap.has-product-accent:hover::before,.collection-product.has-product-accent:hover::before,.mini-card-wrap.has-product-accent:hover::before{opacity:.9;filter:blur(23px)}
+.has-product-accent .product-image,
+.has-product-accent .popular-product-image,
+.has-product-accent .collection-product-image,
+.has-product-accent .mini-img,
+.has-product-accent .cart-page-image,
+.has-product-accent .saved-later-img,
+.has-product-accent .bundle-img,
+.has-product-accent .qv-media {
+  background:radial-gradient(ellipse at 25% 20%,color-mix(in srgb,var(--product-accent) 19%,transparent),transparent 60%),radial-gradient(ellipse at 80% 90%,color-mix(in srgb,var(--product-accent-2) 15%,transparent),transparent 58%),var(--product-accent-soft);
+}
+.has-product-accent .product-image img,
+.has-product-accent .popular-product-image img,
+.has-product-accent .collection-product-image img,
+.has-product-accent .mini-img img,
+.has-product-accent .cart-page-image img,
+.has-product-accent .saved-later-img img,
+.has-product-accent .bundle-img img,
+.has-product-accent .qv-media img {
+  filter:drop-shadow(0 9px 13px color-mix(in srgb,var(--product-accent) 24%,transparent));
+}
+.has-product-accent .add-btn,.has-product-accent .collection-add{border-color:color-mix(in srgb,var(--product-accent) 48%,transparent)}
+.cart-page-item.has-product-accent,.saved-later-item.has-product-accent,.bundle-card.has-product-accent {
+  position:relative;isolation:isolate;background:linear-gradient(115deg,color-mix(in srgb,var(--product-accent) 10%,var(--panel,#17141f)),color-mix(in srgb,var(--product-accent-2) 7%,var(--panel2,#100e16)) 70%);
+  border-color:color-mix(in srgb,var(--product-accent) 34%,var(--line,#34303e));box-shadow:0 5px 22px -16px var(--product-accent-glow);border-radius:16px;
+}
+.product-page.has-product-accent .product-detail-media {
+  border-color:color-mix(in srgb,var(--product-accent) 46%,var(--line,#34303e));
+  background:radial-gradient(ellipse at 24% 22%,color-mix(in srgb,var(--product-accent) 20%,transparent),transparent 62%),radial-gradient(ellipse at 80% 84%,color-mix(in srgb,var(--product-accent-2) 17%,transparent),transparent 60%),var(--panel,#17141f);
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--product-accent) 10%,transparent),0 20px 52px -28px var(--product-accent-glow),0 0 42px -28px var(--product-accent-2);
+}
+.product-page.has-product-accent .product-detail-copy{background:linear-gradient(135deg,color-mix(in srgb,var(--product-accent) 11%,transparent),color-mix(in srgb,var(--product-accent-2) 5%,transparent) 48%,transparent 78%);border-radius:22px}
+.product-page.has-product-accent .product-detail-price,.qv.has-product-accent .qv-price{text-shadow:0 0 22px var(--product-accent-glow)}
+.search-suggestion.has-product-accent{background:linear-gradient(100deg,color-mix(in srgb,var(--product-accent) 13%,var(--panel,#17141f)),color-mix(in srgb,var(--product-accent-2) 8%,var(--panel2,#100e16)));border-inline-start:3px solid var(--product-accent)}
+@media(prefers-reduced-motion:reduce){[data-product-accent]{transition:none!important}.has-product-accent::before{transition:none!important}}
