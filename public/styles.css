@@ -1207,3 +1207,64 @@ html[data-theme="light"] .coupon-note.ok{color:#15803d}html[data-theme="light"] 
 .reward-history{margin-top:12px;padding-top:10px;border-top:1px solid var(--border,#e4e7ec)}
 .reward-history>.line{font-size:.86rem}
 #productPrice .reward-preview{margin-top:7px}
+
+/* V57 flash-sale countdown + WhatsApp share */
+.sale-timer{display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 4px;padding:9px 16px;border-radius:999px;border:1px solid #f59e0b66;background:linear-gradient(90deg,#f59e0b24,#8b5cf624);color:var(--text);font-size:14px;font-weight:600;line-height:1.3}
+.sale-timer[hidden]{display:none}
+.sale-timer .sale-dot{width:9px;height:9px;border-radius:50%;background:#f59e0b;box-shadow:0 0 0 0 #f59e0b99;flex:none;animation:saleDot 1.8s ease-out infinite}
+.sale-timer .sale-clock{font-variant-numeric:tabular-nums;font-weight:800;font-size:16px;letter-spacing:.04em;color:#ffd48a;direction:ltr;unicode-bidi:isolate}
+.product-detail-copy .sale-timer{margin:10px 0 2px}
+@keyframes saleDot{0%{box-shadow:0 0 0 0 #f59e0b99}70%{box-shadow:0 0 0 9px #f59e0b00}100%{box-shadow:0 0 0 0 #f59e0b00}}
+@media(prefers-reduced-motion:reduce){.sale-timer .sale-dot{animation:none}}
+:root[data-theme="light"] .sale-timer{border-color:#d9770666;background:linear-gradient(90deg,#f59e0b1f,#8b5cf61a)}
+:root[data-theme="light"] .sale-timer .sale-clock{color:#b45309}
+.product-detail-actions .wa-btn{border-color:#25d36655;color:#25d366}
+.product-detail-actions .wa-btn:hover{background:#25d3661f;border-color:#25d366aa}
+:root[data-theme="light"] .product-detail-actions .wa-btn{color:#128c4a;border-color:#128c4a55}
+@media(max-width:520px){.sale-timer{border-radius:18px;width:100%;justify-content:center}}
+@media(max-width:520px){
+.product-detail-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.product-detail-actions #productAdd,.product-detail-actions [data-home]{grid-column:1/-1}
+.product-detail-actions .share-btn{justify-content:center;width:100%}
+}
+.campaign-copy .sale-timer{margin:16px 0 18px}
+
+/* ---- Product image gallery: swipeable on phones, thumbnails + zoom lightbox ---- */
+.pgal{position:relative;padding:0;overflow:hidden}
+.pgal-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x pan-y pinch-zoom}
+.pgal-track::-webkit-scrollbar{display:none}
+.pgal-slide{flex:0 0 100%;scroll-snap-align:start;scroll-snap-stop:always;display:flex;align-items:center;justify-content:center;min-height:340px;padding:0;margin:0;border:0;background:none;cursor:zoom-in;color:inherit}
+.pgal-slide img{display:block;width:100%;height:auto;max-height:620px;object-fit:contain;-webkit-user-drag:none;user-select:none}
+.pgal-zoom{position:absolute;top:12px;inset-inline-end:12px;width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:#000a;color:#fff;font-size:17px;display:grid;place-items:center;cursor:pointer;z-index:2;backdrop-filter:blur(6px)}
+.pgal-nav{position:absolute;top:50%;transform:translateY(-50%);width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:#000a;color:#fff;font-size:20px;line-height:1;display:none;place-items:center;cursor:pointer;z-index:2}
+.pgal-nav.prev{inset-inline-start:10px}.pgal-nav.next{inset-inline-end:10px}
+.pgal-nav[disabled]{opacity:.35;cursor:default}
+@media(hover:hover) and (min-width:801px){.pgal-nav{display:grid}}
+.pgal-dots{display:flex;gap:7px;justify-content:center;padding:10px 0 4px}
+.pgal-dots button{width:8px;height:8px;padding:0;border-radius:50%;border:0;background:#ffffff40;cursor:pointer}
+.pgal-dots button[aria-current="true"]{background:var(--purple,#8055c7);transform:scale(1.25)}
+.pgal-thumbs{display:flex;gap:8px;padding:8px 12px 12px;overflow-x:auto;scrollbar-width:thin}
+.pgal-thumbs button{flex:0 0 64px;height:64px;padding:0;border-radius:10px;overflow:hidden;border:2px solid transparent;background:#ffffff0a;cursor:pointer;opacity:.7}
+.pgal-thumbs button[aria-current="true"]{border-color:var(--purple,#8055c7);opacity:1}
+.pgal-thumbs img{width:100%;height:100%;object-fit:cover;display:block}
+@media(max-width:800px){.pgal-thumbs{display:none}}
+@media(min-width:801px){.pgal-dots{display:none}}
+:where(html[data-theme="light"]) .pgal-dots button{background:#28195a33}
+:where(html[data-theme="light"]) .pgal-thumbs button{background:#28195a0d}
+.zlb{position:fixed;inset:0;z-index:10000;background:#05040af2;display:flex;flex-direction:column;touch-action:none;user-select:none;-webkit-user-select:none}
+.zlb-stage{flex:1;position:relative;overflow:hidden;display:grid;place-items:center;cursor:zoom-in}
+.zlb-stage.zoomed{cursor:grab}.zlb-stage.panning{cursor:grabbing}
+.zlb-img{max-width:100%;max-height:100%;object-fit:contain;transform-origin:center center;will-change:transform;-webkit-user-drag:none;pointer-events:none}
+.zlb-btn{position:absolute;width:44px;height:44px;border-radius:50%;border:1px solid #ffffff30;background:#1b1826cc;color:#fff;font-size:22px;display:grid;place-items:center;cursor:pointer;z-index:3}
+.zlb-close{top:14px;inset-inline-end:14px}
+.zlb-prev{top:50%;inset-inline-start:14px;transform:translateY(-50%)}.zlb-next{top:50%;inset-inline-end:14px;transform:translateY(-50%)}
+.zlb-count{position:absolute;top:22px;inset-inline-start:18px;color:#fff;font:600 13px Inter,system-ui,sans-serif;background:#1b1826cc;padding:5px 11px;border-radius:99px;z-index:3}
+.zlb-tools{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:3}
+.zlb-tools .zlb-btn{position:static}
+@media(max-width:800px){.zlb-prev,.zlb-next{display:none}}
+body.zlb-open{overflow:hidden}
+.gal-admin{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0}
+.gal-item{position:relative;width:96px;border:1px solid var(--line,#ddd);border-radius:10px;overflow:hidden;background:#ffffff08}
+.gal-item img{display:block;width:96px;height:96px;object-fit:cover}
+.gal-item .gal-bar{display:flex;justify-content:space-between;gap:2px;padding:3px}
+.gal-item .gal-bar button{flex:1;padding:2px 0;font-size:13px;border:0;border-radius:6px;cursor:pointer}

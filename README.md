@@ -1,3 +1,40 @@
+# Kardivo V57 — Flash-sale countdown + richer WhatsApp sharing
+
+- **Flash-sale countdown (display only)**: Admin > Settings > "Flash-sale countdown". Set "Sale ends at" (your local time), a label (Arabic version in the Arabic section), and whether to show it on the homepage campaign banner and on product pages. A product page shows the timer only when the selected option has an old (crossed-out) price, and it follows the option picker. Empty date = no countdown. **Prices never change when the sale ends**: the timer just disappears, so remove the old prices yourself afterwards (Bulk edit > price % helps).
+- **Reliable clock**: the server sends its own time with the public settings and the timer counts against that, so a customer's phone with the wrong date or timezone still sees the right remaining time. The server also stops sending a sale once it has ended, and a timer on screen hides itself the second it reaches zero. A single 1-second timer drives every countdown on the page and stops when none is visible.
+- **WhatsApp share**: product pages (which already had a Share button) now have a **WhatsApp** button next to it that opens WhatsApp directly, and both buttons send a better message: product name, price ("Price from" the lowest option when there are options; the old price too when discounted), and the link. English pages share the `?lang=en` link, Arabic pages the plain link. The Share button still opens the phone's share sheet when available and falls back to WhatsApp. The link preview image/title/description come from the existing `og:` tags (no new image generation).
+- Phone layout: Add to cart full width, Share and WhatsApp side by side, Back to store below. Styles cover the light theme, Arabic (RTL) and reduced motion.
+- No schema or migration changes: five new settings (`sale_ends_at`, `sale_label`, `sale_label_ar`, `sale_on_banner`, `sale_on_products`) come from the built-in defaults. `sw.js` cache v36, `app.js?v=50`, `styles.css?v=43`.
+- Tested: in headless Chromium against a mocked API (server-clock skew, ticking, variant switching, toggles, expiry while on the page, share text in English and Arabic, native share vs `wa.me` fallback) and the real `worker.js` against a SQLite-backed D1 shim (public filtering of an ended sale, date validation, nothing half-saved on a bad date, non-admin blocked). Not tested: real Cloudflare, real WhatsApp, iOS Safari. Verify on staging: set a sale ending in 5 minutes, watch it on a phone and let it expire.
+- Not included: per-product sale dates (one store-wide end date for now) and the countdown on product cards in the grid.
+
+---
+
+# Kardivo V56 — AI SEO text + AI image cleanup
+
+- **AI SEO text**: product form > "Search / SEO text" > "✨ Write SEO text". Gemini writes the meta title (about 60 chars), meta description (about 155) and search keywords in Arabic and English from the product's name, category, platform, region and descriptions (no web search, only the facts you entered; it is told never to invent prices, discounts or guarantees). It fills only empty fields unless "Replace existing" is ticked, and nothing is saved until you press Save product. Admin > Products > **✨ AI SEO text** does the same for every product missing a meta title/description, one at a time, saving only empty fields (`POST /api/admin/ai/seo` with `product_id` + `save`).
+- **Product pages now use the SEO fields**: `<title>`, `<meta name="description">`, `og:title/og:description`, JSON-LD description and a new `<meta name="keywords">` (the tab title too). Arabic pages use the Arabic fields and English pages the English ones; empty fields fall back to the old behaviour (product name + description). The store name is appended to the title only when the result stays under about 65 characters.
+- **AI image cleanup**: product form > "✨ Clean up with AI" sends the uploaded file (or the Image URL) to a Gemini image model and shows a **preview**; "Use this image" puts it in the upload field and it is stored on Save. Select products in the list and press **✨ Clean images** for a bulk run (saved immediately, no preview, one at a time, original kept). The first cleanup remembers the original in `products.image_original`; "Restore original image" in the edit form (or `POST /api/admin/products/:id/restore-image`) puts it back. The prompt tells the model to keep logos and text exactly as they are and to remove screenshot clutter. Settings > AI auto-fill has two new fields: image model (default `gemini-2.5-flash-image`; change it if Google retires it) and the cover background description, so every cover matches. Image calls are limited to 60 per admin per hour (text AI keeps its 300).
+- **Schema version 17**: adds nullable columns `meta_title`, `meta_description`, `meta_title_ar`, `meta_description_ar`, `seo_keywords`, `seo_keywords_ar`, `image_original` to `products` (runs automatically on the first request). Saving a product from an older cached admin page keeps the stored SEO fields. `image_original` is never sent to the storefront.
+- `sw.js` cache v35, `app.js?v=49`. CSV export/import does not include the SEO columns yet.
+- Not covered: a real Worker/D1/Gemini run. The Gemini calls were run against a mocked API (SEO parsing and length limits, image result, retry without `imageConfig`, refusal text, 429) and the SQL against SQLite. Verify on staging with your real key: (1) cleanup on 3 or 4 products with text-heavy art, since image models can still change small text, (2) view-source on a product page for the new title/description, (3) that your key and billing allow the image model.
+
+---
+
+# Kardivo V54 — Product CSV import/export, scroll fix, Gemini auto-fill
+
+- **Export / Import CSV** on Admin > Products (plus a template download). Export includes every product (hidden too) with options as `Name:Price[:OldPrice] | Name2:Price2`. Import shows a preview (new / updated / skipped) before anything is written, matches products by `id`, then `slug`, then the name, and never erases existing data with a blank cell. Unknown categories are created. Existing options are matched by name and repriced; options missing from the file are left alone. New endpoint: `POST /api/admin/products/import` (chunks of at most 60 rows; each chunk is one D1 batch).
+- **Scroll position kept**: saving, cancelling, hiding or deleting a product no longer jumps the admin page to the top.
+- **AI auto-fill (Gemini)**: "Auto-fill with AI" button in the product form. It uses the typed name, the image (uploaded file or Image URL) and Google Search grounding to fill the Arabic name, both descriptions, platform, region and category. By default it only fills empty fields; "Replace existing text" overwrites. Nothing is saved until you press Save. Configure in Admin > Settings > AI auto-fill: API key, model (default `gemini-3.8-flash`, change it if Google retires it), optional extra instructions. The key is stored in the `settings` table, never returned to the browser, and removed from `/api/settings/public` and `/api/admin/settings`. A `GEMINI_API_KEY` Worker secret (`wrangler secret put GEMINI_API_KEY`) takes priority over the saved key. Limited to 300 AI requests per admin per hour.
+- **AI fill missing** (Admin > Products): fills every product that lacks an Arabic name or a description, one at a time, empty fields only (never names or prices). Can be stopped; waits and retries once on a Gemini rate limit.
+- **Dashboard revenue chart**: SVG bars per day (per week above 90 days), empty days included, 7-day average line, axis labels and hover details.
+- **Bulk edit** (Admin > Products): tick products, then set category, show/hide, feature/unfeature or change price (and old price) by a percentage. Options (variants) are not repriced.
+- **AI draft reply** (order > Support thread > "✨ Draft"): Gemini reads the order facts and recent messages and drafts a reply in the customer's language. It never sends anything; you edit and press Send. Endpoint `POST /api/admin/ai/reply`.
+- No schema changes. `sw.js` cache v34, `app.js?v=48`.
+- Not covered: a real Worker/D1/Gemini run. Import logic was run against SQLite and the Gemini call against a mocked API. Verify on staging with your real key and a few products first.
+
+---
+
 # Kardivo V50 — Balance, rewards, and checkout hardening
 
 ## Changes in this build
@@ -271,3 +308,9 @@ No DROP/TRUNCATE/reset/mass migration is included. Existing `schema.sql` and `wr
 - Live regions: `#toast` is `role="status"`, and a hidden `#a11yLive` announces cart count and quantity changes. Focus stays on the quantity button after a change.
 - Modals are `role="dialog"` with a labelled close button, focus moved in and restored, and Tab trapped inside.
 - Hearts have a 44px hit area; quantity buttons, add buttons, chips and close buttons are at least 44px on touch screens. Star ratings read as "N out of 5 stars".
+
+## Product image gallery
+- Each product has its cover (`image_url`) plus up to 8 extra images (`products.gallery`, a JSON list added automatically by the schema migration, version 18; existing data is untouched).
+- Admin > product form > "Gallery images": add links or upload several files, reorder, remove. Uploads are stored in R2 when you press Save product (`POST /api/admin/products/:id/image?gallery=1` returns the URL without changing the cover).
+- Saves validate links: http(s) URLs or our own `/media/product/...` URLs, with the key URL-decoded first, so both `products%2F1%2Fid.png` and `products/1/id.png` are accepted. An admin page that doesn't send `gallery` leaves the existing gallery alone; `gallery: []` clears it.
+- Storefront: swipeable gallery on phones (dots), thumbnails and arrows on desktop, tap/click opens a zoom viewer (pinch, double-tap, wheel, drag to pan, swipe or arrow keys). Product JSON-LD lists the cover plus gallery images for Google.

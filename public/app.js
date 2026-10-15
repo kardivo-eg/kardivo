@@ -14,7 +14,15 @@ const state = {
   admin: { tab: "dashboard", data: {} },
 };
 const AR = {
+  WhatsApp: "واتساب",
   Close: "إغلاق",
+  "Zoom image": "تكبير الصورة",
+  "Previous image": "الصورة السابقة",
+  "Next image": "الصورة التالية",
+  "Image {0} of {1}": "صورة {0} من {1}",
+  "Zoom in": "تكبير",
+  "Zoom out": "تصغير",
+  "Show image {0}": "عرض الصورة {0}",
   "{0} out of 5 stars": "{0} من 5 نجوم",
   "{0} removed from cart.": "{0} اتشال من السلة.",
   "Popular searches": "الأكتر بحثاً",
@@ -775,6 +783,167 @@ const stockImg = (url, alt, fallback = STOCK_ART[0], className = "", sizes = "(m
     : "";
   return `<img${className ? ` class="${escapeHTML(className)}"` : ""} src="${escapeHTML(src)}"${rs} alt="${escapeHTML(alt || "")}" loading="lazy" decoding="async" data-stock-fallback="${safeFallback}" onerror="this.removeAttribute('srcset');if(this.dataset.stockFallback&&this.src!==this.dataset.stockFallback){this.src=this.dataset.stockFallback;this.dataset.stockFallback=''}else{this.remove()}">`;
 };
+
+// ---- Product image gallery (swipe on phones, thumbnails + zoom lightbox) ----
+const productImageList = (p) => {
+  const list = Array.isArray(p.images) && p.images.length ? p.images : [p.image_url, ...(Array.isArray(p.gallery) ? p.gallery : [])];
+  return [...new Set(list.map((u) => String(u || "").trim()).filter(Boolean))];
+};
+function productGalleryHTML(p, name) {
+  const imgs = productImageList(p);
+  if (!imgs.length) return `<div class="product-detail-media">${stockImg("", name, stockArtFor(p))}</div>`;
+  const many = imgs.length > 1;
+  return `<div class="product-detail-media pgal" data-pgal role="region" aria-roledescription="carousel" aria-label="${escapeHTML(name)}"><div class="pgal-track" tabindex="0">${imgs.map((u, i) => `<button type="button" class="pgal-slide" data-pgal-open="${i}" aria-label="${escapeHTML(t("Zoom image"))}${many ? " " + escapeHTML(t("Image {0} of {1}", i + 1, imgs.length)) : ""}"><img src="${escapeHTML(u)}" alt="${escapeHTML(many ? `${name} (${i + 1}/${imgs.length})` : name)}" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async" draggable="false" onerror="if(this.dataset.f!=='1'){this.dataset.f='1';this.src='${escapeHTML(stockArtFor(p))}'}else{this.remove()}"></button>`).join("")}</div><span class="pgal-zoom" aria-hidden="true">⤢</span>${many ? `<button type="button" class="pgal-nav prev" data-pgal-step="-1" aria-label="${escapeHTML(t("Previous image"))}">‹</button><button type="button" class="pgal-nav next" data-pgal-step="1" aria-label="${escapeHTML(t("Next image"))}">›</button><div class="pgal-dots">${imgs.map((_, i) => `<button type="button" data-pgal-go="${i}" aria-label="${escapeHTML(t("Show image {0}", i + 1))}" ${i === 0 ? 'aria-current="true"' : ""}></button>`).join("")}</div><div class="pgal-thumbs">${imgs.map((u, i) => `<button type="button" data-pgal-go="${i}" aria-label="${escapeHTML(t("Show image {0}", i + 1))}" ${i === 0 ? 'aria-current="true"' : ""}><img src="${escapeHTML(u)}" alt="" loading="lazy" draggable="false"></button>`).join("")}</div>` : ""}</div>`;
+}
+function initProductGallery(p) {
+  const root = document.querySelector("[data-pgal]");
+  if (!root) return;
+  const imgs = productImageList(p),
+    track = root.querySelector(".pgal-track"),
+    slides = [...track.children];
+  let cur = 0;
+  const mark = (i) => {
+    cur = i;
+    root.querySelectorAll("[data-pgal-go]").forEach((b) => (Number(b.dataset.pgalGo) === i ? b.setAttribute("aria-current", "true") : b.removeAttribute("aria-current")));
+    root.querySelector(".pgal-nav.prev")?.toggleAttribute("disabled", i <= 0);
+    root.querySelector(".pgal-nav.next")?.toggleAttribute("disabled", i >= imgs.length - 1);
+  };
+  const go = (i) => {
+    i = Math.max(0, Math.min(imgs.length - 1, i));
+    // scrollIntoView keeps working in RTL, where scrollLeft is negative
+    slides[i].scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+    mark(i);
+  };
+  let raf = 0;
+  track.addEventListener("scroll", () => {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      const w = track.clientWidth || 1,
+        i = Math.max(0, Math.min(imgs.length - 1, Math.round(Math.abs(track.scrollLeft) / w)));
+      if (i !== cur) mark(i);
+    });
+  }, { passive: true });
+  mark(0);
+  root.addEventListener("click", (e) => {
+    const step = e.target.closest("[data-pgal-step]"),
+      to = e.target.closest("[data-pgal-go]"),
+      open = e.target.closest("[data-pgal-open]");
+    if (step) go(cur + Number(step.dataset.pgalStep));
+    else if (to) go(Number(to.dataset.pgalGo));
+    else if (open) openZoomLightbox(imgs, Number(open.dataset.pgalOpen), (i) => go(i));
+  });
+  track.addEventListener("keydown", (e) => {
+    const rtl = document.documentElement.dir === "rtl";
+    if (e.key === "ArrowRight") go(cur + (rtl ? -1 : 1));
+    else if (e.key === "ArrowLeft") go(cur + (rtl ? 1 : -1));
+  });
+}
+function openZoomLightbox(imgs, start, onChange) {
+  if (document.querySelector(".zlb")) return;
+  let i = start, scale = 1, tx = 0, ty = 0;
+  const MAX = 5, last = document.activeElement;
+  const el = document.createElement("div");
+  el.className = "zlb";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-modal", "true");
+  const many = imgs.length > 1;
+  el.innerHTML = `<div class="zlb-stage"><img class="zlb-img" alt="" draggable="false"></div>${many ? `<span class="zlb-count"></span><button type="button" class="zlb-btn zlb-prev" aria-label="${escapeHTML(t("Previous image"))}">‹</button><button type="button" class="zlb-btn zlb-next" aria-label="${escapeHTML(t("Next image"))}">›</button>` : ""}<button type="button" class="zlb-btn zlb-close" aria-label="${escapeHTML(t("Close"))}">✕</button><div class="zlb-tools"><button type="button" class="zlb-btn" data-z="out" aria-label="${escapeHTML(t("Zoom out"))}">−</button><button type="button" class="zlb-btn" data-z="in" aria-label="${escapeHTML(t("Zoom in"))}">+</button></div>`;
+  document.body.appendChild(el);
+  document.body.classList.add("zlb-open");
+  const stage = el.querySelector(".zlb-stage"), img = el.querySelector(".zlb-img");
+  const clamp = () => {
+    const r = stage.getBoundingClientRect(), w = img.clientWidth * scale, h = img.clientHeight * scale;
+    const mx = Math.max(0, (w - r.width) / 2), my = Math.max(0, (h - r.height) / 2);
+    tx = Math.max(-mx, Math.min(mx, tx));
+    ty = Math.max(-my, Math.min(my, ty));
+  };
+  const draw = (anim) => {
+    if (scale <= 1) { tx = 0; ty = 0; } else clamp();
+    img.style.transition = anim ? "transform .2s ease" : "none";
+    img.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
+    stage.classList.toggle("zoomed", scale > 1);
+  };
+  const show = (n) => {
+    i = (n + imgs.length) % imgs.length;
+    scale = 1; tx = 0; ty = 0;
+    img.src = imgs[i];
+    draw(false);
+    const c = el.querySelector(".zlb-count");
+    if (c) c.textContent = `${i + 1} / ${imgs.length}`;
+    onChange && onChange(i);
+  };
+  const zoomAt = (ns, cx, cy, anim = true) => {
+    ns = Math.max(1, Math.min(MAX, ns));
+    const r = stage.getBoundingClientRect(), ox = cx - (r.left + r.width / 2), oy = cy - (r.top + r.height / 2), k = ns / scale;
+    tx = ox - (ox - tx) * k; ty = oy - (oy - ty) * k; scale = ns;
+    draw(anim);
+  };
+  const close = () => {
+    document.removeEventListener("keydown", onKey, true);
+    el.remove();
+    document.body.classList.remove("zlb-open");
+    try { last && last.focus && last.focus(); } catch {}
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") { e.stopPropagation(); close(); }
+    else if (many && (e.key === "ArrowRight" || e.key === "ArrowLeft")) show(i + ((e.key === "ArrowRight") === (document.documentElement.dir !== "rtl") ? 1 : -1));
+    else if (e.key === "+" || e.key === "=") { const r = stage.getBoundingClientRect(); zoomAt(scale * 1.5, r.left + r.width / 2, r.top + r.height / 2); }
+    else if (e.key === "-") { const r = stage.getBoundingClientRect(); zoomAt(scale / 1.5, r.left + r.width / 2, r.top + r.height / 2); }
+  };
+  document.addEventListener("keydown", onKey, true);
+  el.querySelector(".zlb-close").onclick = close;
+  el.querySelector(".zlb-prev")?.addEventListener("click", () => show(i - 1));
+  el.querySelector(".zlb-next")?.addEventListener("click", () => show(i + 1));
+  el.querySelector(".zlb-tools").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-z]");
+    if (!b) return;
+    const r = stage.getBoundingClientRect();
+    zoomAt(b.dataset.z === "in" ? scale * 1.6 : scale / 1.6, r.left + r.width / 2, r.top + r.height / 2);
+  });
+  stage.addEventListener("wheel", (e) => { e.preventDefault(); zoomAt(scale * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX, e.clientY, false); }, { passive: false });
+  // pointer gestures: drag to pan when zoomed, swipe to change image when not, pinch with two fingers, double tap/click to toggle
+  const pts = new Map();
+  let startDist = 0, startScale = 1, sx = 0, sy = 0, stx = 0, sty = 0, moved = 0, lastTap = 0, swipeDx = 0;
+  stage.addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".zlb-btn")) return;
+    stage.setPointerCapture(e.pointerId);
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 1) { sx = e.clientX; sy = e.clientY; stx = tx; sty = ty; moved = 0; swipeDx = 0; stage.classList.add("panning"); }
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; startDist = Math.hypot(a.x - b.x, a.y - b.y) || 1; startScale = scale; }
+  });
+  stage.addEventListener("pointermove", (e) => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) {
+      const [a, b] = [...pts.values()];
+      zoomAt(startScale * (Math.hypot(a.x - b.x, a.y - b.y) / startDist), (a.x + b.x) / 2, (a.y + b.y) / 2, false);
+      moved = 99;
+    } else if (pts.size === 1) {
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      moved = Math.max(moved, Math.hypot(dx, dy));
+      if (scale > 1) { tx = stx + dx; ty = sty + dy; draw(false); } else swipeDx = dx;
+    }
+  });
+  const end = (e) => {
+    if (!pts.has(e.pointerId)) return;
+    const wasPinch = pts.size === 2;
+    pts.delete(e.pointerId);
+    stage.classList.remove("panning");
+    if (pts.size === 1) { const [p0] = [...pts.values()]; sx = p0.x; sy = p0.y; stx = tx; sty = ty; }
+    if (pts.size || wasPinch) { if (scale < 1.05) { scale = 1; draw(true); } return; }
+    if (scale <= 1 && many && Math.abs(swipeDx) > 60 && moved > 60) { show(i + (swipeDx < 0 ? 1 : -1) * (document.documentElement.dir === "rtl" ? -1 : 1)); return; }
+    if (moved < 8) {
+      const now = Date.now();
+      if (now - lastTap < 320) { lastTap = 0; scale > 1 ? ((scale = 1), draw(true)) : zoomAt(2.5, e.clientX, e.clientY); }
+      else lastTap = now;
+    }
+  };
+  stage.addEventListener("pointerup", end);
+  stage.addEventListener("pointercancel", end);
+  stage.addEventListener("dblclick", (e) => e.preventDefault());
+  show(i);
+  el.querySelector(".zlb-close").focus();
+}
 function loadCart() {
   try {
     return JSON.parse(localStorage.getItem("kardivo_cart") || "[]");
@@ -935,6 +1104,8 @@ async function api(path, options = {}) {
   } catch {}
   if (!res.ok)
     throw new Error(tr(body.error || `Request failed (${res.status})`));
+  // The countdown uses the server's clock, so a phone with the wrong time still shows the right remaining time.
+  if (path === "/api/settings/public" && body && body.server_time) state.timeOffset = Number(body.server_time) - Date.now();
   return body;
 }
 const skProductHTML = () => `<section class="product-page container sk-page" aria-busy="true" aria-label="${escapeHTML(t("Loading product..."))}"><div class="sk sk-line w40" style="margin:0 0 18px"></div><div class="product-detail"><div class="sk sk-hero-img"></div><div class="sk-stack"><div class="sk sk-line w40"></div><div class="sk sk-title"></div><div class="sk sk-line w80"></div><div class="sk sk-line w60"></div><div class="sk sk-block"></div><div class="sk sk-btn"></div></div></div></section>`;
@@ -1214,6 +1385,58 @@ function renderPopularSearches(box) {
   box.innerHTML = html;
   box.hidden = !html;
 }
+// ---- Flash-sale countdown (display only: it never changes any price) ----
+const saleEndMs = () => {
+  const e = Date.parse(String(state.settings.sale_ends_at || ""));
+  return isNaN(e) ? 0 : e;
+};
+const saleLeftMs = () => (saleEndMs() ? saleEndMs() - (Date.now() + (state.timeOffset || 0)) : 0);
+const saleActive = () => saleLeftMs() > 0;
+function saleClockText(ms) {
+  const sec = Math.max(0, Math.floor(ms / 1000)),
+    d = Math.floor(sec / 86400),
+    p2 = (n) => String(n).padStart(2, "0");
+  return `${d ? d + (state.lang === "ar" ? " يوم " : "d ") : ""}${p2(Math.floor((sec % 86400) / 3600))}:${p2(Math.floor((sec % 3600) / 60))}:${p2(sec % 60)}`;
+}
+const saleLabelText = () => String(S("sale_label") || "").trim() || (state.lang === "ar" ? "العرض بينتهي بعد" : "Sale ends in");
+const saleBlockHTML = (id, hidden) =>
+  `<div class="sale-timer" ${id ? `id="${id}"` : ""} data-sale ${hidden ? "hidden" : ""} role="timer"><span class="sale-dot" aria-hidden="true"></span><span class="sale-label">${escapeHTML(saleLabelText())}</span><bdi dir="ltr" class="sale-clock" data-sale-timer>${saleClockText(saleLeftMs())}</bdi></div>`;
+let saleTick = null;
+// One shared 1-second timer. It stops by itself when no countdown is on screen, and hides every countdown the moment the sale ends.
+function ensureSaleTicker() {
+  if (saleTick) return;
+  const tick = () => {
+    const shown = $$("[data-sale-timer]").filter((e) => !e.closest("[data-sale]")?.hidden);
+    if (!shown.length) { clearInterval(saleTick); saleTick = null; return; }
+    const left = saleLeftMs();
+    if (left <= 0) {
+      state.settings.sale_ends_at = "";
+      $$("[data-sale]").forEach((e) => (e.hidden = true));
+      clearInterval(saleTick);
+      saleTick = null;
+      return;
+    }
+    const txt = saleClockText(left);
+    shown.forEach((e) => (e.textContent = txt));
+  };
+  saleTick = setInterval(tick, 1000);
+}
+// ---- Share a product (WhatsApp first: that is where customers share links) ----
+function productShareData(p, name, variants) {
+  const ar = state.lang === "ar",
+    cur = ar ? "ج.م" : state.settings.store_currency || "EGP",
+    fmt = (v) => `${Number(Number(v).toFixed(2))} ${cur}`,
+    from = variants.length > 1 && new Set(variants.map((v) => Number(v.price))).size > 1,
+    price = variants.length ? Math.min(...variants.map((v) => Number(v.price))) : Number(p.price),
+    old = variants.length ? 0 : Number(p.old_price || 0),
+    was = old > price ? (ar ? ` (بدل ${fmt(old)})` : ` (was ${fmt(old)})`) : "",
+    u = new URL(location.href);
+  u.hash = "";
+  if (ar) u.searchParams.delete("lang");
+  else u.searchParams.set("lang", "en");
+  const label = ar ? (from ? "السعر يبدأ من" : "السعر") : from ? "Price from" : "Price";
+  return { title: name, text: `${name}\n${label}: ${fmt(price)}${was}`, url: u.href };
+}
 function renderCampaign() {
   const section = $("#campaignSection");
   if (!section) return;
@@ -1236,6 +1459,13 @@ function renderCampaign() {
   if (ctaEl && !String(S("campaign_cta") || "").trim()) ctaEl.textContent = state.lang === "ar" ? "اكتشف المنتجات" : "Explore the store";
   const cta = $("#campaignCta");
   if (cta) cta.href = /^(https?:\/\/|\/#|\/product\/|\/)/i.test(link) ? link : "/#store";
+  const sale = $("#campaignSale");
+  if (sale) {
+    sale.hidden = !(saleActive() && String(state.settings.sale_on_banner) !== "0");
+    sale.querySelector(".sale-label").textContent = saleLabelText();
+    sale.querySelector("[data-sale-timer]").textContent = saleClockText(saleLeftMs());
+    if (!sale.hidden) ensureSaleTicker();
+  }
   const art = $("#campaignArt");
   if (art) {
     const artwork = image && /^https?:\/\//i.test(image) ? image : STOCK_ART[0];
@@ -1475,14 +1705,14 @@ async function openProductPage(slug) {
       soldOut =
         p.delivery_type === "code" &&
         (variants.length ? totalStock <= 0 : Number(p.stock) <= 0);
-    document.title = `${name} | ${sn}`;
+    document.title = String((state.lang === "ar" ? p.meta_title_ar : p.meta_title) || "").trim() || `${name} | ${sn}`;
     trackMarketingEvent("product_viewed", { product_id: Number(p.id) });
     const first = variants[0],
       price = variants.length ? Number(first.price) : Number(p.price),
       old = variants.length
         ? Number(first.old_price || 0)
         : Number(p.old_price || 0);
-    main.innerHTML = `<section class="product-page container"><div class="product-breadcrumb"><a href="/" data-home>${t("Store")}</a><span>/</span>${crumbCat(p)}<span>${escapeHTML(name)}</span></div><div class="product-detail"><div class="product-detail-media">${stockImg(p.image_url, name, stockArtFor(p))}</div><div class="product-detail-copy"><span class="eyebrow">${escapeHTML(cName({ name: p.category_name, name_ar: p.category_name_ar }) || t("DIGITAL PRODUCT"))}</span><h1>${escapeHTML(name)}</h1><div class="product-detail-price" id="productPrice">${money(price)} ${old > price ? `<del>${money(old)}</del>` : ""}${rewardPreview(price)}</div><div class="product-detail-meta">${[
+    main.innerHTML = `<section class="product-page container"><div class="product-breadcrumb"><a href="/" data-home>${t("Store")}</a><span>/</span>${crumbCat(p)}<span>${escapeHTML(name)}</span></div><div class="product-detail">${productGalleryHTML(p, name)}<div class="product-detail-copy"><span class="eyebrow">${escapeHTML(cName({ name: p.category_name, name_ar: p.category_name_ar }) || t("DIGITAL PRODUCT"))}</span><h1>${escapeHTML(name)}</h1><div class="product-detail-price" id="productPrice">${money(price)} ${old > price ? `<del>${money(old)}</del>` : ""}${rewardPreview(price)}</div>${saleActive() && String(state.settings.sale_on_products) !== "0" ? saleBlockHTML("productSale", !(old > price)) : ""}<div class="product-detail-meta">${[
       p.platform,
       p.region,
       p.delivery_type === "code"
@@ -1497,7 +1727,8 @@ async function openProductPage(slug) {
       .map((x) => `<span>${escapeHTML(x)}</span>`)
       .join(
         "",
-      )}</div><div class="product-facts"><h3>${t("What to know")}</h3><dl>${p.platform ? `<div><dt>${t("Platform")}</dt><dd>${escapeHTML(p.platform)}</dd></div>` : ""}${p.region ? `<div><dt>${t("Region")}</dt><dd>${escapeHTML(p.region)}</dd></div>` : ""}<div><dt>${t("Delivery")}</dt><dd>${escapeHTML(p.delivery_type === "code" ? (state.lang === "ar" ? "كود رقمي" : "Digital code") : t("Manual delivery"))}</dd></div></dl><p>${t("Digital delivery details")}</p></div>${variants.length ? `<div class="field" style="margin:18px 0"><label>${t("Choose option")}</label><select id="productVariant">${variants.map((v, i) => `<option value="${v.id}" ${i === 0 ? "selected" : ""} data-price="${v.price}" data-old="${v.old_price || 0}" data-stock="${v.stock || 0}">${escapeHTML(v.name)}${p.delivery_type === "code" && state.settings.show_stock !== false ? ` — ${v.stock || 0} ${t("left")}` : ""}</option>`).join("")}</select></div>` : ""}<div class="product-description">${desc ? escapeHTML(desc).replace(/\n/g, "<br>") : t("No description has been added for this product yet.")}</div>${(p.reviews || []).length ? `<div class="admin-panel" style="margin-top:20px"><h3>${t("Customer reviews")}</h3>${p.reviews.map((r) => `<div class="line" style="padding:10px 0"><span><b>${starsHTML(r.rating)}</b><br><small>${escapeHTML(r.user_name || "Verified customer")}</small></span><span style="max-width:55%">${escapeHTML(r.body || "")}${r.photo ? `<br><a href="${escapeHTML(r.photo)}" target="_blank" rel="noreferrer"><img class="review-photo" loading="lazy" src="${escapeHTML(r.photo)}" alt=""></a>` : ""}</span></div>`).join("")}</div>` : ""}<div class="notify-box" id="notifyBox" hidden><b>${t("Sold out right now")}</b><br><small>${t("Leave your email or WhatsApp number and we'll tell you when it's back.")}</small><div style="display:flex;gap:8px;margin-top:8px"><input id="notifyContact" placeholder="${t("Email or WhatsApp number")}" style="flex:1"><button class="btn ghost" id="notifyBtn" type="button">${t("Notify me")}</button></div></div><div class="product-detail-actions"><button class="btn primary" id="productAdd" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Add to cart") : t("Add to cart")}</button><button class="btn ghost share-btn" id="productShare" type="button"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.8l7.4-4.3M8.3 13.2l7.4 4.3"/></svg><span>${t("Share")}</span></button><a class="btn ghost" href="/" data-home>${t("Back to store")}</a></div><p class="delivery-promise" id="deliveryPromise" ${soldOut ? "hidden" : ""}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>${t("Usually delivered in 5–15 min after payment confirmed.")}</span></p></div></div></section>`;
+      )}</div><div class="product-facts"><h3>${t("What to know")}</h3><dl>${p.platform ? `<div><dt>${t("Platform")}</dt><dd>${escapeHTML(p.platform)}</dd></div>` : ""}${p.region ? `<div><dt>${t("Region")}</dt><dd>${escapeHTML(p.region)}</dd></div>` : ""}<div><dt>${t("Delivery")}</dt><dd>${escapeHTML(p.delivery_type === "code" ? (state.lang === "ar" ? "كود رقمي" : "Digital code") : t("Manual delivery"))}</dd></div></dl><p>${t("Digital delivery details")}</p></div>${variants.length ? `<div class="field" style="margin:18px 0"><label>${t("Choose option")}</label><select id="productVariant">${variants.map((v, i) => `<option value="${v.id}" ${i === 0 ? "selected" : ""} data-price="${v.price}" data-old="${v.old_price || 0}" data-stock="${v.stock || 0}">${escapeHTML(v.name)}${p.delivery_type === "code" && state.settings.show_stock !== false ? ` — ${v.stock || 0} ${t("left")}` : ""}</option>`).join("")}</select></div>` : ""}<div class="product-description">${desc ? escapeHTML(desc).replace(/\n/g, "<br>") : t("No description has been added for this product yet.")}</div>${(p.reviews || []).length ? `<div class="admin-panel" style="margin-top:20px"><h3>${t("Customer reviews")}</h3>${p.reviews.map((r) => `<div class="line" style="padding:10px 0"><span><b>${starsHTML(r.rating)}</b><br><small>${escapeHTML(r.user_name || "Verified customer")}</small></span><span style="max-width:55%">${escapeHTML(r.body || "")}${r.photo ? `<br><a href="${escapeHTML(r.photo)}" target="_blank" rel="noreferrer"><img class="review-photo" loading="lazy" src="${escapeHTML(r.photo)}" alt=""></a>` : ""}</span></div>`).join("")}</div>` : ""}<div class="notify-box" id="notifyBox" hidden><b>${t("Sold out right now")}</b><br><small>${t("Leave your email or WhatsApp number and we'll tell you when it's back.")}</small><div style="display:flex;gap:8px;margin-top:8px"><input id="notifyContact" placeholder="${t("Email or WhatsApp number")}" style="flex:1"><button class="btn ghost" id="notifyBtn" type="button">${t("Notify me")}</button></div></div><div class="product-detail-actions"><button class="btn primary" id="productAdd" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Add to cart") : t("Add to cart")}</button><button class="btn ghost share-btn" id="productShare" type="button"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.8l7.4-4.3M8.3 13.2l7.4 4.3"/></svg><span>${t("Share")}</span></button><button class="btn ghost share-btn wa-btn" id="productWhatsApp" type="button"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.5A8.4 8.4 0 1 1 21 11.5z"/></svg><span>${t("WhatsApp")}</span></button><a class="btn ghost" href="/" data-home>${t("Back to store")}</a></div><p class="delivery-promise" id="deliveryPromise" ${soldOut ? "hidden" : ""}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>${t("Usually delivered in 5–15 min after payment confirmed.")}</span></p></div></div></section>`;
+    initProductGallery(p);
     const updateVariant = () => {
       const sel = $("#productVariant");
       if (!sel) {
@@ -1509,6 +1740,11 @@ async function openProductPage(slug) {
         ol = Number(o.dataset.old);
       $("#productPrice").innerHTML =
         `${money(pr)} ${ol > pr ? `<del>${money(ol)}</del>` : ""}${rewardPreview(pr)}`;
+      const saleEl = $("#productSale");
+      if (saleEl) {
+        saleEl.hidden = !(saleActive() && ol > pr);
+        if (!saleEl.hidden) ensureSaleTicker();
+      }
       const st = p.delivery_type === "code" && Number(o.dataset.stock) <= 0;
       $("#productAdd").disabled = st;
       $("#notifyBox").hidden = !st;
@@ -1517,6 +1753,7 @@ async function openProductPage(slug) {
     };
     $("#productVariant")?.addEventListener("change", updateVariant);
     updateVariant();
+    if ($("#productSale") && !$("#productSale").hidden) ensureSaleTicker();
     $("#notifyBtn").onclick = async () => {
       const contact = $("#notifyContact").value.trim();
       if (contact.length < 5) return toast(t("Enter an email or WhatsApp number."));
@@ -1541,18 +1778,19 @@ async function openProductPage(slug) {
         p.id,
         $("#productVariant")?.value ? Number($("#productVariant").value) : null,
       );
-    $("#productShare").onclick = async () => {
-      // Native share sheet where the browser has one; otherwise straight to WhatsApp.
-      const url = location.href.split("#")[0],
-        text = `${name} · Kardivo`,
-        wa = () => window.open(`https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`, "_blank", "noopener");
-      if (!navigator.share) return wa();
+    const shareNow = (viaWhatsApp) => async () => {
+      const d = productShareData(p, name, variants),
+        wa = () => window.open(`https://wa.me/?text=${encodeURIComponent(`${d.text}\n${d.url}`)}`, "_blank", "noopener");
+      // WhatsApp button goes straight to WhatsApp. The generic Share button uses the phone's share sheet when there is one.
+      if (viaWhatsApp || !navigator.share) return wa();
       try {
-        await navigator.share({ title: name, text, url });
+        await navigator.share({ title: d.title, text: d.text, url: d.url });
       } catch (e) {
         if (e?.name !== "AbortError") wa();
       }
     };
+    $("#productShare").onclick = shareNow(false);
+    $("#productWhatsApp").onclick = shareNow(true);
     // Sticky add-to-cart bar (phones; CSS hides it on wider screens). Shows whenever the main
     // button is out of view and mirrors its label, disabled state and the current price.
     const mainAdd = $("#productAdd"),
@@ -2553,6 +2791,40 @@ function fmtBytes(n) {
   n = Number(n) || 0;
   return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
 }
+// Revenue chart: one bar per day (per week for long ranges), empty days included, with a 7-day average line and hover details.
+function revenueChartHTML(daily, days) {
+  if (!daily.length) return `<small>No paid orders in this period.</small>`;
+  const map = new Map(daily.map((x) => [x.date, x]));
+  const end = new Date(), pts = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(end.getTime() - i * 864e5), key = d.toISOString().slice(0, 10), x = map.get(key);
+    pts.push({ date: key, revenue: x ? x.revenue : 0, orders: x ? x.orders : 0 });
+  }
+  let bars = pts, weekly = false;
+  if (days > 90) {
+    weekly = true; bars = [];
+    for (let i = 0; i < pts.length; i += 7) {
+      const g = pts.slice(i, i + 7);
+      bars.push({ date: g[0].date + " – " + g[g.length - 1].date, label: g[0].date, revenue: g.reduce((a, b) => a + b.revenue, 0), orders: g.reduce((a, b) => a + b.orders, 0) });
+    }
+  }
+  const W = 640, H = 210, L = 46, R = 8, T = 10, B = 24, n = bars.length, bw = (W - L - R) / n;
+  const maxV = Math.max(1, ...bars.map((b) => b.revenue)),
+    step = Math.pow(10, Math.floor(Math.log10(maxV))) * ([1, 2, 2.5, 5, 10].find((m) => (Math.pow(10, Math.floor(Math.log10(maxV))) * m * 4) >= maxV) || 10),
+    top = step * 4, y = (v) => T + (H - T - B) * (1 - v / top);
+  const compact = (v) => (v >= 1e6 ? (v / 1e6).toFixed(1).replace(/\.0$/, "") + "M" : v >= 1e3 ? (v / 1e3).toFixed(1).replace(/\.0$/, "") + "k" : String(Math.round(v)));
+  const grid = [0, 1, 2, 3, 4].map((i) => `<line x1="${L}" x2="${W - R}" y1="${y(step * i)}" y2="${y(step * i)}" stroke="currentColor" stroke-opacity=".1"/><text x="${L - 6}" y="${y(step * i) + 3}" text-anchor="end" font-size="9" fill="currentColor" fill-opacity=".6">${compact(step * i)}</text>`).join("");
+  const rects = bars.map((b, i) => `<g><rect x="${L + i * bw}" y="${T}" width="${bw}" height="${H - T - B}" fill="transparent"/><rect x="${(L + i * bw + bw * 0.12).toFixed(1)}" y="${y(b.revenue).toFixed(1)}" width="${Math.max(1, bw * 0.76).toFixed(1)}" height="${Math.max(b.revenue ? 2 : 0, H - B - y(b.revenue)).toFixed(1)}" rx="2" fill="var(--purple)" fill-opacity="${b.revenue ? 0.9 : 0}"/><title>${escapeHTML(b.date)}: ${money(b.revenue)} (${b.orders} order${b.orders === 1 ? "" : "s"})</title></g>`).join("");
+  let line = "";
+  if (!weekly && n >= 7) {
+    const avg = bars.map((_, i) => bars.slice(Math.max(0, i - 6), i + 1).reduce((a, b) => a + b.revenue, 0) / Math.min(7, i + 1));
+    line = `<polyline fill="none" stroke="var(--success)" stroke-width="2" stroke-linejoin="round" points="${avg.map((v, i) => `${(L + i * bw + bw / 2).toFixed(1)},${y(v).toFixed(1)}`).join(" ")}"/>`;
+  }
+  const every = Math.max(1, Math.ceil(n / 7)),
+    ticks = bars.map((b, i) => (i % every === 0 ? `<text x="${(L + i * bw + bw / 2).toFixed(1)}" y="${H - 7}" text-anchor="middle" font-size="9" fill="currentColor" fill-opacity=".6">${escapeHTML((b.label || b.date).slice(5))}</text>` : "")).join("");
+  const total = bars.reduce((a, b) => a + b.revenue, 0), orders = bars.reduce((a, b) => a + b.orders, 0), best = bars.reduce((a, b) => (b.revenue > a.revenue ? b : a), bars[0]);
+  return `<div dir="ltr" style="margin-top:14px"><div style="display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin-bottom:6px"><span>${orders} paid orders</span><span>Avg per day ${money(total / days)}</span><span>Best ${weekly ? "week" : "day"}: ${escapeHTML((best.label || best.date).slice(0, 10))} (${money(best.revenue)})</span>${line ? `<span style="color:var(--success)">━ 7-day average</span>` : ""}</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Revenue per ${weekly ? "week" : "day"}" style="width:100%;height:auto;color:var(--text);display:block">${grid}${rects}${line}${ticks}</svg></div>`;
+}
 async function adminDashboard(main) {
   const days = state.admin.days || 30;
   const [d, r, bk] = await Promise.all([
@@ -2569,7 +2841,7 @@ async function adminDashboard(main) {
   <div class="admin-panel" style="margin-bottom:12px"><div class="panel-head"><h3>Email &amp; WhatsApp check</h3></div><div class="modal-body"><small>Sends a real test email and shows exactly what the provider answers.</small><div class="modal-actions" style="margin:8px 0"><input id="emailTestTo" type="email" placeholder="you@example.com" style="flex:1;min-width:180px"><button class="btn ghost" id="emailTestBtn">Send test email</button><button class="btn ghost" id="waTestBtn">Send WhatsApp alert test</button></div><pre id="emailTestOut" style="white-space:pre-wrap;font-size:12px;margin:0"></pre></div></div>
   <div class="admin-panel admin-quick-actions"><div class="panel-head"><div><h3>Quick actions</h3><small>Jump straight to the jobs you do most</small></div></div><div class="admin-quick-grid"><button type="button" data-admin-jump="queue"><span>01</span><b>Review payments</b><small>${d.review_queue || 0} awaiting proof review</small></button><button type="button" data-admin-jump="orders"><span>02</span><b>Find an order</b><small>Search any order and open its details</small></button><button type="button" data-admin-jump="products"><span>03</span><b>Manage products</b><small>Prices, images, stock and delivery</small></button><button type="button" data-admin-jump="merge"><span>04</span><b>Manage variations</b><small>Combine safely with preview and undo</small></button><button type="button" data-admin-jump="settings"><span>05</span><b>Storefront & campaigns</b><small>Edit bilingual homepage content</small></button></div></div>
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Checkout funnel · last ${r.days} days</h3></div><div class="modal-body"><div class="funnel"><div class="stat"><small>CHECKOUT STARTED</small><b>${f.started}</b></div><div class="stat"><small>CHECKOUT COMPLETED</small><b>${f.completed}</b></div><div class="stat"><small>COMPLETION RATE</small><b>${f.rate}%</b></div><div class="stat"><small>PAID ORDERS</small><b>${f.paid_orders}</b></div></div><small>Counts unique browsing sessions. "Started" = opened checkout; "completed" = placed an order.</small></div></div>
-  <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Revenue · last ${r.days} days</h3></div><div class="modal-body"><div class="line"><span>Cash revenue (paid orders)</span><b>${money(r.cash_revenue)}</b></div><div class="line"><span>Discounts given</span><b>${money(r.discounts_given)}</b></div><div class="line"><span>Store credit used</span><b>${moneyEGP(r.credit_used)}</b></div><div class="line"><span>Supplier cost</span><b>${money(r.total_cost)}</b></div><div class="line"><span>Estimated profit</span><b>${money(r.profit_estimate)}</b></div>${r.costs_incomplete ? `<small>Some products have no cost recorded, so profit is overstated. Add a supplier cost when importing codes, or a cost price on manual products.</small>` : ""}<div class="bars" title="Daily revenue">${r.daily.map((x) => `<span style="height:${Math.max(4, Math.round((x.revenue / maxRev) * 100))}%" title="${escapeHTML(x.date)}: ${money(x.revenue)} (${x.orders} orders)"></span>`).join("") || `<small>No paid orders in this period.</small>`}</div></div></div>
+  <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Revenue · last ${r.days} days</h3></div><div class="modal-body"><div class="line"><span>Cash revenue (paid orders)</span><b>${money(r.cash_revenue)}</b></div><div class="line"><span>Discounts given</span><b>${money(r.discounts_given)}</b></div><div class="line"><span>Store credit used</span><b>${moneyEGP(r.credit_used)}</b></div><div class="line"><span>Supplier cost</span><b>${money(r.total_cost)}</b></div><div class="line"><span>Estimated profit</span><b>${money(r.profit_estimate)}</b></div>${r.costs_incomplete ? `<small>Some products have no cost recorded, so profit is overstated. Add a supplier cost when importing codes, or a cost price on manual products.</small>` : ""}${revenueChartHTML(r.daily, r.days)}</div></div>
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Top products & profit</h3></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Units</th><th>Revenue</th><th>Cost</th><th>Profit</th></tr></thead><tbody>${r.products.map((p) => `<tr><td>${escapeHTML(p.name)}</td><td>${p.units}</td><td>${money(p.revenue)}</td><td>${p.cost == null ? "—" : money(p.cost)}</td><td>${p.profit == null ? "—" : money(p.profit)}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">No sales yet.</td></tr>`}</tbody></table></div></div>
   ${d.low_stock.length ? `<div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Low stock</h3></div><div class="modal-body">${d.low_stock.map((x) => `<div class="line"><span>${escapeHTML(x.name)}${x.variant_name ? " — " + escapeHTML(x.variant_name) : ""}</span><b>${x.stock} left <small>(alert at ${x.threshold ?? "default"})</small></b></div>`).join("")}</div></div>` : ""}
   <div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Automatic jobs</h3></div><div class="modal-body">${(d.jobs || []).map((j) => `<div class="line"><span>${escapeHTML(JOB_NAMES[j.job] || j.job)}</span><span><span class="tag ${j.ok ? "green" : "red"}">${j.ok ? "OK" : "FAILED"}</span> <small>${escapeHTML(fmtTime(j.ran_at))} ${escapeHTML(j.detail || "")}</small></span></div>`).join("") || `<small>No scheduled run recorded yet. Jobs run from the Cloudflare cron trigger in wrangler.toml.</small>`}<div class="modal-actions"><button class="btn ghost" id="cleanupReservations">Release expired reservations now</button><button class="btn ghost" id="sendLowStock">Send low-stock alert now</button></div></div></div>
@@ -2782,7 +3054,7 @@ async function orderForm(id) {
     <div class="field"><label>${t("Delivery message")}</label><textarea id="oDelivery">${escapeHTML(order.delivery_message || "")}</textarea></div><div class="field"><label>Notes (internal)</label><textarea id="oNotes">${escapeHTML(order.notes || "")}</textarea></div>${codes.length ? `<div class="notice">Assigned codes: ${codes.map((c) => `<code>${escapeHTML(c.code)}</code>`).join(", ")}</div>` : ""}
     <div class="modal-actions"><button type="button" class="btn ghost" id="cancelOrder">Close</button>${order.payment_status !== "paid" || order.fulfillment_status !== "fulfilled" ? `<button type="button" class="btn primary" id="markPaidDeliver">${t("Mark paid & deliver")}</button>` : ""}<button class="btn primary">Save order</button></div></form>
     <div id="waBox"></div>
-    <h3 style="margin:20px 0 8px">Support thread</h3><div class="thread" id="adminThread">${messages.map((m) => `<div class="msg ${m.sender === "customer" ? "customer" : ""}"><small>${m.sender === "customer" ? escapeHTML(name) : "You"} · ${escapeHTML(fmtTime(m.created_at))}</small>${escapeHTML(m.body)}</div>`).join("") || `<div class="empty small">No messages.</div>`}</div><form id="replyForm" class="thread-form"><textarea id="replyBody" maxlength="1000" placeholder="Reply to the customer (they also get an email if one is on file)"></textarea><button class="btn primary">Send</button></form>
+    <h3 style="margin:20px 0 8px">Support thread</h3><div class="thread" id="adminThread">${messages.map((m) => `<div class="msg ${m.sender === "customer" ? "customer" : ""}"><small>${m.sender === "customer" ? escapeHTML(name) : "You"} · ${escapeHTML(fmtTime(m.created_at))}</small>${escapeHTML(m.body)}</div>`).join("") || `<div class="empty small">No messages.</div>`}</div><form id="replyForm" class="thread-form"><textarea id="replyBody" maxlength="1000" placeholder="Reply to the customer (they also get an email if one is on file)"></textarea><div style="display:flex;flex-direction:column;gap:6px"><button class="btn primary">Send</button><button type="button" class="btn ghost" id="aiReply" title="Draft a reply with Gemini">✨ Draft</button></div></form>
     <h3 style="margin:20px 0 8px">Refunds & disputes</h3>${issues.map((l) => `<div class="line"><span><span class="tag ${l.kind === "refund" ? "red" : ""}">${escapeHTML(l.kind)}</span> ${escapeHTML(REASON_LABEL[l.reason] || l.reason)}${l.note ? ` <small>— ${escapeHTML(l.note)}</small>` : ""}</span><small>${l.amount != null ? money(l.amount) + " · " : ""}${escapeHTML(fmtTime(l.created_at))}</small></div>`).join("") || `<small>None logged.</small>`}
     <form id="disputeForm" class="form-grid" style="margin-top:10px"><div class="field"><label>Log a dispute / complaint</label><select id="dReason"><option value="">Reason…</option>${reasonOpts(d.dispute_reasons)}</select></div><div class="field"><label>Note</label><input id="dNote" maxlength="500"></div><div><button class="mini">Log dispute</button></div></form>`,
     true,
@@ -2849,6 +3121,21 @@ async function orderForm(id) {
     } catch (err) {
       toast(err.message);
     }
+  };
+  $("#aiReply").onclick = async (e) => {
+    const b = e.currentTarget, box = $("#replyBody");
+    b.disabled = true;
+    b.textContent = "Thinking…";
+    try {
+      const r = await api("/api/admin/ai/reply", { method: "POST", body: JSON.stringify({ order_id: id }) });
+      box.value = r.draft;
+      box.focus();
+      toast("Draft ready. Read it and edit before sending.");
+    } catch (err) {
+      toast(err.message);
+    }
+    b.disabled = false;
+    b.textContent = "✨ Draft";
   };
   $("#replyForm").onsubmit = async (e) => {
     e.preventDefault();
@@ -3275,8 +3562,14 @@ async function adminProducts(main) {
   const rows = await api("/api/admin/products");
   main.innerHTML =
     adminHeader("Products", "Add product", "addProduct") +
-    `<div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Product</th><th>Price (editable)</th><th>Category</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows.map((p) => `<tr><td><b>${escapeHTML(p.name)}</b><br><small>${escapeHTML(p.platform || "")} ${escapeHTML(p.region || "")}</small></td><td><input type="number" step="0.01" min="0" value="${p.price}" data-qprice="${p.id}" style="width:96px"></td><td>${escapeHTML(p.category_name || "Uncategorized")}</td><td>${p.delivery_type === "code" ? p.stock : "Manual"}</td><td>${p.active ? "Active" : "Hidden"}${p.featured ? " · Featured" : ""}</td><td><div class="table-actions"><button class="mini" data-edit-product="${p.id}">Edit</button><button class="mini" data-toggle-product="${p.id}" data-active="${p.active ? 0 : 1}">${p.active ? "Hide" : "Show"}</button><button class="mini danger" data-delete-product="${p.id}">Delete</button></div></td></tr>`).join("") || `<tr><td colspan="6" class="empty">No products.</td></tr>`}</tbody></table></div></div>`;
+    `<div class="prod-tools" style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px"><button class="btn ghost" id="pExport" type="button">Export CSV</button><button class="btn ghost" id="pImport" type="button">Import CSV</button><button class="btn ghost" id="pTemplate" type="button">Download template</button><button class="btn ghost" id="pAiBulk" type="button">✨ AI fill missing</button><button class="btn ghost" id="pAiSeo" type="button">✨ AI SEO text</button></div><div id="bulkBar" class="notice" hidden style="position:sticky;top:8px;z-index:5;margin-bottom:10px;display:none;flex-wrap:wrap;gap:8px;align-items:center"></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th style="width:28px"><input type="checkbox" id="bulkAll" aria-label="Select all"></th><th>Product</th><th>Price (editable)</th><th>Category</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows.map((p) => `<tr><td><input type="checkbox" class="bulkSel" value="${p.id}" aria-label="Select ${escapeHTML(p.name)}"></td><td><b>${escapeHTML(p.name)}</b><br><small>${escapeHTML(p.platform || "")} ${escapeHTML(p.region || "")}</small></td><td><input type="number" step="0.01" min="0" value="${p.price}" data-qprice="${p.id}" style="width:96px"></td><td>${escapeHTML(p.category_name || "Uncategorized")}</td><td>${p.delivery_type === "code" ? p.stock : "Manual"}</td><td>${p.active ? "Active" : "Hidden"}${p.featured ? " · Featured" : ""}</td><td><div class="table-actions"><button class="mini" data-edit-product="${p.id}">Edit</button><button class="mini" data-toggle-product="${p.id}" data-active="${p.active ? 0 : 1}">${p.active ? "Hide" : "Show"}</button><button class="mini danger" data-delete-product="${p.id}">Delete</button></div></td></tr>`).join("") || `<tr><td colspan="7" class="empty">No products.</td></tr>`}</tbody></table></div></div>`;
   $("#addProduct").onclick = () => productForm();
+  $("#pExport").onclick = () => exportProductsCSV(rows);
+  $("#pTemplate").onclick = downloadProductTemplate;
+  $("#pImport").onclick = () => productImportModal(rows);
+  $("#pAiBulk").onclick = () => aiBulkModal(rows);
+  $("#pAiSeo").onclick = () => aiSeoBulk(rows);
+  bindBulkEdit(rows);
   $$("[data-edit-product]").forEach(
     (b) =>
       (b.onclick = () =>
@@ -3308,7 +3601,7 @@ async function adminProducts(main) {
             method: "POST",
             body: JSON.stringify({ active: b.dataset.active === "1" }),
           });
-          renderAdminTab();
+          adminRerender();
           refreshStore();
         } catch (e) {
           toast(e.message);
@@ -3329,7 +3622,7 @@ async function adminProducts(main) {
             method: "DELETE",
           });
           toast("Product deleted.");
-          renderAdminTab();
+          adminRerender();
           refreshStore();
         } catch (e) {
           toast(e.message);
@@ -3341,9 +3634,66 @@ function productForm(p = null) {
   const vars = p?.variants || [];
   openModal(
     p ? "Edit product" : "Add product",
-    `<form id="productForm"><div class="form-grid"><div class="field"><label>Name</label><input id="pName" value="${escapeHTML(p?.name || "")}" required></div><div class="field"><label>${t("Name (Arabic)")}</label><input id="pNameAr" dir="rtl" value="${escapeHTML(p?.name_ar || "")}"></div><div class="field"><label>Slug</label><input id="pSlug" value="${escapeHTML(p?.slug || "")}"></div><div class="field"><label>Price (EGP)</label><input id="pPrice" type="number" step="0.01" value="${p?.price ?? ""}" required></div><div class="field"><label>Old price (EGP)</label><input id="pOld" type="number" step="0.01" value="${p?.old_price ?? ""}"></div><div class="field"><label>Category</label><select id="pCategory"><option value="">Uncategorized</option>${state.categories.map((c) => `<option value="${c.id}" ${p?.category_id == c.id ? "selected" : ""}>${escapeHTML(c.name)}</option>`).join("")}</select></div><div class="field"><label>Delivery</label><select id="pDelivery"><option value="manual" ${p?.delivery_type !== "code" ? "selected" : ""}>Manual</option><option value="code" ${p?.delivery_type === "code" ? "selected" : ""}>Digital code</option></select></div><div class="field"><label>Platform</label><input id="pPlatform" value="${escapeHTML(p?.platform || "")}" placeholder="PC, PlayStation..."></div><div class="field"><label>Region</label><input id="pRegion" value="${escapeHTML(p?.region || "")}" placeholder="EG, Global..."></div><div class="field"><label>Low-stock alert at (codes left, empty = default)</label><input id="pLow" type="number" min="0" value="${p?.low_stock_threshold ?? ""}"></div><div class="field"><label>Cost price (manual products, for profit)</label><input id="pCost" type="number" step="0.01" min="0" value="${p?.cost_price ?? ""}"></div></div><div class="field"><label>Image URL</label><input id="pImage" value="${escapeHTML(p?.image_url || "")}" placeholder="https://..."></div><div class="field"><label>${t("Image upload")}</label><input id="pImageFile" type="file" accept="image/*"></div><div class="form-grid"><div class="field"><label>Description</label><textarea id="pDescription">${escapeHTML(p?.description || "")}</textarea></div><div class="field"><label>${t("Description (Arabic)")}</label><textarea id="pDescriptionAr" dir="rtl">${escapeHTML(p?.description_ar || "")}</textarea></div></div><details open style="margin-top:12px"><summary><b>${t("Variants / denominations")}</b></summary><div id="variantRows" style="margin-top:10px">${vars.map((v) => `<div class="form-grid variant-row" data-variant-id="${v.id}"><input class="vName" value="${escapeHTML(v.name)}" placeholder="${t("Option name")}"><input class="vPrice" type="number" step="0.01" value="${v.price}" placeholder="Price"><input class="vOld" type="number" step="0.01" value="${v.old_price ?? ""}" placeholder="Old price"><label><input class="vActive" type="checkbox" ${v.active ? "checked" : ""}> Active</label><button type="button" class="mini danger vRemove">Remove</button></div>`).join("")}</div><button type="button" class="mini" id="addVariantRow" style="margin-top:8px">${t("Add")}</button><small style="display:block;margin-top:6px">For digital products, add codes to each option from Digital codes.</small></details><div class="form-grid" style="margin-top:12px"><label><input id="pActive" type="checkbox" ${p?.active !== 0 ? "checked" : ""}> Active</label><label><input id="pFeatured" type="checkbox" ${p?.featured ? "checked" : ""}> Featured</label></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelP">Cancel</button><button class="btn primary">Save product</button></div></form>`,
+    `<form id="productForm"><div class="notice" id="aiBox" style="margin-bottom:12px"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><div style="flex:1;min-width:200px"><b>✨ AI auto-fill</b><br><small id="aiStatus">Type the name (add an image if you have one), then Gemini fills the Arabic name, both descriptions, platform, region and category. Review before saving.</small></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><button type="button" class="btn ghost" id="aiFill">Auto-fill with AI</button><label style="font-size:12px"><input type="checkbox" id="aiOverwrite"> Replace existing text</label></div></div></div><div class="form-grid"><div class="field"><label>Name</label><input id="pName" value="${escapeHTML(p?.name || "")}" required></div><div class="field"><label>${t("Name (Arabic)")}</label><input id="pNameAr" dir="rtl" value="${escapeHTML(p?.name_ar || "")}"></div><div class="field"><label>Slug</label><input id="pSlug" value="${escapeHTML(p?.slug || "")}"></div><div class="field"><label>Price (EGP)</label><input id="pPrice" type="number" step="0.01" value="${p?.price ?? ""}" required></div><div class="field"><label>Old price (EGP)</label><input id="pOld" type="number" step="0.01" value="${p?.old_price ?? ""}"></div><div class="field"><label>Category</label><select id="pCategory"><option value="">Uncategorized</option>${state.categories.map((c) => `<option value="${c.id}" ${p?.category_id == c.id ? "selected" : ""}>${escapeHTML(c.name)}</option>`).join("")}</select></div><div class="field"><label>Delivery</label><select id="pDelivery"><option value="manual" ${p?.delivery_type !== "code" ? "selected" : ""}>Manual</option><option value="code" ${p?.delivery_type === "code" ? "selected" : ""}>Digital code</option></select></div><div class="field"><label>Platform</label><input id="pPlatform" value="${escapeHTML(p?.platform || "")}" placeholder="PC, PlayStation..."></div><div class="field"><label>Region</label><input id="pRegion" value="${escapeHTML(p?.region || "")}" placeholder="EG, Global..."></div><div class="field"><label>Low-stock alert at (codes left, empty = default)</label><input id="pLow" type="number" min="0" value="${p?.low_stock_threshold ?? ""}"></div><div class="field"><label>Cost price (manual products, for profit)</label><input id="pCost" type="number" step="0.01" min="0" value="${p?.cost_price ?? ""}"></div></div><div class="field"><label>Image URL</label><input id="pImage" value="${escapeHTML(p?.image_url || "")}" placeholder="https://..."></div><div class="field"><label>${t("Image upload")}</label><input id="pImageFile" type="file" accept="image/*"></div><div class="field" id="galBox"><label>Gallery images <small>(extra photos shown after the cover, up to 8)</small></label><div class="gal-admin" id="galList"></div><div style="display:flex;flex-wrap:wrap;gap:8px"><input id="galUrl" placeholder="https://... image link" style="flex:1;min-width:180px"><button type="button" class="btn ghost" id="galAddUrl">Add link</button><button type="button" class="btn ghost" id="galAddFile">Upload images</button><input id="galFiles" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden></div><small id="galNote" style="display:block;margin-top:6px"></small></div><div class="notice" id="imgAiBox" style="margin-bottom:12px"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><div style="flex:1;min-width:200px"><b>✨ Clean up image</b><br><small id="imgAiStatus">Turns a messy screenshot into a clean cover on your standard background. You see the result first and nothing changes until you press Save product.</small></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><button type="button" class="btn ghost" id="imgAiGo">Clean up with AI</button>${p?.image_original ? `<button type="button" class="btn ghost" id="imgRestore">Restore original image</button>` : ""}</div></div><div id="imgAiPreview" style="margin-top:10px" hidden></div></div><div class="form-grid"><div class="field"><label>Description</label><textarea id="pDescription">${escapeHTML(p?.description || "")}</textarea></div><div class="field"><label>${t("Description (Arabic)")}</label><textarea id="pDescriptionAr" dir="rtl">${escapeHTML(p?.description_ar || "")}</textarea></div></div><details style="margin-top:12px" ${p?.meta_title || p?.meta_description || p?.seo_keywords ? "open" : ""}><summary><b>Search / SEO text</b></summary><div class="notice" style="margin:10px 0"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><div style="flex:1;min-width:200px"><small id="seoStatus">Written for Google: a title (about 60 characters), a description (about 155) and search keywords, in Arabic and English. Empty fields fall back to the product name and description.</small></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><button type="button" class="btn ghost" id="seoGo">✨ Write SEO text</button><label style="font-size:12px"><input type="checkbox" id="seoOver"> Replace existing</label></div></div></div><div class="form-grid"><div class="field"><label>Meta title <small id="cMt"></small></label><input id="pMetaTitle" maxlength="70" value="${escapeHTML(p?.meta_title || "")}"></div><div class="field"><label>Meta title (Arabic) <small id="cMtA"></small></label><input id="pMetaTitleAr" dir="rtl" maxlength="70" value="${escapeHTML(p?.meta_title_ar || "")}"></div><div class="field"><label>Meta description <small id="cMd"></small></label><textarea id="pMetaDesc" maxlength="170">${escapeHTML(p?.meta_description || "")}</textarea></div><div class="field"><label>Meta description (Arabic) <small id="cMdA"></small></label><textarea id="pMetaDescAr" dir="rtl" maxlength="170">${escapeHTML(p?.meta_description_ar || "")}</textarea></div><div class="field"><label>Search keywords</label><input id="pKeywords" maxlength="220" value="${escapeHTML(p?.seo_keywords || "")}" placeholder="comma, separated"></div><div class="field"><label>Search keywords (Arabic)</label><input id="pKeywordsAr" dir="rtl" maxlength="220" value="${escapeHTML(p?.seo_keywords_ar || "")}" placeholder="كلمة، كلمة"></div></div></details><details open style="margin-top:12px"><summary><b>${t("Variants / denominations")}</b></summary><div id="variantRows" style="margin-top:10px">${vars.map((v) => `<div class="form-grid variant-row" data-variant-id="${v.id}"><input class="vName" value="${escapeHTML(v.name)}" placeholder="${t("Option name")}"><input class="vPrice" type="number" step="0.01" value="${v.price}" placeholder="Price"><input class="vOld" type="number" step="0.01" value="${v.old_price ?? ""}" placeholder="Old price"><label><input class="vActive" type="checkbox" ${v.active ? "checked" : ""}> Active</label><button type="button" class="mini danger vRemove">Remove</button></div>`).join("")}</div><button type="button" class="mini" id="addVariantRow" style="margin-top:8px">${t("Add")}</button><small style="display:block;margin-top:6px">For digital products, add codes to each option from Digital codes.</small></details><div class="form-grid" style="margin-top:12px"><label><input id="pActive" type="checkbox" ${p?.active !== 0 ? "checked" : ""}> Active</label><label><input id="pFeatured" type="checkbox" ${p?.featured ? "checked" : ""}> Featured</label></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelP">Cancel</button><button class="btn primary">Save product</button></div></form>`,
   );
-  $("#cancelP").onclick = () => openAdmin();
+  $("#cancelP").onclick = () => { closeModal(); state.adminOpen = true; };
+  $("#aiFill").onclick = () => aiFillProductForm();
+  $("#seoGo").onclick = () => aiSeoProductForm();
+  $("#imgAiGo").onclick = () => aiImageProductForm(p);
+  $("#imgRestore")?.addEventListener("click", async () => {
+    if (!confirm("Put the original image back for this product?")) return;
+    try {
+      const r = await api(`/api/admin/products/${p.id}/restore-image`, { method: "POST" });
+      $("#pImage").value = r.image_url;
+      $("#imgRestore").remove();
+      $("#imgAiStatus").textContent = "Original image restored.";
+      refreshStore();
+    } catch (e) {
+      toast(e.message);
+    }
+  });
+  $("#pImageFile").addEventListener("change", () => delete $("#pImageFile").dataset.ai);
+  // Gallery editor: items are { url } (already stored or an external link) or { file, preview } (uploaded when the product is saved).
+  const GAL_MAX = 8;
+  const gal = (p?.gallery || []).map((url) => ({ url }));
+  const drawGal = () => {
+    $("#galList").innerHTML = gal.map((g, i) => `<div class="gal-item" data-i="${i}"><img src="${escapeHTML(g.url || g.preview)}" alt=""><div class="gal-bar"><button type="button" data-gal="left" ${i === 0 ? "disabled" : ""} aria-label="Move earlier">←</button><button type="button" data-gal="right" ${i === gal.length - 1 ? "disabled" : ""} aria-label="Move later">→</button><button type="button" data-gal="del" aria-label="Remove">✕</button></div></div>`).join("");
+    $("#galNote").textContent = `${gal.length}/${GAL_MAX} extra images${gal.some((g) => g.file) ? ". New uploads are stored when you press Save product." : ""}`;
+  };
+  $("#galList").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-gal]");
+    if (!b) return;
+    const i = Number(b.closest(".gal-item").dataset.i), act = b.dataset.gal;
+    if (act === "del") { const [r] = gal.splice(i, 1); if (r?.preview) URL.revokeObjectURL(r.preview); }
+    else { const j = act === "left" ? i - 1 : i + 1; if (j >= 0 && j < gal.length) [gal[i], gal[j]] = [gal[j], gal[i]]; }
+    drawGal();
+  });
+  $("#galAddUrl").onclick = () => {
+    const u = $("#galUrl").value.trim();
+    if (!u) return;
+    if (!/^https?:\/\//i.test(u) && !/^\/media\/product\//.test(u)) return toast("Use a full https:// image link.");
+    if (gal.length >= GAL_MAX) return toast(`Up to ${GAL_MAX} extra images.`);
+    gal.push({ url: u });
+    $("#galUrl").value = "";
+    drawGal();
+  };
+  $("#galAddFile").onclick = () => $("#galFiles").click();
+  $("#galFiles").addEventListener("change", () => {
+    for (const f of [...$("#galFiles").files]) {
+      if (gal.length >= GAL_MAX) { toast(`Up to ${GAL_MAX} extra images.`); break; }
+      if (!/^image\/(jpeg|png|webp|gif)$/i.test(f.type)) { toast(`${f.name}: use a JPG, PNG, WEBP or GIF.`); continue; }
+      if (f.size > 8 * 1024 * 1024) { toast(`${f.name} is over 8 MB.`); continue; }
+      gal.push({ file: f, preview: URL.createObjectURL(f) });
+    }
+    $("#galFiles").value = "";
+    drawGal();
+  });
+  drawGal();
+  for (const [inp, out, max] of [["#pMetaTitle", "#cMt", 60], ["#pMetaTitleAr", "#cMtA", 60], ["#pMetaDesc", "#cMd", 155], ["#pMetaDescAr", "#cMdA", 155]]) {
+    const draw = () => { const n = $(inp).value.length; $(out).textContent = `(${n}/${max})`; $(out).style.color = n > max ? "#c0392b" : ""; };
+    $(inp).addEventListener("input", draw);
+    draw();
+  }
   const nameInput = $("#pName"),
     slugInput = $("#pSlug");
   if (!p && nameInput && slugInput) {
@@ -3397,8 +3747,15 @@ function productForm(p = null) {
       image_url: $("#pImage").value,
       description: $("#pDescription").value,
       description_ar: $("#pDescriptionAr").value,
+      meta_title: $("#pMetaTitle").value,
+      meta_title_ar: $("#pMetaTitleAr").value,
+      meta_description: $("#pMetaDesc").value,
+      meta_description_ar: $("#pMetaDescAr").value,
+      seo_keywords: $("#pKeywords").value,
+      seo_keywords_ar: $("#pKeywordsAr").value,
       active: $("#pActive").checked,
       featured: $("#pFeatured").checked,
+      gallery: gal.filter((g) => g.url).map((g) => g.url),
     };
     try {
       const r = await api("/api/admin/products" + (p ? "/" + p.id : ""), {
@@ -3427,19 +3784,569 @@ function productForm(p = null) {
           });
       }
       const file = $("#pImageFile")?.files?.[0];
-      if (file) await uploadAdminImage(id, file);
+      if (file) await uploadAdminImage(id, file, $("#pImageFile").dataset.ai === "1");
+      if (gal.some((g) => g.file)) {
+        for (const g of gal) if (g.file) { g.url = (await uploadAdminImage(id, g.file, false, true)).image_url; }
+        await api(`/api/admin/products/${id}/gallery`, { method: "PUT", body: JSON.stringify({ gallery: gal.map((g) => g.url) }) });
+      }
+      gal.forEach((g) => g.preview && URL.revokeObjectURL(g.preview));
       toast("Product saved.");
-      openAdmin();
+      closeModal();
+      state.adminOpen = true;
+      await adminRerender();
       refreshStore();
     } catch (err) {
       toast(err.message);
     }
   };
 }
-async function uploadAdminImage(id, file) {
+// Re-draw the current admin tab without jumping to the top: keep the page height while it reloads, then restore the scroll position.
+async function adminRerender() {
+  const main = $("#adminMain");
+  if (!main) return openAdmin();
+  const y = window.scrollY;
+  main.style.minHeight = main.offsetHeight + "px";
+  try {
+    await renderAdminTab();
+  } finally {
+    main.style.minHeight = "";
+    window.scrollTo(0, y);
+  }
+}
+function closeAdminModal() {
+  closeModal();
+  state.adminOpen = true;
+}
+// ---- Products: CSV export / import ----
+const PRODUCT_CSV_COLS = ["id", "slug", "name", "name_ar", "description", "description_ar", "price", "old_price", "category", "platform", "region", "delivery_type", "active", "featured", "low_stock_threshold", "cost_price", "image_url", "options"];
+const PRODUCT_CSV_ALIASES = {
+  product: "name", title: "name", english_name: "name", arabic_name: "name_ar", name_arabic: "name_ar",
+  desc: "description", english_description: "description", arabic_description: "description_ar", description_arabic: "description_ar",
+  oldprice: "old_price", compare_price: "old_price", image: "image_url", img: "image_url", photo: "image_url",
+  category_name: "category", delivery: "delivery_type", cost: "cost_price", low_stock: "low_stock_threshold",
+  variants: "options", option: "options", denominations: "options",
+};
+function csvEsc(v) {
+  let s = v == null ? "" : String(v);
+  if (/^[=+\-@\t\r]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s)) s = "'" + s; // stops spreadsheet formulas; removed again on import
+  return /[",;\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function downloadTextFile(name, text) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }));
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+const optionsText = (vars) => (vars || []).map((v) => `${v.name}:${v.price}${v.old_price != null && v.old_price !== "" ? ":" + v.old_price : ""}`).join(" | ");
+function exportProductsCSV(rows) {
+  const line = (p) => [p.id, p.slug, p.name, p.name_ar, p.description, p.description_ar, p.price, p.old_price, p.category_name, p.platform, p.region, p.delivery_type, p.active ? 1 : 0, p.featured ? 1 : 0, p.low_stock_threshold, p.cost_price, p.image_url, optionsText(p.variants)].map(csvEsc).join(",");
+  downloadTextFile(`kardivo-products-${new Date().toISOString().slice(0, 10)}.csv`, [PRODUCT_CSV_COLS.join(",")].concat(rows.map(line)).join("\r\n"));
+  toast(`Exported ${rows.length} products.`);
+}
+function downloadProductTemplate() {
+  const ex = [
+    ["", "", "PlayStation Plus Essential 1 Month", "بلايستيشن بلس إسنشيال شهر", "Monthly PlayStation Plus subscription code.", "كود اشتراك بلايستيشن بلس لمدة شهر.", 450, 500, "Subscriptions", "PlayStation", "Global", "code", 1, 0, "", "", "https://example.com/psplus.jpg", ""],
+    ["", "", "PSN Gift Card", "", "", "", 500, "", "Gift Cards", "PlayStation", "US", "code", 1, 1, "", "", "", "10 USD:520 | 25 USD:1280:1350 | 50 USD:2550"],
+  ];
+  downloadTextFile("kardivo-products-template.csv", [PRODUCT_CSV_COLS.join(",")].concat(ex.map((r) => r.map(csvEsc).join(","))).join("\r\n"));
+}
+function csvToProductRecords(text) {
+  const grid = parseCSV(text);
+  if (grid.length < 2) return { records: [], cols: [], ignored: [] };
+  const keys = grid[0].map((h) => {
+    const k = h.trim().toLowerCase().replace(/[\s-]+/g, "_");
+    return PRODUCT_CSV_COLS.includes(k) ? k : PRODUCT_CSV_ALIASES[k] || "";
+  });
+  const ignored = grid[0].filter((h, i) => h.trim() && !keys[i]);
+  const records = grid.slice(1).map((r, n) => {
+    const o = { _line: n + 2 };
+    keys.forEach((k, i) => {
+      if (k && o[k] === undefined) o[k] = String(r[i] ?? "").trim().replace(/^'(?=[=+\-@])/, "");
+    });
+    return o;
+  });
+  return { records: records.filter((o) => Object.keys(o).some((k) => k !== "_line" && o[k])), cols: [...new Set(keys.filter(Boolean))], ignored };
+}
+function productImportModal(existing) {
+  openModal(
+    "Import products from CSV",
+    `<div id="impBody"><p style="margin:0 0 8px">Use a file exported from here (or the template). Products are matched by <b>id</b>, then <b>slug</b>, then the name; matches are updated, everything else is added. <b>Blank cells never erase existing data.</b></p><div class="field"><label>CSV file</label><input id="impFile" type="file" accept=".csv,.txt,text/csv,text/plain"></div><div id="impPreview"></div><div class="modal-actions"><button type="button" class="btn ghost" id="impCancel">Cancel</button><button type="button" class="btn primary" id="impGo" disabled>Import</button></div></div>`,
+    true,
+  );
+  $("#impCancel").onclick = closeAdminModal;
+  let records = [];
+  const slugs = new Map(existing.map((p) => [p.slug, p])),
+    ids = new Map(existing.map((p) => [String(p.id), p]));
+  const matchOf = (r) => ids.get(String(r.id || "")) || slugs.get(slugifyClient(r.slug || "")) || (!r.slug && r.name ? slugs.get(slugifyClient(r.name)) : null);
+  $("#impFile").onchange = async (e) => {
+    const f = e.target.files?.[0],
+      box = $("#impPreview"),
+      go = $("#impGo");
+    go.disabled = true;
+    records = [];
+    if (!f) return (box.innerHTML = "");
+    let parsed;
+    try {
+      parsed = csvToProductRecords(await f.text());
+    } catch {
+      return (box.innerHTML = `<div class="notice danger-text">Could not read that file.</div>`);
+    }
+    records = parsed.records;
+    if (!records.length || !parsed.cols.includes("name") && !parsed.cols.includes("id") && !parsed.cols.includes("slug"))
+      return (box.innerHTML = `<div class="notice danger-text">No products found. The first row must be column titles (at least <code>name</code> and <code>price</code>). Download the template to see the format.</div>`);
+    const upd = records.filter(matchOf).length,
+      add = records.length - upd,
+      miss = records.filter((r) => !matchOf(r) && (!r.name || !r.price)).length;
+    box.innerHTML = `<div class="notice" style="margin:10px 0"><b>${records.length}</b> rows: <b>${add}</b> new, <b>${upd}</b> updated${miss ? `, <b class="danger-text">${miss}</b> new rows are missing a name or price and will be skipped` : ""}.<br><small>Columns used: ${parsed.cols.map(escapeHTML).join(", ")}.${parsed.ignored.length ? ` Ignored: ${parsed.ignored.map(escapeHTML).join(", ")}.` : ""}</small></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Row</th><th>Name</th><th>Price</th><th>Category</th><th>Action</th></tr></thead><tbody>${records.slice(0, 8).map((r) => `<tr><td>${r._line}</td><td>${escapeHTML(r.name || matchOf(r)?.name || "")}</td><td>${escapeHTML(r.price || "")}</td><td>${escapeHTML(r.category || "")}</td><td>${matchOf(r) ? "Update" : "New"}</td></tr>`).join("")}</tbody></table></div>${records.length > 8 ? `<small>…and ${records.length - 8} more rows.</small>` : ""}`;
+    go.disabled = false;
+  };
+  $("#impGo").onclick = async () => {
+    const go = $("#impGo"),
+      box = $("#impPreview");
+    go.disabled = true;
+    $("#impFile").disabled = true;
+    const chunks = [];
+    let cur = [],
+      weight = 0;
+    for (const r of records) {
+      const w = 1 + (r.options ? r.options.split("|").length : 0);
+      if (cur.length && (cur.length >= 20 || weight + w > 25)) (chunks.push(cur), (cur = []), (weight = 0));
+      cur.push(r);
+      weight += w;
+    }
+    if (cur.length) chunks.push(cur);
+    const all = [];
+    let done = 0,
+      stopped = "";
+    for (const ch of chunks) {
+      box.innerHTML = `<div class="notice" style="margin:10px 0">Importing… ${done} of ${records.length}</div>`;
+      try {
+        const r = await api("/api/admin/products/import", { method: "POST", body: JSON.stringify({ rows: ch }) });
+        all.push(...r.results);
+      } catch (err) {
+        stopped = `${err.message} Rows ${ch[0]._line} to ${records[records.length - 1]._line} were not imported.`;
+        break;
+      }
+      done += ch.length;
+    }
+    const made = all.filter((r) => r.status === "created").length,
+      upd = all.filter((r) => r.status === "updated").length,
+      errs = all.filter((r) => r.status === "error");
+    box.innerHTML = `<div class="notice" style="margin:10px 0"><b>${made}</b> added, <b>${upd}</b> updated${errs.length ? `, <b class="danger-text">${errs.length}</b> skipped` : ""}.${stopped ? `<br><span class="danger-text">${escapeHTML(stopped)}</span>` : ""}</div>${errs.length ? `<div class="table-wrap"><table class="admin-table"><thead><tr><th>Row</th><th>Name</th><th>Problem</th></tr></thead><tbody>${errs.map((r) => `<tr><td>${r.line}</td><td>${escapeHTML(r.name || "")}</td><td>${escapeHTML(r.error)}</td></tr>`).join("")}</tbody></table></div>` : ""}`;
+    go.textContent = "Done";
+    go.disabled = false;
+    $("#impCancel").hidden = true;
+    go.onclick = async () => {
+      closeAdminModal();
+      await adminRerender();
+    };
+    refreshStore();
+  };
+}
+// ---- Products: select several and change them together ----
+function bindBulkEdit(rows) {
+  const bar = $("#bulkBar"), boxes = () => $$(".bulkSel"), picked = () => boxes().filter((b) => b.checked).map((b) => Number(b.value));
+  const draw = () => {
+    const ids = picked();
+    $("#bulkAll").checked = ids.length > 0 && ids.length === boxes().length;
+    if (!ids.length) { bar.hidden = true; bar.style.display = "none"; return; }
+    bar.hidden = false; bar.style.display = "flex";
+    bar.innerHTML = `<b>${ids.length} selected</b><select id="bkCat"><option value="">Set category…</option>${state.categories.map((c) => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join("")}</select><button type="button" class="mini" data-bk="show">Show</button><button type="button" class="mini" data-bk="hide">Hide</button><button type="button" class="mini" data-bk="feature">Feature</button><button type="button" class="mini" data-bk="unfeature">Unfeature</button><button type="button" class="mini" data-bk="aiimg">✨ Clean images</button><span style="display:inline-flex;gap:4px;align-items:center">Price <input id="bkPct" type="number" step="0.1" placeholder="±%" style="width:70px"><button type="button" class="mini" data-bk="pct">Apply %</button></span><button type="button" class="mini" data-bk="clear">Clear</button>`;
+  };
+  $("#bulkAll").onchange = (e) => { boxes().forEach((b) => (b.checked = e.target.checked)); draw(); };
+  $("#adminMain").onchange = (e) => {
+    if (e.target.classList.contains("bulkSel")) draw();
+    if (e.target.id === "bkCat" && e.target.value) run("cat", e.target.value);
+  };
+  $("#adminMain").onclick = (e) => { const b = e.target.closest("[data-bk]"); if (b) run(b.dataset.bk); };
+  async function run(kind, val) {
+    const ids = picked();
+    if (!ids.length) return;
+    if (kind === "clear") { boxes().forEach((b) => (b.checked = false)); return draw(); }
+    if (kind === "aiimg") return aiImageBulk(ids, rows);
+    let pct = 0;
+    if (kind === "pct") {
+      pct = Number($("#bkPct").value);
+      if (!pct || pct < -90 || pct > 500) return toast("Enter a percentage between -90 and 500.");
+      if (!confirm(`Change the price of ${ids.length} products by ${pct > 0 ? "+" : ""}${pct}%? Options (variants) are not changed.`)) return;
+    } else if (!confirm(`Apply to ${ids.length} selected products?`)) { draw(); return; }
+    let ok = 0, bad = 0;
+    for (const id of ids) {
+      const p = rows.find((x) => x.id === id), body = { ...p };
+      if (kind === "show") body.active = true;
+      else if (kind === "hide") body.active = false;
+      else if (kind === "feature") body.featured = true;
+      else if (kind === "unfeature") body.featured = false;
+      else if (kind === "cat") body.category_id = Number(val);
+      else if (kind === "pct") body.price = Math.max(0, Math.round(p.price * (1 + pct / 100) * 100) / 100);
+      if (kind === "pct" && p.old_price != null && p.old_price !== "") body.old_price = Math.max(0, Math.round(p.old_price * (1 + pct / 100) * 100) / 100);
+      try { await api("/api/admin/products/" + id, { method: "PUT", body: JSON.stringify(body) }); ok++; } catch { bad++; }
+    }
+    toast(`${ok} products updated${bad ? `, ${bad} failed` : ""}.`);
+    await adminRerender();
+    refreshStore();
+  }
+}
+// ---- Bulk AI fill: every product missing its Arabic name or a description ----
+const aiMissing = (p) => !String(p.name_ar || "").trim() || !String(p.description || "").trim() || !String(p.description_ar || "").trim();
+function aiBulkModal(rows) {
+  const todo = rows.filter(aiMissing);
+  openModal(
+    "AI fill missing product text",
+    `<div id="bulkBody"><p style="margin:0 0 8px"><b>${todo.length}</b> of ${rows.length} products are missing an Arabic name, a description or an Arabic description.</p><p style="margin:0 0 8px">For each one Gemini looks the product up and fills <b>only the empty fields</b> (Arabic name, descriptions, platform, region, category). Text you already wrote is never touched, and names and prices are never changed. It runs one product at a time, so keep this window open. Review a few results afterwards: AI can be wrong about niche products.</p><div id="bulkProg" class="notice" ${todo.length ? "hidden" : ""} style="margin:10px 0"></div><div id="bulkLog" style="max-height:220px;overflow:auto;font-size:13px"></div><div class="modal-actions"><button type="button" class="btn ghost" id="bulkCancel">Close</button><button type="button" class="btn primary" id="bulkGo" ${todo.length ? "" : "disabled"}>Fill ${todo.length} products</button></div></div>`,
+    true,
+  );
+  let stop = false,
+    running = false;
+  $("#bulkCancel").onclick = async () => {
+    stop = true;
+    closeAdminModal();
+    if (running || $("#bulkGo")?.dataset.ran) await adminRerender();
+  };
+  $("#bulkGo").onclick = async () => {
+    const go = $("#bulkGo"),
+      prog = $("#bulkProg"),
+      log = $("#bulkLog");
+    if (running) {
+      stop = true;
+      go.disabled = true;
+      go.textContent = "Stopping…";
+      return;
+    }
+    running = true;
+    go.dataset.ran = "1";
+    go.textContent = "Stop";
+    prog.hidden = false;
+    const cats = state.categories.map((c) => c.name),
+      add = (msg, bad) => log.insertAdjacentHTML("beforeend", `<div class="${bad ? "danger-text" : ""}">${escapeHTML(msg)}</div>`);
+    let ok = 0,
+      fail = 0,
+      i = 0,
+      fatal = "";
+    for (const p of todo) {
+      if (stop) break;
+      prog.textContent = `Working… ${i} of ${todo.length} done (${ok} filled, ${fail} failed)`;
+      i++;
+      let r = null;
+      for (let attempt = 0; attempt < 2 && !r; attempt++) {
+        try {
+          r = await api("/api/admin/ai/product", {
+            method: "POST",
+            body: JSON.stringify({ name: p.name, name_ar: p.name_ar, description: p.description, platform: p.platform, region: p.region, category: p.category_name || "", image_url: p.image_url || "", categories: cats }),
+          });
+        } catch (e) {
+          if (/rate limit|too many/i.test(e.message) && attempt === 0) {
+            prog.textContent = "Gemini rate limit reached. Waiting 40 seconds, then continuing…";
+            await new Promise((res) => setTimeout(res, 40000));
+          } else if (/api key|Add your Gemini/i.test(e.message)) {
+            fatal = e.message;
+            break;
+          } else {
+            add(`${p.name}: ${e.message}`, true);
+            break;
+          }
+        }
+      }
+      if (fatal) break;
+      if (!r) {
+        fail++;
+        continue;
+      }
+      const f = r.fields,
+        body = { ...p },
+        got = [];
+      const fillIf = (k, v, label) => {
+        if (v && !String(p[k] || "").trim()) (body[k] = v, got.push(label));
+      };
+      fillIf("name_ar", f.name_ar, "Arabic name");
+      fillIf("description", f.description, "description");
+      fillIf("description_ar", f.description_ar, "Arabic description");
+      fillIf("platform", f.platform, "platform");
+      fillIf("region", f.region, "region");
+      if (f.category && !p.category_id) {
+        const c = state.categories.find((x) => x.name.toLowerCase() === f.category.toLowerCase());
+        if (c) (body.category_id = c.id, got.push("category"));
+      }
+      if (!got.length) {
+        add(`${p.name}: nothing new to fill`);
+        continue;
+      }
+      try {
+        await api("/api/admin/products/" + p.id, { method: "PUT", body: JSON.stringify(body) });
+        Object.assign(p, body);
+        ok++;
+        add(`${p.name}: ${got.join(", ")}${r.searched ? "" : " (no web search, check it)"}`);
+      } catch (e) {
+        fail++;
+        add(`${p.name}: could not save (${e.message})`, true);
+      }
+      await new Promise((res) => setTimeout(res, 800));
+    }
+    running = false;
+    prog.innerHTML = `${fatal ? `<span class="danger-text">${escapeHTML(fatal)}</span><br>` : ""}${stop && !fatal ? "Stopped. " : fatal ? "" : "Finished. "}<b>${ok}</b> products filled${fail ? `, <b class="danger-text">${fail}</b> failed` : ""}.`;
+    go.hidden = true;
+    $("#bulkCancel").textContent = "Done";
+    refreshStore();
+  };
+}
+// ---- Product form: Gemini auto-fill ----
+async function aiImagePayload(file) {
+  try {
+    const img = await decodeImage(file),
+      w0 = img.naturalWidth || img.width,
+      h0 = img.naturalHeight || img.height,
+      k = Math.min(1, 1024 / Math.max(w0, h0)),
+      c = document.createElement("canvas");
+    c.width = Math.round(w0 * k);
+    c.height = Math.round(h0 * k);
+    const g = c.getContext("2d");
+    g.fillStyle = "#fff";
+    g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(img, 0, 0, c.width, c.height);
+    img.close?.();
+    return { image_data: c.toDataURL("image/jpeg", 0.8).split(",")[1], image_mime: "image/jpeg" };
+  } catch {
+    return {};
+  }
+}
+async function aiFillProductForm() {
+  const btn = $("#aiFill"),
+    st = $("#aiStatus"),
+    over = $("#aiOverwrite").checked,
+    v = (sel) => $(sel).value.trim(),
+    file = $("#pImageFile")?.files?.[0],
+    catSel = $("#pCategory");
+  if (!v("#pName") && !v("#pImage") && !file) {
+    st.textContent = "Type a product name or add an image first.";
+    return;
+  }
+  const payload = {
+    name: v("#pName"),
+    image_url: v("#pImage"),
+    categories: state.categories.map((c) => c.name),
+    ...(over ? {} : { name_ar: v("#pNameAr"), description: v("#pDescription"), platform: v("#pPlatform"), region: v("#pRegion"), category: catSel.value ? catSel.selectedOptions[0].textContent.trim() : "" }),
+  };
+  btn.disabled = true;
+  st.textContent = "Asking Gemini… this usually takes 10 to 30 seconds.";
+  try {
+    if (file) Object.assign(payload, await aiImagePayload(file));
+    const r = await api("/api/admin/ai/product", { method: "POST", body: JSON.stringify(payload) }),
+      f = r.fields,
+      filled = [];
+    const put = (sel, val, label, force) => {
+      const el = $(sel);
+      if (!el || !val || (el.value.trim() && !(over && !force))) return;
+      el.value = val;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      filled.push(label);
+    };
+    put("#pName", f.name, "name", true);
+    put("#pNameAr", f.name_ar, "Arabic name");
+    put("#pDescription", f.description, "description");
+    put("#pDescriptionAr", f.description_ar, "Arabic description");
+    put("#pPlatform", f.platform, "platform");
+    put("#pRegion", f.region, "region");
+    if (f.category && (!catSel.value || over)) {
+      const o = [...catSel.options].find((x) => x.textContent.trim().toLowerCase() === f.category.toLowerCase());
+      if (o && catSel.value !== o.value) {
+        catSel.value = o.value;
+        filled.push("category");
+      }
+    }
+    const src = (r.sources || []).filter((s) => /^https?:\/\//.test(s.uri)).map((s) => `<a href="${escapeHTML(s.uri)}" target="_blank" rel="noopener noreferrer">${escapeHTML(s.title || "source")}</a>`).join(", ");
+    st.innerHTML = `${filled.length ? `Filled: ${filled.join(", ")}. Check it, then press Save.` : "Nothing to fill: those fields already have text. Tick “Replace existing text” to overwrite."} ${r.searched ? "Checked against Google Search." : "<b>Google Search was not available, so this comes from the model alone. Double-check it.</b>"}${r.image_used ? "" : " (No image was used.)"}${src ? `<br>Sources: ${src}` : ""}`;
+  } catch (e) {
+    st.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+// ---- AI SEO text + image cleanup ----
+const b64ToFile = (b64, mime, name) => {
+  const bin = atob(b64), u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return new File([u8], name, { type: mime });
+};
+async function aiSeoProductForm() {
+  const btn = $("#seoGo"), st = $("#seoStatus"), over = $("#seoOver").checked, v = (sel) => $(sel).value.trim(), catSel = $("#pCategory");
+  if (!v("#pName")) { st.textContent = "Type the product name first."; return; }
+  btn.disabled = true;
+  st.textContent = "Asking Gemini…";
+  try {
+    const r = await api("/api/admin/ai/seo", {
+        method: "POST",
+        body: JSON.stringify({ name: v("#pName"), name_ar: v("#pNameAr"), description: v("#pDescription"), description_ar: v("#pDescriptionAr"), platform: v("#pPlatform"), region: v("#pRegion"), category: catSel.value ? catSel.selectedOptions[0].textContent.trim() : "" }),
+      }),
+      map = { meta_title: "#pMetaTitle", meta_title_ar: "#pMetaTitleAr", meta_description: "#pMetaDesc", meta_description_ar: "#pMetaDescAr", seo_keywords: "#pKeywords", seo_keywords_ar: "#pKeywordsAr" };
+    let n = 0;
+    for (const [k, sel] of Object.entries(map)) {
+      const el = $(sel);
+      if (!el || !r.fields[k] || (el.value.trim() && !over)) continue;
+      el.value = r.fields[k];
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      n++;
+    }
+    st.textContent = n ? `Filled ${n} field${n > 1 ? "s" : ""}. Read them, then press Save product.` : "Nothing to fill: those fields already have text. Tick “Replace existing” to overwrite.";
+  } catch (e) {
+    st.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+async function aiImageProductForm(p) {
+  const btn = $("#imgAiGo"), st = $("#imgAiStatus"), box = $("#imgAiPreview"), file = $("#pImageFile")?.files?.[0], url = $("#pImage").value.trim();
+  if (!file && !url) { st.textContent = "Add an image first: upload a file or fill the Image URL."; return; }
+  btn.disabled = true;
+  box.hidden = true;
+  st.textContent = "Cleaning up the image… this usually takes 15 to 60 seconds.";
+  try {
+    const payload = { name: $("#pName").value.trim() };
+    if (file) Object.assign(payload, await aiImagePayload(file));
+    if (!payload.image_data) payload.image_url = url;
+    if (!payload.image_data && !payload.image_url) throw new Error("That image could not be read. Try a JPG or PNG.");
+    const r = await api("/api/admin/ai/image", { method: "POST", body: JSON.stringify(payload) }),
+      src = `data:${r.mime};base64,${r.image_data}`;
+    box.hidden = false;
+    box.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start"><img alt="AI cover preview" src="${src}" style="width:200px;max-width:100%;border-radius:10px;border:1px solid var(--line,#ddd)"><div style="display:flex;flex-direction:column;gap:6px"><button type="button" class="btn primary" id="imgUse">Use this image</button><button type="button" class="btn ghost" id="imgAgain">Try again</button><button type="button" class="btn ghost" id="imgDiscard">Discard</button><small>Check that the logo and text are exactly right before using it.</small></div></div>`;
+    st.textContent = "Done. Compare it with your original, then choose.";
+    $("#imgUse").onclick = () => {
+      const f = b64ToFile(r.image_data, r.mime, `cover.${r.mime.includes("jpeg") ? "jpg" : r.mime.split("/")[1]}`),
+        dt = new DataTransfer(),
+        inp = $("#pImageFile");
+      dt.items.add(f);
+      inp.files = dt.files;
+      inp.dataset.ai = "1";
+      box.hidden = true;
+      st.textContent = "Image selected. It is saved when you press Save product" + (p?.image_original || !p ? "." : "; the old one is kept so you can restore it.");
+    };
+    $("#imgAgain").onclick = () => aiImageProductForm(p);
+    $("#imgDiscard").onclick = () => { box.hidden = true; st.textContent = "Discarded. Nothing was changed."; };
+  } catch (e) {
+    st.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+// One-at-a-time runner for the bulk AI tools: stop button, rate-limit wait + retry, per-item log.
+function aiBulkRunner({ title, intro, items, verb, call, describe }) {
+  openModal(
+    title,
+    `<div id="abBody"><p style="margin:0 0 8px">${intro}</p><div id="abProg" class="notice" ${items.length ? "hidden" : ""} style="margin:10px 0"></div><div id="abLog" style="max-height:220px;overflow:auto;font-size:13px"></div><div class="modal-actions"><button type="button" class="btn ghost" id="abClose">Close</button><button type="button" class="btn primary" id="abGo" ${items.length ? "" : "disabled"}>${verb} ${items.length} product${items.length === 1 ? "" : "s"}</button></div></div>`,
+    true,
+  );
+  let stop = false, running = false;
+  $("#abClose").onclick = async () => {
+    stop = true;
+    closeAdminModal();
+    if (running || $("#abGo")?.dataset.ran) await adminRerender();
+  };
+  $("#abGo").onclick = async () => {
+    const go = $("#abGo"), prog = $("#abProg"), log = $("#abLog");
+    if (running) { stop = true; go.disabled = true; go.textContent = "Stopping…"; return; }
+    running = true;
+    go.dataset.ran = "1";
+    go.textContent = "Stop";
+    prog.hidden = false;
+    const add = (msg, bad) => log.insertAdjacentHTML("beforeend", `<div class="${bad ? "danger-text" : ""}">${escapeHTML(msg)}</div>`);
+    let ok = 0, fail = 0, i = 0, fatal = "";
+    for (const p of items) {
+      if (stop) break;
+      prog.textContent = `Working… ${i} of ${items.length} done (${ok} ok, ${fail} failed)`;
+      i++;
+      let r = null;
+      for (let attempt = 0; attempt < 2 && !r; attempt++) {
+        try {
+          r = await call(p);
+        } catch (e) {
+          if (/rate limit/i.test(e.message) && attempt === 0) {
+            prog.textContent = "Gemini rate limit reached. Waiting 40 seconds, then continuing…";
+            await new Promise((res) => setTimeout(res, 40000));
+          } else if (/api key|Add your Gemini|Too many AI|R2 storage/i.test(e.message)) {
+            fatal = e.message;
+            break;
+          } else {
+            add(`${p.name}: ${e.message}`, true);
+            break;
+          }
+        }
+      }
+      if (fatal) break;
+      if (!r) { fail++; continue; }
+      ok++;
+      add(`${p.name}: ${describe(r)}`);
+      await new Promise((res) => setTimeout(res, 600));
+    }
+    running = false;
+    prog.innerHTML = `${fatal ? `<span class="danger-text">${escapeHTML(fatal)}</span><br>` : ""}${stop && !fatal ? "Stopped. " : fatal ? "" : "Finished. "}<b>${ok}</b> done${fail ? `, <b class="danger-text">${fail}</b> failed` : ""}.`;
+    go.hidden = true;
+    $("#abClose").textContent = "Done";
+    refreshStore();
+  };
+}
+const seoMissing = (p) => !String(p.meta_title || "").trim() || !String(p.meta_description || "").trim() || !String(p.meta_title_ar || "").trim() || !String(p.meta_description_ar || "").trim();
+function aiSeoBulk(rows) {
+  const todo = rows.filter((p) => p.name && seoMissing(p));
+  aiBulkRunner({
+    title: "AI SEO text",
+    intro: `<b>${todo.length}</b> of ${rows.length} products are missing a meta title or description in Arabic or English. For each one Gemini writes the meta title, meta description and search keywords in both languages from the product's name, category and description, and saves <b>only the empty fields</b>. Anything you wrote yourself is kept. Keep this window open; review a few results afterwards.`,
+    items: todo,
+    verb: "Write SEO text for",
+    call: (p) => api("/api/admin/ai/seo", { method: "POST", body: JSON.stringify({ product_id: p.id, save: true }) }),
+    describe: (r) => (r.saved?.length ? `${r.saved.length} fields saved` : "nothing new to save"),
+  });
+}
+function aiImageBulk(ids, rows) {
+  const picked = ids.map((id) => rows.find((x) => x.id === id)).filter(Boolean),
+    todo = picked.filter((p) => String(p.image_url || "").trim()),
+    skipped = picked.length - todo.length;
+  aiBulkRunner({
+    title: "Clean up product images",
+    intro: `Gemini redraws each selected product's cover on your standard background${skipped ? ` (${skipped} selected product${skipped === 1 ? " has" : "s have"} no image and will be skipped)` : ""}. <b>These are saved straight away</b> with no preview. The original is kept for each product, and you can restore it from the product's edit form (“Restore original image”). Image generation is billed per picture and slow (about 20 to 60 seconds each), and the limit is 60 per hour. Check the text and logos on a few results afterwards.`,
+    items: todo,
+    verb: "Clean images of",
+    call: (p) => api("/api/admin/ai/image", { method: "POST", body: JSON.stringify({ product_id: p.id, save: true }) }),
+    describe: () => "new cover saved (original kept)",
+  });
+}
+// ---- Settings: Gemini key ----
+async function aiSettingsPanel(main) {
+  let c;
+  try {
+    c = await api("/api/admin/ai");
+  } catch {
+    return;
+  }
+  const form = document.createElement("form");
+  form.className = "admin-panel";
+  form.id = "aiForm";
+  form.style.marginTop = "14px";
+  form.innerHTML = `<div class="modal-body"><b>AI auto-fill (Gemini)</b> <span class="tag ${c.configured ? "green" : "red"}">${c.configured ? "key set " + escapeHTML(c.key_hint) : "no key"}</span><small style="display:block;margin:6px 0 10px">Adds an “Auto-fill with AI” button to the product form. Get a key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a>. The key stays on the server and is never sent back to this page.${c.source === "secret" ? " It is currently read from the GEMINI_API_KEY Worker secret, which takes priority over a key saved here." : ""}</small><div class="form-grid"><div class="field"><label>Gemini API key</label><input id="aiKey" type="password" autocomplete="off" placeholder="${c.configured ? "Saved. Paste a new key to replace it" : "Paste your API key"}"></div><div class="field"><label>Model</label><input id="aiModel" value="${escapeHTML(c.model)}" placeholder="${escapeHTML(c.default_model)}"></div></div><div class="form-grid"><div class="field"><label>Image model (for “Clean up image”)</label><input id="aiImgModel" value="${escapeHTML(c.image_model || "")}" placeholder="${escapeHTML(c.default_image_model || "")}"></div><div class="field"><label>Cover background</label><input id="aiImgBg" value="${escapeHTML(c.image_bg || "")}" placeholder="${escapeHTML(c.default_image_bg || "")}"></div></div><small style="display:block;margin:-4px 0 10px">Image cleanup needs a Gemini image model (the Nano Banana family) and usually a billed API key. Describe the background once and every cover uses it, so the catalog looks uniform.</small><div class="field"><label>Extra instructions (optional)</label><textarea id="aiInstr" placeholder="e.g. Write Arabic descriptions in a friendly Egyptian tone. Always mention instant delivery.">${escapeHTML(c.instructions)}</textarea></div><div class="modal-actions">${c.source === "saved" ? `<button type="button" class="btn ghost" id="aiRemove">Remove saved key</button>` : ""}<button class="btn primary">Save AI settings</button></div></div>`;
+  main.appendChild(form);
+  const save = async (extra, msg) => {
+    try {
+      await api("/api/admin/ai", { method: "PUT", body: JSON.stringify({ model: $("#aiModel").value, instructions: $("#aiInstr").value, image_model: $("#aiImgModel").value, image_bg: $("#aiImgBg").value, ...extra }) });
+      toast(msg);
+      form.remove();
+      await aiSettingsPanel(main);
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    save({ api_key: $("#aiKey").value }, "AI settings saved.");
+  };
+  $("#aiRemove")?.addEventListener("click", () => {
+    if (confirm("Remove the saved Gemini key? AI auto-fill will stop working until you add one.")) save({ clear_key: true }, "Key removed.");
+  });
+}
+async function uploadAdminImage(id, file, ai = false, gallery = false) {
   const fd = new FormData();
   fd.append("file", file);
-  const res = await fetch(`/api/admin/products/${id}/image`, {
+  const res = await fetch(`/api/admin/products/${id}/image${ai ? "?ai=1" : gallery ? "?gallery=1" : ""}`, {
     method: "POST",
     credentials: "same-origin",
     body: fd,
@@ -3680,17 +4587,25 @@ function categoryForm(c = null) {
     }
   };
 }
+// Stored as UTC ISO; the datetime-local input wants the admin's local wall-clock time.
+function isoToLocalInput(iso) {
+  const d = new Date(iso || "");
+  if (!iso || isNaN(d)) return "";
+  const p2 = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`;
+}
 async function adminSettings(main) {
   const s = await api("/api/admin/settings");
   const field = ([k, label, type]) =>
     type === "toggle"
       ? `<label class="switch-row" style="margin:8px 0"><span>${label}</span><input class="switch" id="s_${k}" type="checkbox" ${s[k] !== "0" ? "checked" : ""}></label>`
-      : `<div class="field"><label>${label}</label>${type === "textarea" ? `<textarea id="s_${k}">${escapeHTML(s[k] || "")}</textarea>` : `<input id="s_${k}" type="${type === "color" ? "color" : type === "number" ? "number" : "text"}" ${type === "number" ? 'step="0.01"' : ""} value="${escapeHTML(s[k] || "")}">`}</div>`;
+      : `<div class="field"><label>${label}</label>${type === "textarea" ? `<textarea id="s_${k}">${escapeHTML(s[k] || "")}</textarea>` : `<input id="s_${k}" type="${type === "color" ? "color" : type === "number" ? "number" : type === "datetime" ? "datetime-local" : "text"}" ${type === "number" ? 'step="0.01"' : ""} value="${type === "datetime" ? isoToLocalInput(s[k]) : escapeHTML(s[k] || "")}">`}</div>`;
   const pay = `<details open><summary><b>Payment methods</b></summary>${PAY.map(([k, n]) => `<div class="switch-row"><div><b>${n}</b><div class="field" style="margin:7px 0 0"><input id="s_${k}" value="${escapeHTML(s[k] || "")}" placeholder="Destination / number"></div></div><input class="switch" id="s_${k}_enabled" type="checkbox" ${s[k + "_enabled"] !== "0" ? "checked" : ""}></div>`).join("")}</details>`;
   main.innerHTML = `<div class="admin-top"><h2>Settings</h2><span class="eyebrow">EVERYTHING EDITABLE</span></div><form id="settingsForm" class="admin-panel"><div class="modal-body">${pay}${SETTINGS_SCHEMA.map(([t, f]) => `<details style="margin-top:14px"><summary><b>${t}</b></summary>${f.map(field).join("")}</details>`).join("")}<div class="modal-actions"><button class="btn primary">Save settings</button></div></div></form>
   <form id="pwForm" class="admin-panel" style="margin-top:14px"><div class="modal-body"><b>Change admin password</b><div class="form-grid"><div class="field"><label>Current password</label><input id="pwCur" type="password" required></div><div class="field"><label>New password (8+ characters)</label><input id="pwNew" type="password" minlength="8" required></div></div><div class="modal-actions"><button class="btn ghost">Change password</button></div></div></form>`;
   main.insertAdjacentHTML("beforeend", await opsPanelHTML());
   bindOps();
+  await aiSettingsPanel(main);
   $$('[id^="s_"][id$="_ar"]').forEach((e) => (e.dir = "rtl"));
   $("#settingsForm").onsubmit = async (e) => {
     e.preventDefault();
@@ -3702,7 +4617,7 @@ async function adminSettings(main) {
     for (const [, f] of SETTINGS_SCHEMA)
       for (const [k, , type] of f) {
         const el = $("#s_" + k);
-        body[k] = type === "toggle" ? (el.checked ? "1" : "0") : el.value;
+        body[k] = type === "toggle" ? (el.checked ? "1" : "0") : type === "datetime" ? (el.value ? new Date(el.value).toISOString() : "") : el.value;
       }
     try {
       await api("/api/admin/settings", {
@@ -3834,6 +4749,15 @@ const SETTINGS_SCHEMA = [
     ],
   ],
   [
+    "Flash-sale countdown",
+    [
+      ["sale_ends_at", "Sale ends at (your local time; empty = no countdown). Display only: prices do NOT change when it ends, so edit the old prices yourself afterwards.", "datetime"],
+      ["sale_label", "Countdown label"],
+      ["sale_on_banner", "Show the countdown on the homepage campaign banner", "toggle"],
+      ["sale_on_products", "Show the countdown on product pages that have an old (crossed-out) price", "toggle"],
+    ],
+  ],
+  [
     "Orders & stock",
     [
       ["orders_open", "Accept new orders", "toggle"],
@@ -3907,6 +4831,7 @@ SETTINGS_SCHEMA.push([
     "campaign_title",
     "campaign_text",
     "campaign_cta",
+    "sale_label",
     "catalog_eyebrow",
     "catalog_title",
     "search_placeholder",

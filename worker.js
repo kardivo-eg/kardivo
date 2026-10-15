@@ -211,6 +211,12 @@ const DEFAULTS = {
   campaign_title_ar: "فيه حاجة حلوة مستنياك.",
   campaign_text_ar: "اكتشف منتجات رقمية مختارة والعروض المتاحة دلوقتي.",
   campaign_cta_ar: "اكتشف المجموعة",
+  // Flash-sale countdown (display only: it never changes prices). sale_ends_at is an ISO UTC time, empty = no sale.
+  sale_ends_at: "",
+  sale_label: "Flash sale ends in",
+  sale_label_ar: "العرض بينتهي بعد",
+  sale_on_banner: "1",
+  sale_on_products: "1",
   catalog_eyebrow: "THE CATALOG",
   catalog_title: "Pick your upgrade.",
   search_placeholder: "Search games, cards, subscriptions...",
@@ -304,7 +310,7 @@ const DEFAULTS = {
   auto_bundle_max_egp: "100",
   auto_bundle_min_products: "2",
 };
-const SCHEMA_VERSION = 16; // 16: users.points_redeemed (V41 added the column but never bumped the version, so existing DBs skipped the migration)
+const SCHEMA_VERSION = 18; // 18: products.gallery (extra product images, JSON list) // 17: products SEO fields + image_original (AI SEO text, AI image cleanup) // 16: users.points_redeemed (V41 added the column but never bumped the version, so existing DBs skipped the migration)
 // Columns added over time. Each is added only if missing (additive, never destructive).
 const COLUMN_ADDS = [
   ["discounts", "max_uses", "INTEGER"],
@@ -332,6 +338,14 @@ const COLUMN_ADDS = [
   ["products", "description_ar", "TEXT DEFAULT ''"],
   ["products", "low_stock_threshold", "INTEGER"],
   ["products", "cost_price", "REAL"],
+  ["products", "meta_title", "TEXT DEFAULT ''"],
+  ["products", "meta_description", "TEXT DEFAULT ''"],
+  ["products", "meta_title_ar", "TEXT DEFAULT ''"],
+  ["products", "meta_description_ar", "TEXT DEFAULT ''"],
+  ["products", "seo_keywords", "TEXT DEFAULT ''"],
+  ["products", "seo_keywords_ar", "TEXT DEFAULT ''"],
+  ["products", "image_original", "TEXT DEFAULT ''"],
+  ["products", "gallery", "TEXT DEFAULT ''"],
   ["categories", "name_ar", "TEXT DEFAULT ''"],
   ["inventory", "variant_id", "INTEGER"],
   ["inventory", "batch_id", "INTEGER"],
@@ -828,6 +842,446 @@ async function settings(env) {
     .results;
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
 }
+// ---------- Bulk product import (CSV rows sent in small chunks by the admin page) ----------
+// Blank cells never overwrite existing data. Products are matched by id, then slug, then the slug made from the name,
+// so importing the same file twice updates instead of duplicating. Options column: "Name:Price[:OldPrice] | Name2:Price2".
+const IMPORT_TEXT = ["name", "name_ar", "description", "description_ar", "image_url", "platform", "region"];
+const isNumStr = (v) => /^\d+(\.\d+)?$/.test(String(v).trim());
+const parseFlag = (v) => {
+  const s = clean(v).toLowerCase();
+  if (!s) return null;
+  if (/^(1|true|yes|y|active|show|on|نعم)$/.test(s)) return 1;
+  if (/^(0|false|no|n|hidden|hide|off|لا)$/.test(s)) return 0;
+  return null;
+};
+function parseOptions(str) {
+  const out = [];
+  for (const part of String(str || "").split("|")) {
+    const tk = part.split(":").map((x) => x.trim());
+    if (!tk.join("")) continue;
+    let name, price, old = null;
+    if (tk.length >= 3 && isNumStr(tk[tk.length - 1]) && isNumStr(tk[tk.length - 2])) {
+      old = Number(tk[tk.length - 1]);
+      price = Number(tk[tk.length - 2]);
+      name = tk.slice(0, -2).join(":");
+    } else if (tk.length >= 2 && isNumStr(tk[tk.length - 1])) {
+      price = Number(tk[tk.length - 1]);
+      name = tk.slice(0, -1).join(":");
+    } else return { error: `Option "${part.trim()}" must look like Name:Price or Name:Price:OldPrice.` };
+    name = clean(name);
+    if (!name) return { error: `Option "${part.trim()}" has no name.` };
+    out.push({ name: name.slice(0, 120), price, old_price: old });
+  }
+  return { options: out };
+}
+async function importProducts(env, rows) {
+  const [cats, prods, vars] = await Promise.all([
+    env.DB.prepare("SELECT id,name,name_ar,slug FROM categories").all(),
+    env.DB.prepare("SELECT id,slug FROM products").all(),
+    env.DB.prepare("SELECT product_id,name FROM product_variants").all(),
+  ]);
+  const catByKey = new Map(),
+    catSlugs = new Set();
+  for (const c of cats.results) {
+    for (const k of [c.name, c.name_ar, c.slug]) if (clean(k)) catByKey.set(clean(k).toLowerCase(), c.id);
+    catSlugs.add(c.slug);
+  }
+  const idToSlug = new Map(prods.results.map((p) => [Number(p.id), p.slug])),
+    known = new Set(prods.results.map((p) => p.slug)),
+    slugOfId = idToSlug,
+    varSeen = new Set(vars.results.map((v) => `${slugOfId.get(Number(v.product_id))}|${String(v.name).toLowerCase()}`));
+  const stmts = [],
+    results = [];
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i] && typeof rows[i] === "object" ? rows[i] : {},
+      line = Number(r._line) || i + 1,
+      fail = (error) => results.push({ line, name: clean(r.name), status: "error", error });
+    const g = (k) => (r[k] === undefined || r[k] === null ? "" : clean(r[k]));
+    const idNum = Number(g("id"));
+    let slug = idNum && idToSlug.has(idNum) ? idToSlug.get(idNum) : "";
+    const wanted = g("slug") ? slugify(g("slug")) : g("name") ? slugify(g("name")) : "";
+    if (!slug && wanted && known.has(wanted)) slug = wanted;
+    const isNew = !slug;
+    if (g("price") && badNum(g("price"))) { fail("Price must be a valid non-negative number."); continue; }
+    if (g("old_price") && badNum(g("old_price"))) { fail("Old price must be a valid non-negative number."); continue; }
+    if (isNew && !g("name")) { fail("Name is required for a new product."); continue; }
+    if (isNew && !g("price")) { fail("Price is required for a new product."); continue; }
+    const opts = parseOptions(g("options"));
+    if (opts.error) { fail(opts.error); continue; }
+    let categoryId;
+    const catName = g("category");
+    if (catName) {
+      categoryId = catByKey.get(catName.toLowerCase());
+      if (!categoryId) {
+        let cslug = slugify(catName), n = 2;
+        const base = cslug;
+        while (catSlugs.has(cslug)) cslug = `${base}-${n++}`;
+        const cr = await env.DB.prepare("INSERT INTO categories(name,slug,name_ar) VALUES(?,?,?)").bind(catName.slice(0, 80), cslug, "").run();
+        categoryId = Number(cr.meta.last_row_id);
+        catSlugs.add(cslug);
+        catByKey.set(catName.toLowerCase(), categoryId);
+      }
+    }
+    const dt = g("delivery_type").toLowerCase(),
+      delivery = !dt ? null : /code|digital|كود|رقمي/.test(dt) ? "code" : "manual",
+      active = parseFlag(r.active),
+      featured = parseFlag(r.featured);
+    const low = g("low_stock_threshold") ? optInt(g("low_stock_threshold")) : undefined,
+      cost = g("cost_price") ? optNum(g("cost_price")) : undefined;
+    if (isNew) {
+      let base = wanted || slugify(g("name")), s = base, n = 2;
+      while (known.has(s)) s = `${base}-${n++}`;
+      known.add(s);
+      stmts.push(
+        env.DB.prepare(
+          "INSERT INTO products(name,slug,description,name_ar,description_ar,price,old_price,image_url,category_id,platform,region,delivery_type,active,featured,low_stock_threshold,cost_price) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        ).bind(
+          g("name").slice(0, 200), s, g("description"), g("name_ar").slice(0, 200), g("description_ar"),
+          Number(g("price")), g("old_price") ? Number(g("old_price")) : null, g("image_url"),
+          categoryId ?? null, g("platform"), g("region"), delivery || "manual",
+          active === 0 ? 0 : 1, featured ? 1 : 0, low ?? null, cost ?? null,
+        ),
+      );
+      slug = s;
+    } else {
+      const sets = [],
+        binds = [];
+      for (const k of IMPORT_TEXT) if (g(k)) { sets.push(`${k}=?`); binds.push(g(k)); }
+      if (g("price")) { sets.push("price=?"); binds.push(Number(g("price"))); }
+      if (g("old_price")) { sets.push("old_price=?"); binds.push(Number(g("old_price"))); }
+      if (categoryId !== undefined) { sets.push("category_id=?"); binds.push(categoryId); }
+      if (delivery) { sets.push("delivery_type=?"); binds.push(delivery); }
+      if (active !== null) { sets.push("active=?"); binds.push(active); }
+      if (featured !== null) { sets.push("featured=?"); binds.push(featured); }
+      if (low !== undefined) { sets.push("low_stock_threshold=?"); binds.push(low); }
+      if (cost !== undefined) { sets.push("cost_price=?"); binds.push(cost); }
+      if (sets.length) {
+        sets.push("updated_at=CURRENT_TIMESTAMP");
+        stmts.push(env.DB.prepare(`UPDATE products SET ${sets.join(",")} WHERE slug=?`).bind(...binds, slug));
+      }
+    }
+    (opts.options || []).forEach((o, k) => {
+      const key = `${slug}|${o.name.toLowerCase()}`;
+      if (varSeen.has(key))
+        stmts.push(
+          env.DB.prepare(
+            "UPDATE product_variants SET price=?,old_price=?,updated_at=CURRENT_TIMESTAMP WHERE name=? COLLATE NOCASE AND product_id=(SELECT id FROM products WHERE slug=?)",
+          ).bind(o.price, o.old_price, o.name, slug),
+        );
+      else {
+        varSeen.add(key);
+        stmts.push(
+          env.DB.prepare(
+            "INSERT INTO product_variants(product_id,name,price,old_price,active,sort_order) SELECT id,?,?,?,1,? FROM products WHERE slug=?",
+          ).bind(o.name, o.price, o.old_price, k, slug),
+        );
+      }
+    });
+    results.push({ line, name: g("name") || slug, slug, status: isNew ? "created" : "updated" });
+  }
+  if (stmts.length) await env.DB.batch(stmts);
+  return results;
+}
+
+// ---------- Gemini auto-fill ----------
+const GEMINI_DEFAULT_MODEL = "gemini-3.8-flash";
+async function geminiConfig(env) {
+  const s = await settings(env),
+    secret = clean(env.GEMINI_API_KEY),
+    saved = clean(s.gemini_api_key),
+    key = secret || saved;
+  return {
+    key,
+    source: secret ? "secret" : saved ? "saved" : "",
+    model: clean(s.gemini_model) || GEMINI_DEFAULT_MODEL,
+    instructions: clean(s.gemini_instructions),
+    imageModel: clean(s.gemini_image_model) || GEMINI_IMAGE_DEFAULT_MODEL,
+    imageBg: clean(s.gemini_image_bg),
+  };
+}
+function bytesToBase64(buf) {
+  const u = new Uint8Array(buf);
+  let s = "";
+  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+async function fetchImageForAi(env, req, imageUrl) {
+  try {
+    const u = new URL(imageUrl, new URL(req.url).origin);
+    if (u.protocol !== "https:" && !(u.origin === new URL(req.url).origin)) return null;
+    const r = await fetch(u.toString(), { headers: { accept: "image/*" } });
+    const type = (r.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    if (!r.ok || !/^image\/(jpeg|png|webp|gif)$/.test(type)) return null;
+    const buf = await r.arrayBuffer();
+    if (buf.byteLength > 4 * 1024 * 1024) return null;
+    return { mime: type, data: bytesToBase64(buf) };
+  } catch {
+    return null;
+  }
+}
+const aiText = (v, n) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+async function geminiProduct(env, req, cfg, b) {
+  const cats = (Array.isArray(b.categories) ? b.categories : []).map((c) => aiText(c, 60)).filter(Boolean).slice(0, 40);
+  const name = aiText(b.name, 200),
+    haveImage = (b.image_data && b.image_mime) || b.image_url;
+  if (!name && !haveImage) return { error: "Type a product name or add an image first.", status: 400 };
+  let image = null;
+  if (b.image_data && /^image\/(jpeg|png|webp|gif)$/.test(String(b.image_mime)) && String(b.image_data).length < 7_000_000)
+    image = { mime: String(b.image_mime), data: String(b.image_data).replace(/^data:[^,]*,/, "") };
+  else if (clean(b.image_url)) image = await fetchImageForAi(env, req, clean(b.image_url));
+  const known = [
+    ["English name", name],
+    ["Arabic name", aiText(b.name_ar, 200)],
+    ["Platform", aiText(b.platform, 80)],
+    ["Region", aiText(b.region, 80)],
+    ["Category", aiText(b.category, 80)],
+    ["English description", aiText(b.description, 600)],
+  ].filter(([, v]) => v);
+  const system =
+    "You write product catalog content for Kardivo, an Egyptian online store that sells digital goods: games, gift cards, game top-ups and subscriptions. " +
+    "Be accurate. Use Google Search to confirm what the product really is: publisher, platform, region and what the buyer receives. " +
+    "Never invent prices, release dates, discounts, guarantees, or delivery times. If you cannot confirm something, leave that field as an empty string. " +
+    "Descriptions are 2 to 4 short sentences of plain text: no markdown, no HTML, no emojis, no links. " +
+    "Arabic must be natural Modern Standard Arabic suited to Egyptian e-commerce; keep game, brand and platform names recognisable (Latin spelling or the common Arabic transliteration). " +
+    "Reply with ONLY one JSON object, with no code fence and no commentary." +
+    (cfg.instructions ? `\nStore owner's extra instructions: ${cfg.instructions.slice(0, 1500)}` : "");
+  const prompt =
+    `Product information given by the store owner:\n${known.map(([k, v]) => `- ${k}: ${v}`).join("\n") || "- (only an image was given)"}\n` +
+    (image ? "A product image is attached; use it to identify the product.\n" : "") +
+    `Allowed categories: ${cats.length ? cats.join(" | ") : "(none)"}\n\n` +
+    `Return this JSON shape: {"name":"clean official English product name","name_ar":"Arabic product name","description":"English description","description_ar":"Arabic description","platform":"short platform such as PlayStation, Xbox, PC, Steam, Nintendo, Netflix, or empty","region":"such as Global, US, EG, KSA, EU, or empty if unknown","category":"exactly one of the allowed categories, or empty"}`;
+  const parts = [{ text: prompt }];
+  if (image) parts.push({ inlineData: { mimeType: image.mime, data: image.data } });
+  const call = async (withSearch) => {
+    const ctl = new AbortController(),
+      timer = setTimeout(() => ctl.abort(), 50000);
+    try {
+      return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cfg.model)}:generateContent`, {
+        method: "POST",
+        signal: ctl.signal,
+        headers: { "content-type": "application/json", "x-goog-api-key": cfg.key },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: system }] },
+          contents: [{ role: "user", parts }],
+          ...(withSearch ? { tools: [{ google_search: {} }] } : {}),
+          generationConfig: { temperature: 0.3, maxOutputTokens: 3000 },
+        }),
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  let res, searched = true;
+  try {
+    res = await call(true);
+    if (res.status === 400) {
+      // Some keys/models do not allow the search tool. Try again without it rather than failing.
+      const retry = await call(false);
+      if (retry.ok) { res = retry; searched = false; }
+    }
+  } catch (e) {
+    return { error: e?.name === "AbortError" ? "Gemini took too long to answer. Try again." : "Could not reach Gemini.", status: 504 };
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = String(data?.error?.message || "");
+    if (res.status === 429) return { error: "Gemini rate limit reached. Wait a minute and try again.", status: 429 };
+    if (res.status === 404) return { error: `Gemini does not know the model "${cfg.model}". Change it in Settings > AI auto-fill.`, status: 400 };
+    if (/api key/i.test(msg) || res.status === 401 || res.status === 403)
+      return { error: "Gemini rejected the API key. Check it in Settings > AI auto-fill.", status: 400 };
+    return { error: `Gemini error: ${msg.slice(0, 200) || res.status}`, status: 502 };
+  }
+  const cand = data?.candidates?.[0],
+    text = (cand?.content?.parts || []).map((p) => p.text || "").join("").trim();
+  if (!text) return { error: "Gemini returned nothing (the answer may have been blocked). Try a more specific name.", status: 502 };
+  let obj = null;
+  try {
+    const t = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, ""),
+      a = t.indexOf("{"),
+      z = t.lastIndexOf("}");
+    obj = JSON.parse(t.slice(a, z + 1));
+  } catch {}
+  if (!obj || typeof obj !== "object") return { error: "Gemini's answer could not be read. Try again.", status: 502 };
+  const cat = cats.find((c) => c.toLowerCase() === aiText(obj.category, 80).toLowerCase()) || "";
+  const sources = (cand?.groundingMetadata?.groundingChunks || [])
+    .map((c) => c.web)
+    .filter((w) => w?.uri)
+    .slice(0, 5)
+    .map((w) => ({ title: aiText(w.title, 80), uri: String(w.uri) }));
+  return {
+    fields: {
+      name: aiText(obj.name, 200),
+      name_ar: aiText(obj.name_ar, 200),
+      description: String(obj.description ?? "").replace(/\s+/g, " ").trim().slice(0, 2500),
+      description_ar: String(obj.description_ar ?? "").replace(/\s+/g, " ").trim().slice(0, 2500),
+      platform: aiText(obj.platform, 80),
+      region: aiText(obj.region, 80),
+      category: cat,
+    },
+    searched: searched && !!cand?.groundingMetadata,
+    image_used: !!image,
+    sources,
+  };
+}
+
+async function geminiReply(env, cfg, orderId) {
+  const o = await env.DB.prepare("SELECT o.order_number,o.payment_status,o.fulfillment_status,o.payment_method,o.total,o.created_at,COALESCE(u.name,o.guest_name,'') customer,(SELECT GROUP_CONCAT(oi.product_name||CASE WHEN COALESCE(oi.variant_name,'')<>'' THEN ' - '||oi.variant_name ELSE '' END||' x '||oi.quantity,'; ') FROM order_items oi WHERE oi.order_id=o.id) items FROM orders o LEFT JOIN users u ON u.id=o.user_id WHERE o.id=?").bind(orderId).first();
+  if (!o) return { error: "Order not found.", status: 404 };
+  const msgs = (await env.DB.prepare("SELECT sender,body FROM kd_order_messages WHERE order_id=? ORDER BY id DESC LIMIT 8").bind(orderId).all()).results.reverse();
+  if (!msgs.length) return { error: "There are no messages in this order yet.", status: 400 };
+  const system =
+    "You are the customer support agent of Kardivo, an Egyptian store selling digital goods (game codes, gift cards, subscriptions). Write ONE reply to the customer's latest message. " +
+    "Reply in the same language the customer used (Egyptian-friendly Arabic or English). Be warm, short (2 to 4 sentences) and concrete. Plain text only. " +
+    "Use only the order facts given. Never invent delivery times, refunds, discounts or policies, never ask for or write any gift-card code or password, and if you cannot know the answer say you are checking and will update them shortly. " +
+    "Reply with only the message text." + (cfg.instructions ? `\nStore owner's extra instructions: ${cfg.instructions.slice(0, 1500)}` : "");
+  const prompt = `Order ${o.order_number} (customer: ${o.customer || "unknown"})\nItems: ${o.items || "-"}\nTotal: ${o.total} EGP via ${o.payment_method}\nPayment status: ${o.payment_status}\nFulfillment status: ${o.fulfillment_status}\n\nConversation (oldest first):\n${msgs.map((m) => `${m.sender === "customer" ? "Customer" : "Support"}: ${String(m.body).slice(0, 600)}`).join("\n")}\n\nWrite the support reply now.`;
+  let res;
+  try {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cfg.model)}:generateContent`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": cfg.key },
+      body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0.5, maxOutputTokens: 600 } }),
+      signal: AbortSignal.timeout(30000),
+    });
+  } catch {
+    return { error: "Could not reach Gemini.", status: 504 };
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { error: res.status === 429 ? "Gemini rate limit reached. Try again in a minute." : `Gemini error: ${String(data?.error?.message || res.status).slice(0, 160)}`, status: res.status === 429 ? 429 : 502 };
+  const text = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("").trim().replace(/^["“]|["”]$/g, "");
+  if (!text) return { error: "Gemini returned nothing. Try again.", status: 502 };
+  return { draft: text.slice(0, 1000) };
+}
+
+// ---------- SEO text + image cleanup (Gemini) ----------
+const SEO_LIMITS = { meta_title: 70, meta_description: 170, meta_title_ar: 70, meta_description_ar: 170, seo_keywords: 220, seo_keywords_ar: 220 };
+const SEO_KEYS = Object.keys(SEO_LIMITS);
+const seoClean = (k, v) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, SEO_LIMITS[k]);
+// Bind values for the six SEO columns. When a field is not sent (older admin page, CSV import, bulk edit) the stored value is kept.
+const seoBinds = (b, existing = {}) => SEO_KEYS.map((k) => (b[k] === undefined ? (existing[k] ?? "") : seoClean(k, b[k])));
+
+async function geminiGenerate(cfg, model, body, ms = 50000) {
+  const ctl = new AbortController(),
+    timer = setTimeout(() => ctl.abort(), ms);
+  try {
+    return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method: "POST",
+      signal: ctl.signal,
+      headers: { "content-type": "application/json", "x-goog-api-key": cfg.key },
+      body: JSON.stringify(body),
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+function geminiHttpError(res, data, model) {
+  const msg = String(data?.error?.message || "");
+  if (res.status === 429) return { error: "Gemini rate limit reached. Wait a minute and try again.", status: 429 };
+  if (res.status === 404) return { error: `Gemini does not know the model "${model}". Change it in Settings > AI auto-fill.`, status: 400 };
+  if (/api key/i.test(msg) || res.status === 401 || res.status === 403)
+    return { error: "Gemini rejected the API key, or this key cannot use that model. Check it in Settings > AI auto-fill.", status: 400 };
+  return { error: `Gemini error: ${msg.slice(0, 200) || res.status}`, status: 502 };
+}
+
+async function geminiSeo(env, cfg, b) {
+  const name = aiText(b.name, 200);
+  if (!name) return { error: "The product needs a name first.", status: 400 };
+  const facts = [
+    ["English name", name],
+    ["Arabic name", aiText(b.name_ar, 200)],
+    ["Category", aiText(b.category, 80)],
+    ["Platform", aiText(b.platform, 80)],
+    ["Region", aiText(b.region, 80)],
+    ["English description", aiText(b.description, 700)],
+    ["Arabic description", aiText(b.description_ar, 700)],
+  ].filter(([, v]) => v);
+  const store = aiText(b.store_name, 60) || "Kardivo";
+  const system =
+    `You write search-engine metadata for ${store}, an Egyptian online store selling digital goods: games, gift cards, game top-ups and subscriptions. ` +
+    "Use ONLY the facts given. Never invent prices, discounts, guarantees, delivery times, ratings or stock claims. " +
+    "meta_title: at most 60 characters, starts with the product name, no store name, no quotes, no trailing punctuation. " +
+    "meta_description: 120 to 155 characters, one or two plain sentences that say what the buyer gets (platform, region, digital delivery when the facts say so) and end with a soft call to action. " +
+    "seo_keywords: 6 to 10 short search phrases separated by commas, lower-case for English, most specific first, no duplicates. " +
+    "Write the _ar fields in natural Modern Standard Arabic suited to Egyptian shoppers (include phrases people search for, such as شراء, بطاقة, كود, أفضل سعر في مصر only when they fit the product). Keep game, brand and platform names recognisable. " +
+    "Plain text only: no markdown, HTML, emojis or links. Reply with ONLY one JSON object, with no code fence and no commentary." +
+    (cfg.instructions ? `\nStore owner's extra instructions: ${cfg.instructions.slice(0, 1500)}` : "");
+  const prompt =
+    `Product facts:\n${facts.map(([k, v]) => `- ${k}: ${v}`).join("\n")}\n\n` +
+    'Return exactly this JSON shape: {"meta_title":"","meta_description":"","seo_keywords":"","meta_title_ar":"","meta_description_ar":"","seo_keywords_ar":""}';
+  let res;
+  try {
+    res = await geminiGenerate(cfg, cfg.model, {
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 1500, responseMimeType: "application/json" },
+    });
+  } catch (e) {
+    return { error: e?.name === "AbortError" ? "Gemini took too long to answer. Try again." : "Could not reach Gemini.", status: 504 };
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return geminiHttpError(res, data, cfg.model);
+  const text = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("").trim();
+  if (!text) return { error: "Gemini returned nothing (the answer may have been blocked). Try again.", status: 502 };
+  let obj = null;
+  try {
+    const t = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+    obj = JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1));
+  } catch {}
+  if (!obj || typeof obj !== "object") return { error: "Gemini's answer could not be read. Try again.", status: 502 };
+  const fields = {};
+  for (const k of SEO_KEYS) {
+    let v = seoClean(k, obj[k]);
+    // Cut a title/description that ran over at a word boundary instead of mid-word.
+    if (/^meta_(title|description)/.test(k) && String(obj[k] ?? "").trim().length > SEO_LIMITS[k]) v = v.replace(/\s+\S*$/, "");
+    fields[k] = v;
+  }
+  return { fields };
+}
+
+const GEMINI_IMAGE_DEFAULT_MODEL = "gemini-2.5-flash-image";
+const IMAGE_BG_DEFAULT = "a clean, uniform, light neutral studio background (#F4F4F6) with soft even lighting and a very subtle ground shadow";
+async function geminiImage(env, req, cfg, b) {
+  let image = null;
+  if (b.image_data && /^image\/(jpeg|png|webp)$/.test(String(b.image_mime)) && String(b.image_data).length < 7_000_000)
+    image = { mime: String(b.image_mime), data: String(b.image_data).replace(/^data:[^,]*,/, "") };
+  else if (clean(b.image_url)) image = await fetchImageForAi(env, req, clean(b.image_url));
+  if (!image) return { error: "Add a product image first (upload one or fill the Image URL). It must be a JPG, PNG or WEBP under 4 MB.", status: 400 };
+  const bg = cfg.imageBg || IMAGE_BG_DEFAULT,
+    name = aiText(b.name, 120);
+  const prompt =
+    "Edit this product image into a clean e-commerce cover for a digital-goods store." +
+    (name ? ` The product is: ${name}.` : "") +
+    " Keep the product artwork, logo, packaging and every piece of text on it EXACTLY as in the original: do not redraw, translate, restyle, add or remove any text, logo or design element." +
+    " Remove everything that is not the product itself: screenshot or browser frames, status bars, cursors, watermarks, borders, price stickers, pop-ups and unrelated background." +
+    ` Place the product centered on ${bg}.` +
+    " Square 1:1 composition with the product filling about 80% of the frame. Do not add people, extra objects, new text or decoration. Return only the finished image.";
+  const body = (withRatio) => ({
+    contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: image.mime, data: image.data } }] }],
+    generationConfig: { responseModalities: ["IMAGE"], ...(withRatio ? { imageConfig: { aspectRatio: "1:1" } } : {}) },
+  });
+  let res;
+  try {
+    res = await geminiGenerate(cfg, cfg.imageModel, body(true), 90000);
+    if (res.status === 400) {
+      // Some image models reject imageConfig; ask again without it before giving up.
+      const retry = await geminiGenerate(cfg, cfg.imageModel, body(false), 90000);
+      if (retry.ok) res = retry;
+    }
+  } catch (e) {
+    return { error: e?.name === "AbortError" ? "Gemini took too long to draw the image. Try again." : "Could not reach Gemini.", status: 504 };
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return geminiHttpError(res, data, cfg.imageModel);
+  const parts = data?.candidates?.[0]?.content?.parts || [],
+    img = parts.map((p) => p.inlineData || p.inline_data).find((d) => d?.data),
+    mime = String(img?.mimeType || img?.mime_type || "image/png").toLowerCase();
+  if (!img || !/^image\/(png|jpeg|webp)$/.test(mime)) {
+    const why = parts.map((p) => p.text || "").join(" ").trim();
+    return { error: `Gemini did not return an image${why ? `: ${why.slice(0, 160)}` : " (it may have been blocked). Try again or use a clearer source image."}`, status: 502 };
+  }
+  return { image_data: img.data, mime };
+}
+
 async function productList(env, includeInactive = false) {
   const where = includeInactive ? "" : "WHERE p.active=1";
   const rows = (
@@ -847,12 +1301,65 @@ async function productList(env, includeInactive = false) {
     : [];
   for (const p of rows) {
     p.variants = vs.filter((v) => v.product_id === p.id);
+    withGallery(p);
     if (!includeInactive) {
       delete p.cost_price;
+      delete p.image_original;
       delete p.low_stock_threshold;
     }
   }
   return rows;
+}
+// ---- Product image gallery ----
+// Extra images live in products.gallery as a JSON list of URLs. products.image_url stays the cover (shown first, used for cards and link previews).
+const GALLERY_MAX = 8;
+// Accepts an http(s) link or one of our own /media/product/ URLs. The upload endpoint returns the key URL-encoded
+// (/media/product/products%2F1%2F<id>.png), so the key is decoded before it is checked; literal slashes work too.
+function galleryUrlOk(u) {
+  if (typeof u !== "string") return false;
+  u = u.trim();
+  if (!u || u.length > 600) return false;
+  if (/^https?:\/\/[^\s"'<>]+$/i.test(u)) return true;
+  const m = u.match(/^\/media\/product\/([^?#]+)$/);
+  if (!m) return false;
+  let key;
+  try {
+    key = decodeURIComponent(m[1]);
+  } catch {
+    return false;
+  }
+  return /^products\/[A-Za-z0-9._\/-]+$/.test(key) && !key.includes("..");
+}
+function galleryOf(raw) {
+  let a = raw;
+  if (!Array.isArray(a)) {
+    try {
+      a = JSON.parse(raw || "[]");
+    } catch {
+      a = [];
+    }
+  }
+  return Array.isArray(a) ? a.filter(galleryUrlOk).map((u) => u.trim()).slice(0, GALLERY_MAX) : [];
+}
+// Returns { skip:true } when the client did not send a gallery (older admin pages must not wipe it), { error } or { list }.
+function validateGallery(v) {
+  if (v === undefined) return { skip: true };
+  if (v === null || v === "") return { list: [] };
+  if (!Array.isArray(v)) return { error: "The gallery must be a list of image links." };
+  const list = [...new Set(v.map((x) => (typeof x === "string" ? x.trim() : x)).filter((x) => x !== ""))];
+  if (list.length > GALLERY_MAX) return { error: `A product can have up to ${GALLERY_MAX} extra images.` };
+  if (!list.every(galleryUrlOk)) return { error: "One of the image links is not valid." };
+  return { list };
+}
+// cover first, then the gallery, no duplicates
+const imagesOf = (p) => [...new Set([clean(p.image_url), ...galleryOf(p.gallery)].filter(Boolean))];
+function withGallery(p) {
+  p.gallery = galleryOf(p.gallery);
+  p.images = imagesOf(p);
+  return p;
+}
+async function saveGallery(env, id, list) {
+  await env.DB.prepare("UPDATE products SET gallery=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(JSON.stringify(list), id).run();
 }
 const blank = (v) => v === "" || v == null;
 const optNum = (v) => (blank(v) || !Number.isFinite(Number(v)) || Number(v) < 0 ? null : Number(v));
@@ -1970,6 +2477,8 @@ async function api(req, env, url, ctx) {
     ).results;
     delete product.cost_price;
     delete product.low_stock_threshold;
+    delete product.image_original;
+    withGallery(product);
     product.reviews = (
       await env.DB.prepare(
         "SELECT r.id,r.rating,r.body,r.created_at,r.photo_key,u.name user_name FROM product_reviews r LEFT JOIN users u ON u.id=r.user_id WHERE r.product_id=? AND r.approved=1 ORDER BY r.id DESC LIMIT 20",
@@ -2001,8 +2510,13 @@ async function api(req, env, url, ctx) {
     out.vapid_public_key = pushReady(env) ? env.VAPID_PUBLIC_KEY : "";
     out.referral_enabled = s.referral_enabled !== "0";
     out.testimonials_enabled = s.testimonials_enabled !== "0";
+    // An ended (or unreadable) sale is never sent to shoppers, and the server clock is included so a phone with the wrong time still counts down correctly.
+    const saleEnd = Date.parse(String(s.sale_ends_at || ""));
+    if (!(saleEnd > Date.now())) out.sale_ends_at = "";
+    out.server_time = Date.now();
     delete out.email_codes;
     delete out.backup_keep;
+    delete out.gemini_api_key;
     return json(out);
   }
   if (path === "/api/auth/register" && method === "POST") {
@@ -2698,6 +3212,16 @@ async function api(req, env, url, ctx) {
       },
     });
   }
+  const restoreMatch = path.match(/^\/api\/admin\/products\/(\d+)\/restore-image$/);
+  if (restoreMatch && method === "POST") {
+    const id = Number(restoreMatch[1]),
+      row = await env.DB.prepare("SELECT image_original FROM products WHERE id=?").bind(id).first();
+    if (!row) return json({ error: "Product not found." }, 404);
+    if (!clean(row.image_original)) return json({ error: "There is no original image to restore." }, 400);
+    await env.DB.prepare("UPDATE products SET image_url=image_original,image_original='',updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(id).run();
+    await audit(env, me, "ai_image_restore", "products", id, "original restored");
+    return json({ ok: true, image_url: row.image_original });
+  }
   const productImageMatch = path.match(
     /^\/api\/admin\/products\/(\d+)\/image$/,
   );
@@ -2729,8 +3253,13 @@ async function api(req, env, url, ctx) {
       },
     });
     const imageUrl = `/media/product/${encodeURIComponent(key)}`;
+    // ?gallery=1: store the file and hand back its URL; the product row changes only when the gallery list is saved.
+    if (url.searchParams.get("gallery") === "1") return json({ ok: true, image_url: imageUrl });
+    // ?ai=1 means this file is an AI-cleaned cover: remember the current picture once so it can be restored.
     await env.DB.prepare(
-      "UPDATE products SET image_url=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+      url.searchParams.get("ai") === "1"
+        ? "UPDATE products SET image_original=CASE WHEN COALESCE(image_original,'')='' THEN image_url ELSE image_original END,image_url=?,updated_at=CURRENT_TIMESTAMP WHERE id=?"
+        : "UPDATE products SET image_url=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
     )
       .bind(imageUrl, id)
       .run();
@@ -2783,8 +3312,10 @@ async function api(req, env, url, ctx) {
     return json(await productList(env, true));
   if (path === "/api/admin/products" && method === "POST") {
     const b = await readJson(req),
-      err = validateProduct(b);
+      err = validateProduct(b),
+      gal = validateGallery(b.gallery);
     if (err) return json({ error: err }, 400);
+    if (gal.error) return json({ error: gal.error }, 400);
     const base = slugify(b.slug || b.name);
     let slug = base;
     let n = 2;
@@ -2795,7 +3326,7 @@ async function api(req, env, url, ctx) {
     )
       slug = `${base}-${n++}`;
     const r = await env.DB.prepare(
-      "INSERT INTO products(name,slug,description,name_ar,description_ar,price,old_price,image_url,category_id,platform,region,delivery_type,active,featured,low_stock_threshold,cost_price) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      "INSERT INTO products(name,slug,description,name_ar,description_ar,price,old_price,image_url,category_id,platform,region,delivery_type,active,featured,low_stock_threshold,cost_price,meta_title,meta_description,meta_title_ar,meta_description_ar,seo_keywords,seo_keywords_ar) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
     )
       .bind(
         clean(b.name),
@@ -2814,17 +3345,152 @@ async function api(req, env, url, ctx) {
         b.featured ? 1 : 0,
         optInt(b.low_stock_threshold),
         optNum(b.cost_price),
+        ...seoBinds(b),
       )
       .run();
+    if (gal.list?.length) await saveGallery(env, r.meta.last_row_id, gal.list);
     return json({ id: r.meta.last_row_id }, 201);
   }
+  if (path === "/api/admin/products/import" && method === "POST") {
+    const b = await readJson(req),
+      list = Array.isArray(b.rows) ? b.rows.slice(0, 60) : [];
+    if (!list.length) return json({ error: "No rows to import." }, 400);
+    let results;
+    try {
+      results = await importProducts(env, list);
+    } catch (e) {
+      return json({ error: "Import failed, nothing in this batch was saved: " + String(e?.message || e).slice(0, 160) }, 500);
+    }
+    const made = results.filter((r) => r.status === "created").length,
+      upd = results.filter((r) => r.status === "updated").length;
+    if (made || upd) await audit(env, me, "products_import", "products", null, `${made} created, ${upd} updated`);
+    return json({ results });
+  }
+  if (path === "/api/admin/ai" && method === "GET") {
+    const c = await geminiConfig(env);
+    return json({ configured: !!c.key, source: c.source, key_hint: c.key ? "…" + c.key.slice(-4) : "", model: c.model, default_model: GEMINI_DEFAULT_MODEL, instructions: c.instructions, image_model: c.imageModel, default_image_model: GEMINI_IMAGE_DEFAULT_MODEL, image_bg: c.imageBg, default_image_bg: IMAGE_BG_DEFAULT });
+  }
+  if (path === "/api/admin/ai" && method === "PUT") {
+    const b = await readJson(req),
+      put = (k, v) =>
+        env.DB.prepare("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(k, v).run();
+    if (b.clear_key) await put("gemini_api_key", "");
+    else if (clean(b.api_key)) {
+      const k = clean(b.api_key);
+      if (k.length < 20 || k.length > 200 || /\s/.test(k)) return json({ error: "That does not look like a Gemini API key." }, 400);
+      await put("gemini_api_key", k);
+    }
+    if (b.model !== undefined) {
+      const m = clean(b.model);
+      if (m && !/^[a-zA-Z0-9._-]{3,60}$/.test(m)) return json({ error: "Model names use letters, numbers, dots and dashes only." }, 400);
+      await put("gemini_model", m);
+    }
+    if (b.instructions !== undefined) await put("gemini_instructions", clean(b.instructions).slice(0, 1500));
+    if (b.image_model !== undefined) {
+      const m = clean(b.image_model);
+      if (m && !/^[a-zA-Z0-9._-]{3,60}$/.test(m)) return json({ error: "Model names use letters, numbers, dots and dashes only." }, 400);
+      await put("gemini_image_model", m);
+    }
+    if (b.image_bg !== undefined) await put("gemini_image_bg", clean(b.image_bg).slice(0, 300));
+    await audit(env, me, "ai_settings", "settings", null, b.clear_key ? "key removed" : clean(b.api_key) ? "key updated" : "options updated");
+    return json({ ok: true });
+  }
+  if (path === "/api/admin/ai/reply" && method === "POST") {
+    const cfg = await geminiConfig(env);
+    if (!cfg.key) return json({ error: "Add your Gemini API key first: Admin > Settings > AI auto-fill." }, 400);
+    if (!(await throttle(env, `ai:${me.id}`, 300, 3600000))) return json({ error: "Too many AI requests this hour. Try again later." }, 429);
+    const b = await readJson(req),
+      r = await geminiReply(env, cfg, Number(b.order_id));
+    if (r.error) return json({ error: r.error }, r.status || 500);
+    return json(r);
+  }
+  if (path === "/api/admin/ai/product" && method === "POST") {
+    const cfg = await geminiConfig(env);
+    if (!cfg.key) return json({ error: "Add your Gemini API key first: Admin > Settings > AI auto-fill." }, 400);
+    if (!(await throttle(env, `ai:${me.id}`, 300, 3600000)))
+      return json({ error: "Too many AI requests this hour. Try again later." }, 429);
+    const r = await geminiProduct(env, req, cfg, await readJson(req));
+    if (r.error) return json({ error: r.error }, r.status || 500);
+    return json(r);
+  }
+  if (path === "/api/admin/ai/seo" && method === "POST") {
+    const cfg = await geminiConfig(env);
+    if (!cfg.key) return json({ error: "Add your Gemini API key first: Admin > Settings > AI auto-fill." }, 400);
+    if (!(await throttle(env, `ai:${me.id}`, 300, 3600000))) return json({ error: "Too many AI requests this hour. Try again later." }, 429);
+    const b = await readJson(req),
+      st = await settings(env);
+    let src = b,
+      row = null;
+    if (b.product_id) {
+      // Bulk path: read the product from the database and (optionally) save into the empty SEO fields only.
+      row = await env.DB.prepare(
+        "SELECT p.id,p.name,p.name_ar,p.description,p.description_ar,p.platform,p.region,p.meta_title,p.meta_description,p.meta_title_ar,p.meta_description_ar,p.seo_keywords,p.seo_keywords_ar,c.name category FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.id=?",
+      ).bind(Number(b.product_id)).first();
+      if (!row) return json({ error: "Product not found." }, 404);
+      src = row;
+    }
+    const r = await geminiSeo(env, cfg, { ...src, store_name: st.store_name });
+    if (r.error) return json({ error: r.error }, r.status || 500);
+    if (row && b.save) {
+      const sets = [],
+        binds = [],
+        saved = [];
+      for (const k of SEO_KEYS)
+        if (r.fields[k] && (b.overwrite || !clean(row[k]))) { sets.push(`${k}=?`); binds.push(r.fields[k]); saved.push(k); }
+      if (sets.length) {
+        await env.DB.prepare(`UPDATE products SET ${sets.join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(...binds, row.id).run();
+        await audit(env, me, "ai_seo", "products", row.id, saved.join(","));
+      }
+      return json({ fields: r.fields, saved });
+    }
+    return json(r);
+  }
+  if (path === "/api/admin/ai/image" && method === "POST") {
+    const cfg = await geminiConfig(env);
+    if (!cfg.key) return json({ error: "Add your Gemini API key first: Admin > Settings > AI auto-fill." }, 400);
+    // Image generation costs far more than text, so it has its own, lower hourly limit.
+    if (!(await throttle(env, `aiimg:${me.id}`, 60, 3600000))) return json({ error: "Too many AI image requests this hour (limit 60). Try again later." }, 429);
+    const b = await readJson(req);
+    let prod = null;
+    if (b.product_id) {
+      prod = await env.DB.prepare("SELECT id,name,image_url,image_original FROM products WHERE id=?").bind(Number(b.product_id)).first();
+      if (!prod) return json({ error: "Product not found." }, 404);
+      if (b.save && !bucketOf(env)) return json({ error: "R2 storage is not configured." }, 503);
+    }
+    const r = await geminiImage(env, req, cfg, prod ? { name: prod.name, image_url: prod.image_url } : b);
+    if (r.error) return json({ error: r.error }, r.status || 500);
+    if (prod && b.save) {
+      const bytes = Uint8Array.from(atob(r.image_data), (c) => c.charCodeAt(0)),
+        key = `products/${prod.id}/${crypto.randomUUID()}.${extFromType(r.mime)}`;
+      await bucketOf(env).put(key, bytes, { httpMetadata: { contentType: r.mime, cacheControl: "public, max-age=31536000, immutable" } });
+      const imageUrl = `/media/product/${encodeURIComponent(key)}`;
+      // The very first cleanup remembers the original picture so it can be restored; later ones keep that same original.
+      await env.DB.prepare("UPDATE products SET image_original=CASE WHEN COALESCE(image_original,'')='' THEN image_url ELSE image_original END,image_url=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(imageUrl, prod.id).run();
+      await audit(env, me, "ai_image", "products", prod.id, "cover cleaned up");
+      return json({ ok: true, image_url: imageUrl });
+    }
+    return json(r);
+  }
   const productMatch = path.match(/^\/api\/admin\/products\/(\d+)$/);
+  const galleryMatch = path.match(/^\/api\/admin\/products\/(\d+)\/gallery$/);
+  if (galleryMatch && method === "PUT") {
+    const id = Number(galleryMatch[1]),
+      b = await readJson(req),
+      gal = validateGallery(b.gallery);
+    if (!(await env.DB.prepare("SELECT id FROM products WHERE id=?").bind(id).first())) return json({ error: "Product not found." }, 404);
+    if (gal.error) return json({ error: gal.error }, 400);
+    if (gal.skip) return json({ error: "Send the gallery as a list of image links." }, 400);
+    await saveGallery(env, id, gal.list);
+    return json({ ok: true, gallery: gal.list });
+  }
   if (productMatch && method === "PUT") {
     const b = await readJson(req),
-      err = validateProduct(b);
+      err = validateProduct(b),
+      gal = validateGallery(b.gallery);
     if (err) return json({ error: err }, 400);
+    if (gal.error) return json({ error: gal.error }, 400);
     const id = Number(productMatch[1]),
-      existing = await env.DB.prepare("SELECT id,active,low_stock_threshold,cost_price FROM products WHERE id=?")
+      existing = await env.DB.prepare("SELECT id,active,low_stock_threshold,cost_price,meta_title,meta_description,meta_title_ar,meta_description_ar,seo_keywords,seo_keywords_ar FROM products WHERE id=?")
         .bind(id)
         .first();
     if (!existing) return json({ error: "Product not found." }, 404);
@@ -2836,7 +3502,7 @@ async function api(req, env, url, ctx) {
       .first();
     if (conflict) newSlug = `${newSlug}-${id}`;
     await env.DB.prepare(
-      "UPDATE products SET name=?,slug=?,description=?,name_ar=?,description_ar=?,price=?,old_price=?,image_url=?,category_id=?,platform=?,region=?,delivery_type=?,active=?,featured=?,low_stock_threshold=?,cost_price=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+      "UPDATE products SET name=?,slug=?,description=?,name_ar=?,description_ar=?,price=?,old_price=?,image_url=?,category_id=?,platform=?,region=?,delivery_type=?,active=?,featured=?,low_stock_threshold=?,cost_price=?,meta_title=?,meta_description=?,meta_title_ar=?,meta_description_ar=?,seo_keywords=?,seo_keywords_ar=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
     )
       .bind(
         clean(b.name),
@@ -2859,9 +3525,12 @@ async function api(req, env, url, ctx) {
         b.featured ? 1 : 0,
         b.low_stock_threshold === undefined ? existing.low_stock_threshold : optInt(b.low_stock_threshold),
         b.cost_price === undefined ? existing.cost_price : optNum(b.cost_price),
+        ...seoBinds(b, existing),
         id,
       )
       .run();
+    // An older admin page that doesn't send a gallery must leave the existing one alone.
+    if (!gal.skip) await saveGallery(env, id, gal.list);
     return json({ ok: true });
   }
   if (productMatch && method === "DELETE") {
@@ -3787,10 +4456,18 @@ async function api(req, env, url, ctx) {
       ).results,
     );
   }
-  if (path === "/api/admin/settings" && method === "GET")
-    return json(await allSettings(env));
+  if (path === "/api/admin/settings" && method === "GET") {
+    const all = await allSettings(env);
+    delete all.gemini_api_key;
+    return json(all);
+  }
   if (path === "/api/admin/settings" && method === "PUT") {
     const body = await readJson(req);
+    if (body.sale_ends_at !== undefined && String(body.sale_ends_at ?? "").trim()) {
+      const d = new Date(String(body.sale_ends_at).trim());
+      if (isNaN(d.getTime()) || d.getFullYear() > 2100) return json({ error: "The flash-sale end date is not valid." }, 400);
+      body.sale_ends_at = d.toISOString();
+    }
     for (const [key, value] of Object.entries(body)) {
       if (!(key in DEFAULTS)) continue;
       let v = String(value ?? "").trim();
@@ -3924,7 +4601,7 @@ async function htmlForProduct(env, request, url) {
   await ensureSchema(env);
   const slug = decodeURIComponent(url.pathname.slice(1)).replace(/\/$/, ""),
     p = await env.DB.prepare(
-      "SELECT p.id,p.name,p.name_ar,p.description,p.description_ar,p.image_url,p.price,p.delivery_type,p.slug,c.name category_name,c.name_ar category_name_ar,c.slug category_slug FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.slug=? AND p.active=1 LIMIT 1",
+      "SELECT p.id,p.name,p.name_ar,p.description,p.description_ar,p.image_url,p.gallery,p.price,p.delivery_type,p.slug,p.meta_title,p.meta_description,p.meta_title_ar,p.meta_description_ar,p.seo_keywords,p.seo_keywords_ar,c.name category_name,c.name_ar category_name_ar,c.slug category_slug FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.slug=? AND p.active=1 LIMIT 1",
     )
       .bind(slug)
       .first();
@@ -3939,8 +4616,12 @@ async function htmlForProduct(env, request, url) {
     ar = lang === "ar",
     name = (ar && clean(p.name_ar)) || p.name,
     store = s.store_name || "Kardivo",
-    title = `${name} | ${store}`,
+    // A hand-written or AI-written SEO title wins. The store name is appended only when it still fits in a normal search-result title.
+    seoTitle = clean(ar ? p.meta_title_ar : p.meta_title),
+    title = seoTitle ? (seoTitle.toLowerCase().includes(store.toLowerCase()) || seoTitle.length + store.length + 3 > 65 ? seoTitle : `${seoTitle} | ${store}`) : `${name} | ${store}`,
+    seoKeywords = clean(ar ? p.seo_keywords_ar : p.seo_keywords),
     desc =
+      clean(ar ? p.meta_description_ar : p.meta_description) ||
       (ar && clean(p.description_ar)) ||
       clean(p.description) ||
       (ar ? `${name} — منتج رقمي من ${store}.` : `${name} — digital product at ${store}.`),
@@ -3976,13 +4657,14 @@ async function htmlForProduct(env, request, url) {
     image: p.image_url,
     type: "product",
     extra:
+      (seoKeywords ? `<meta name="keywords" content="${htmlEsc(seoKeywords)}">` : "") +
       jsonLd({
         "@context": "https://schema.org",
         "@type": "Product",
         name,
         description: short,
         sku: p.slug,
-        ...(p.image_url ? { image: [new URL(p.image_url, url).href] } : {}),
+        ...(imagesOf(p).length ? { image: imagesOf(p).slice(0, 6).map((u) => new URL(u, url).href) } : {}),
         ...(catName ? { category: catName } : {}),
         offers,
         ...(aggregateRating ? { aggregateRating } : {}),
