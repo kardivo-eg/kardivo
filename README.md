@@ -1,3 +1,15 @@
+# Kardivo V62 — Per-product accent colours
+
+- **What it does**: every product picture is read once in the browser and three colours are taken from it (the dominant colour plus two others). Black, white, grey and anything close to them are ignored, so a logo on a white or black background still gives its real colours. A picture with only one colour family gets two neighbouring hues so there are always three. A picture with no real colour (pure greyscale) keeps the normal purple look.
+- **Where it shows**: product grids, search results and category pages, featured picks, favorites, recommendations ("You may also like", "Recently viewed"), cart items, saved-for-later, "complete your bundle", the bundle builder, the search dropdown, quick view, the added-to-cart toast, category cards, the hero tiles, the promotional campaign banner (from its own picture) and the product page. On the product page the whole page background and glow take the colours too, and go back to normal when you leave.
+- **How**: new block "V62 PRODUCT TINT" at the end of `public/app.js` and `public/styles.css`. It sets `--kd-a`, `--kd-b`, `--kd-c` and `data-kd-tint` on whatever element shows the product; the CSS paints only from those variables. Pictures are sampled when they are near the screen, three at a time, and the result is cached per picture URL in `localStorage` (`kd_tint_v1`, up to 600 entries), so a repeat visit tints on first paint. Light theme, Arabic (RTL) and phones are covered. Browsers without `color-mix()` simply keep the old look.
+- **Worker**: new `GET /api/tint-image?u=<https url>`. Pictures on another website usually forbid reading their pixels, so the browser asks this route to relay them. It only relays https pictures the store already uses (a product cover or gallery image, or the campaign image), images only, 6 MB max, so it is not an open proxy. Pictures uploaded to the store (`/media/product/...`) never need it.
+- No schema or migration changes. `sw.js` cache v39, `app.js?v=55`, `styles.css?v=48`. Only `public/` and `worker.js` were changed.
+- Tested in headless Chromium against a mock catalogue (white, black and grey backgrounds, transparent PNG, greyscale, single-colour, and a picture on another origin without CORS), dark and light, English and Arabic, desktop and phone width. Not tested: the real Worker/D1 relay route (syntax-checked only; the mock stood in for it), real Safari/iOS.
+- Admin screens are not tinted (storefront only).
+
+---
+
 # Kardivo V61 — "Feel" upgrades, hero lights removed
 
 - **Removed**: the V59 string of lights over the hero (code and CSS). The sparkles on the hero picture, the category ticker, the glow and the particles are untouched.
@@ -352,14 +364,3 @@ Visual only (no order, price, payment or API code touched). CSS is the last bloc
 - Phones (<=700px): dialogs are bottom sheets, category and filter chips are single-row swipe lists, 44px touch targets, 16px inputs (no focus zoom), full-width hero buttons, press feedback on touch, no text selection or long-press callout on UI chrome (inputs and delivered codes stay selectable).
 - To allow zoom again, restore the old viewport meta and delete the V60 blocks in `styles.css` and `app.js`.
 - Asset versions: `styles.css?v=46`, `app.js?v=53`.
-
-
-## V63 — Per-product image-reactive accent glow
-
-- Product image palettes are sampled into three separated colours (primary, secondary, tertiary) and cached by image URL.
-- The same palette is applied across product cards, featured/popular placements, favorites, search suggestions, quick view, cart, saved-for-later, bundles and product detail views.
-- Multi-layer ambient gradients create an RGB-backlight effect while keeping the site's global purple branding on non-product UI.
-- Product uploads served from the same origin can be sampled directly. Third-party image hosts must permit canvas CORS; if they block it, the frontend intentionally uses a neutral fallback instead of falsely tinting the product purple.
-- Static asset versions and service-worker cache version were bumped to prevent stale CSS/JS from hiding the update.
-
-Validation: `node --check public/app.js` and `node --check app.js`. Live Cloudflare Worker/D1/R2 deployment and real product-image CORS behavior still require staging verification.

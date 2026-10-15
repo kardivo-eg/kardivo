@@ -399,7 +399,7 @@ function renderFavoritesPage() {
   document.body.classList.remove("product-route"); document.body.classList.add("account-route");
   const products = state.favorites.map(id => state.products.find(p => Number(p.id) === Number(id))).filter(Boolean);
   const guestNote = !state.user ? `<div class="notice favorite-account-note"><b>${t("Sign in to save your favorites to your account.")}</b><p>${t("You must sign in to sync favorites across devices.")}</p><button class="btn primary" id="favoritesLogin">${t("Log in")}</button></div>` : `<div class="notice favorite-account-note">${t("Saved to your account")}</div>`;
-  $("main").innerHTML = `<section class="collection-page container"><div class="collection-hero"><div><span class="eyebrow">KARDIVO · ${t("Favorites")}</span><h1>${t("Your favorites")}</h1><p>${t("Your saved products")}</p></div><a class="btn ghost" href="/#store" data-collection-store>${t("Browse products")}</a></div>${guestNote}<div class="collection-grid">${products.length ? products.map(p => `<article class="collection-product" ${kdAccentMarkup(p)}>${favoriteButton(p)}<a class="collection-product-link" href="/${encodeURIComponent(p.slug || p.id)}"><div class="collection-product-image">${stockImg(p.image_url,pName(p),stockArtFor(p))}</div><div class="collection-product-info"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML([p.platform,p.region].filter(Boolean).join(" · ") || dlv(p))}</small><strong>${money(Number(p.price || 0))}</strong></div></a><button class="btn ghost collection-add" type="button" data-fav-add="${Number(p.id)}">${t("Add to cart")}</button></article>`).join("") : `${emptyState("favorites")}`}</div></section>`;
+  $("main").innerHTML = `<section class="collection-page container"><div class="collection-hero"><div><span class="eyebrow">KARDIVO · ${t("Favorites")}</span><h1>${t("Your favorites")}</h1><p>${t("Your saved products")}</p></div><a class="btn ghost" href="/#store" data-collection-store>${t("Browse products")}</a></div>${guestNote}<div class="collection-grid">${products.length ? products.map(p => `<article class="collection-product">${favoriteButton(p)}<a class="collection-product-link" href="/${encodeURIComponent(p.slug || p.id)}"><div class="collection-product-image">${stockImg(p.image_url,pName(p),stockArtFor(p))}</div><div class="collection-product-info"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML([p.platform,p.region].filter(Boolean).join(" · ") || dlv(p))}</small><strong>${money(Number(p.price || 0))}</strong></div></a><button class="btn ghost collection-add" type="button" data-fav-add="${Number(p.id)}">${t("Add to cart")}</button></article>`).join("") : `${emptyState("favorites")}`}</div></section>`;
   $("#favoritesLogin")?.addEventListener("click", openAuth);
   $("[data-collection-store]")?.addEventListener("click",e=>{e.preventDefault();navigate("/#store","#store")});
   $$('[data-fav-add]').forEach(b=>b.addEventListener('click',()=>{addToCart(Number(b.dataset.favAdd));toast(t("Added to cart."));}));
@@ -1260,7 +1260,7 @@ function renderHeroShowcase() {
   if (!picks.length) return;
   visual.classList.add("hero-visual-products");
   visual.querySelector(".hero-product-stack")?.remove();
-  visual.insertAdjacentHTML("beforeend", `<div class="hero-product-stack" aria-label="Featured products">${picks.map((p,i) => `<a class="hero-product-tile hero-product-tile-${i+1}" ${kdAccentMarkup(p)} href="/${encodeURIComponent(p.slug || p.id)}"><span class="hero-product-art">${stockImg(p.image_url, pName(p), stockArtFor(p))}</span><span class="hero-product-tile-copy"><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || t("Featured"))}</small><b>${escapeHTML(pName(p))}</b><strong>${money(Number(p.price || 0))}</strong></span></a>`).join("")}</div>`);
+  visual.insertAdjacentHTML("beforeend", `<div class="hero-product-stack" aria-label="Featured products">${picks.map((p,i) => `<a class="hero-product-tile hero-product-tile-${i+1}" href="/${encodeURIComponent(p.slug || p.id)}"><span class="hero-product-art">${stockImg(p.image_url, pName(p), stockArtFor(p))}</span><span class="hero-product-tile-copy"><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || t("Featured"))}</small><b>${escapeHTML(pName(p))}</b><strong>${money(Number(p.price || 0))}</strong></span></a>`).join("")}</div>`);
 }
 
 function productAvailable(p) {
@@ -1473,12 +1473,9 @@ function renderCampaign() {
   }
   const art = $("#campaignArt");
   if (art) {
-    const artwork = image && (/^https?:\/\//i.test(image) || image.startsWith("/")) ? image : STOCK_ART[0];
-    art.style.backgroundImage = `linear-gradient(90deg,color-mix(in srgb,var(--product-accent,#827b91) 35%,transparent) 0%,color-mix(in srgb,var(--product-accent-2,#a39aae) 24%,transparent) 45%,color-mix(in srgb,var(--product-accent-3,#5b536b) 22%,transparent) 100%),url("${artwork.replace(/["\\]/g, "")}")`;
+    const artwork = image && /^https?:\/\//i.test(image) ? image : STOCK_ART[0];
+    art.style.backgroundImage = `linear-gradient(90deg,var(--art-a) 0%,var(--art-b) 45%,var(--art-c) 100%),url("${artwork.replace(/["\\]/g, "")}")`;    if (window.kdTintCampaign) window.kdTintCampaign();
   }
-  // The campaign is a first-class storefront surface: derive its glow from its own artwork,
-  // or from the linked/featured product when no custom campaign artwork is supplied.
-  kdApplyCampaignAccent(image, link);
 }
 function renderSearchSuggestions() {
   const box = $("#searchSuggestions"), input = $("#search");
@@ -1487,7 +1484,7 @@ function renderSearchSuggestions() {
   if (!q && document.activeElement === input) { renderPopularSearches(box); return; }
   if (q.length < 2) { box.hidden = true; box.innerHTML = ""; return; }
   const matches = state.products.map(p => ({ p, score: searchScore(p, q) })).filter(x => x.score >= 0).sort((a, b) => b.score - a.score || Number(b.p.featured || 0) - Number(a.p.featured || 0)).slice(0, 5).map(x => x.p);
-  box.innerHTML = matches.map((p) => `<a class="search-suggestion" ${kdAccentMarkup(p)} href="/${encodeURIComponent(p.slug || p.id)}" data-suggestion-product="${p.id}">${stockImg(p.image_url, "", stockArtFor(p))}<span class="suggestion-copy"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</small></span><strong>${money(Number(p.price || 0))}</strong></a>`).join("") || `<div class="search-suggestion-empty">${state.lang === "ar" ? "مفيش نتائج مطابقة. جرّب اسم تاني." : "No matching products. Try another search."}</div>`;
+  box.innerHTML = matches.map((p) => `<a class="search-suggestion" href="/${encodeURIComponent(p.slug || p.id)}" data-suggestion-product="${p.id}">${stockImg(p.image_url, "", stockArtFor(p))}<span class="suggestion-copy"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</small></span><strong>${money(Number(p.price || 0))}</strong></a>`).join("") || `<div class="search-suggestion-empty">${state.lang === "ar" ? "مفيش نتائج مطابقة. جرّب اسم تاني." : "No matching products. Try another search."}</div>`;
   box.hidden = false;
 }
 function renderCategoryCards() {
@@ -1518,7 +1515,7 @@ function renderPopularProducts() {
     const name = pName(p);
     const cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
     const img = stockImg(p.image_url, name, stockArtFor(p));
-    return `<article class="popular-product-wrap" ${kdAccentMarkup(p)}>${favoriteButton(p)}<a class="popular-product" href="/${encodeURIComponent(p.slug || p.id)}"><div class="popular-product-image">${img}</div><div class="popular-product-copy"><span class="popular-product-category">${escapeHTML(cat || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</span><span class="popular-product-name">${escapeHTML(name)}</span><span class="popular-product-price">${money(price)}${old > price ? `<del>${money(old)}</del>` : ""}</span></div></a></article>`;
+    return `<article class="popular-product-wrap">${favoriteButton(p)}<a class="popular-product" href="/${encodeURIComponent(p.slug || p.id)}"><div class="popular-product-image">${img}</div><div class="popular-product-copy"><span class="popular-product-category">${escapeHTML(cat || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</span><span class="popular-product-name">${escapeHTML(name)}</span><span class="popular-product-price">${money(price)}${old > price ? `<del>${money(old)}</del>` : ""}</span></div></a></article>`;
   }).join("");
   bindFavoriteButtons(el);
   const section = $("#popularSection");
@@ -1604,7 +1601,7 @@ function openQuickView(id) {
     const sel = $("#qvVariant");
     return sel ? variants.find((v) => Number(v.id) === Number(sel.value)) || null : null;
   };
-  const body = `<div class="qv" ${kdAccentMarkup(p)}><div class="qv-media">${stockImg(p.image_url, name, stockArtFor(p))}</div><div class="qv-info">${cat ? `<span class="product-cat">${escapeHTML(cat)}</span>` : ""}<div class="qv-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div><div class="qv-price" id="qvPrice"></div>${variants.length ? `<div class="field qv-field"><label for="qvVariant">${t("Choose option")}</label><select id="qvVariant">${variants.map((v) => `<option value="${v.id}" ${startV && Number(startV.id) === Number(v.id) ? "selected" : ""} ${stockOf(v) <= 0 ? "disabled" : ""}>${escapeHTML(v.name)} — ${money(Number(v.price))}${isCode && showStock ? ` · ${stockOf(v) > 0 ? t("{0} left", stockOf(v)) : t("Sold out")}` : ""}</option>`).join("")}</select></div>` : ""}<p class="qv-stock" id="qvStock" aria-live="polite"></p>${short ? `<p class="qv-desc">${escapeHTML(short)}</p>` : ""}<div class="qv-actions"><button type="button" class="btn primary" id="qvAdd">${t("Add to cart")}</button><a class="btn ghost" id="qvMore" href="${href}">${t("Full details")}</a></div></div></div>`;
+  const body = `<div class="qv"><div class="qv-media">${stockImg(p.image_url, name, stockArtFor(p))}</div><div class="qv-info">${cat ? `<span class="product-cat">${escapeHTML(cat)}</span>` : ""}<div class="qv-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div><div class="qv-price" id="qvPrice"></div>${variants.length ? `<div class="field qv-field"><label for="qvVariant">${t("Choose option")}</label><select id="qvVariant">${variants.map((v) => `<option value="${v.id}" ${startV && Number(startV.id) === Number(v.id) ? "selected" : ""} ${stockOf(v) <= 0 ? "disabled" : ""}>${escapeHTML(v.name)} — ${money(Number(v.price))}${isCode && showStock ? ` · ${stockOf(v) > 0 ? t("{0} left", stockOf(v)) : t("Sold out")}` : ""}</option>`).join("")}</select></div>` : ""}<p class="qv-stock" id="qvStock" aria-live="polite"></p>${short ? `<p class="qv-desc">${escapeHTML(short)}</p>` : ""}<div class="qv-actions"><button type="button" class="btn primary" id="qvAdd">${t("Add to cart")}</button><a class="btn ghost" id="qvMore" href="${href}">${t("Full details")}</a></div></div></div>`;
   openModal(escapeHTML(name), body);
   const refresh = () => {
     const v = cur(),
@@ -1637,127 +1634,6 @@ function rewardPreview(price) {
   const pts = Math.floor(Number(price) * ppe);
   const egp = (pts / step) * reward;
   return `<small class="reward-preview">${t("Earn {0} points", pts.toLocaleString())}${egp > 0 ? ` · ${t("worth {0}", moneyEGP(egp))}` : ""}</small>`;
-}
-
-
-// V63 — image-reactive, multi-colour product lighting.
-// Cache the full palette by image URL so cards, quick view, cart and product pages stay in sync.
-const kdAccentCache = new Map();
-const KD_ACCENT_NEUTRAL = { primary: "#827b91", secondary: "#a39aae", tertiary: "#5b536b" };
-function kdAccentMarkup(p) { return `data-product-accent="${Number(p?.id)||0}"`; }
-function kdAccentImages(p) {
-  return [...new Set([p?.image_url, ...(Array.isArray(p?.images) ? p.images : []), ...(Array.isArray(p?.gallery) ? p.gallery : [])].map(v => String(v || "").trim()).filter(v => /^https?:\/\//i.test(v) || v.startsWith("/")))];
-}
-function kdHex(rgb) { return "#" + rgb.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2,"0")).join(""); }
-function kdRgbDistance(a,b) { return Math.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2); }
-function kdSamplePalette(imageUrl) {
-  if (kdAccentCache.has(imageUrl)) return kdAccentCache.get(imageUrl);
-  const task = new Promise(resolve => {
-    const img = new Image();
-    if (!imageUrl.startsWith("/")) img.crossOrigin = "anonymous";
-    img.decoding = "async";
-    img.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d", {willReadFrequently:true});
-        if (!ctx) throw new Error("Canvas unavailable");
-        canvas.width = canvas.height = 72;
-        ctx.drawImage(img, 0, 0, 72, 72);
-        const px = ctx.getImageData(0, 0, 72, 72).data;
-        const bins = new Map(); let valid = 0, chromaticPixels = 0;
-        for (let i=0; i<px.length; i+=4) {
-          if (px[i+3] < 150) continue;
-          const rgb=[px[i],px[i+1],px[i+2]], mx=Math.max(...rgb), mn=Math.min(...rgb);
-          if (mx < 12) continue;
-          const sat = mx ? (mx-mn)/mx : 0;
-          // Ignore near-white background pixels, but keep dark saturated artwork.
-          if (mx > 247 && mn > 226 && sat < .14) continue;
-          valid++;
-          if (sat >= .13 && mx-mn >= 24) chromaticPixels++;
-          // Fine quantization preserves more of the artwork's actual hues.
-          const q=rgb.map(v=>Math.min(255,Math.round(v/12)*12)), key=q.join(",");
-          const b=bins.get(key)||{rgb:q,count:0,satSum:0};
-          b.count++; b.satSum+=sat; bins.set(key,b);
-        }
-        if (!valid || !bins.size) throw new Error("No usable pixels");
-        const all=[...bins.values()].map(b=>({...b,sat:b.satSum/b.count}));
-        // If the image contains real color, rank chromatic bins separately so a gray
-        // background cannot outvote the colored product art. Monochrome art stays neutral.
-        const useColor = chromaticPixels / valid >= .012;
-        const candidates = useColor ? all.filter(b=>b.sat >= .13 && Math.max(...b.rgb)-Math.min(...b.rgb) >= 24) : all;
-        const ranked=candidates.map(b=>({...b,score:b.count*(.45+b.sat*4.2)*(b.sat>=.13?1.35:1)})).sort((a,b)=>b.score-a.score);
-        const chosen=[];
-        for (const c of ranked) {
-          if (!chosen.length || chosen.every(x=>kdRgbDistance(x.rgb,c.rgb)>42)) chosen.push(c);
-          if (chosen.length===3) break;
-        }
-        if (!chosen.length) throw new Error("No palette candidates");
-        const a=chosen[0].rgb;
-        const b=chosen[1]?.rgb || (useColor ? a.map(v=>v*.76+Math.max(...a)*.24) : a.map(v=>v*.72+255*.28));
-        const c=chosen[2]?.rgb || (useColor ? a.map(v=>v*.68) : a.map(v=>v*.55));
-        resolve({primary:kdHex(a),secondary:kdHex(b),tertiary:kdHex(c)});
-      } catch { resolve(null); }
-    };
-    img.onerror=()=>resolve(null);
-    img.src=imageUrl;
-  });
-  kdAccentCache.set(imageUrl,task);
-  return task;
-}
-async function kdAccentPalette(p) {
-  const urls=kdAccentImages(p);
-  for(const url of urls){ const palette=await kdSamplePalette(url); if(palette) return palette; }
-  // Neutral fallback is deliberate: a blocked external image must not turn every product purple.
-  return KD_ACCENT_NEUTRAL;
-}
-async function kdApplyProductAccents(root=document) {
-  const nodes=root.querySelectorAll ? root.querySelectorAll("[data-product-accent]") : [];
-  for(const el of nodes){
-    if(el.dataset.accentReady==="1") continue;
-    const p=(state.products||[]).find(x=>Number(x.id)===Number(el.dataset.productAccent));
-    if(!p) continue;
-    el.dataset.accentReady="1";
-    const palette=await kdAccentPalette(p);
-    if(!el.isConnected) continue;
-    el.style.setProperty("--product-accent",palette.primary);
-    el.style.setProperty("--product-accent-2",palette.secondary);
-    el.style.setProperty("--product-accent-3",palette.tertiary);
-    el.style.setProperty("--product-accent-soft",`color-mix(in srgb, ${palette.primary} 12%, var(--surface, #17141f))`);
-    el.style.setProperty("--product-accent-glow",`color-mix(in srgb, ${palette.primary} 52%, transparent)`);
-    el.classList.add("has-product-accent");
-  }
-}
-async function kdApplyCampaignAccent(imageUrl="", campaignLink="") {
-  const card=document.querySelector("#campaignSection .campaign-card");if(!card)return;
-  let palette=null;
-  // The campaign's own artwork is the most direct source of its accent. A linked product
-  // is second, followed by a featured product. Parse paths safely for absolute and relative links.
-  if(imageUrl && (/^https:\/\//i.test(imageUrl)||String(imageUrl).startsWith("/"))) palette=await kdSamplePalette(imageUrl);
-  let path="";
-  try{path=new URL(String(campaignLink||""),location.origin).pathname.replace(/^\//,"").replace(/^product\//,"");}catch{}
-  let linked=null;
-  try{const decoded=decodeURIComponent(path);linked=(state.products||[]).find(p=>decoded&&(String(p.id)===decoded||String(p.slug||"")===decoded));}catch{}
-  if(!palette&&linked)palette=await kdAccentPalette(linked);
-  if(!palette){const featured=(state.products||[]).find(p=>Number(p.featured)===1)||(state.products||[])[0];if(featured)palette=await kdAccentPalette(featured);}
-  if(!palette)palette=KD_ACCENT_NEUTRAL;
-  if(!card.isConnected)return;
-  for(const [k,v]of [["--product-accent",palette.primary],["--product-accent-2",palette.secondary],["--product-accent-3",palette.tertiary]])card.style.setProperty(k,v);
-  card.style.setProperty("--product-accent-glow",`color-mix(in srgb, ${palette.primary} 48%, transparent)`);
-  card.classList.add("campaign-has-product-accent");
-}
-if(typeof document!=="undefined"){
-  const kdAccentStart=()=>{
-    if(!document.body) return;
-    let queued=false;
-    const observer=new MutationObserver(records=>{
-      if(!records.some(r=>r.addedNodes&&r.addedNodes.length)||queued) return;
-      queued=true; requestAnimationFrame(()=>{queued=false;kdApplyProductAccents(document);});
-    });
-    observer.observe(document.body,{childList:true,subtree:true});
-    kdApplyProductAccents(document);
-  };
-  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",kdAccentStart,{once:true});
-  else kdAccentStart();
 }
 
 function renderProducts() {
@@ -1796,7 +1672,7 @@ function renderProducts() {
         href = "/" + encodeURIComponent(p.slug),
         name = pName(p),
         cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
-      return `<article class="product-card product-card-link" ${kdAccentMarkup(p)}><div class="product-image">${stockImg(p.image_url, name, stockArtFor(p))}<a class="product-image-link" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"></a>${favoriteButton(p)}${quickViewButton(p)}${sale ? `<span class="sale">${escapeHTML(saveBadgeText(displayPrice, displayOld))}</span>` : ""}<span class="stock${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? " low" : ""}">${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? t("Only {0} left", totalStock) : badge}</span></div><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span><small class="save-line">${escapeHTML(t("You save {0}", moneyShort(displayOld - displayPrice)))}</small>` : ""}${rewardPreview(displayPrice)}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
+      return `<article class="product-card product-card-link"><div class="product-image">${stockImg(p.image_url, name, stockArtFor(p))}<a class="product-image-link" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"></a>${favoriteButton(p)}${quickViewButton(p)}${sale ? `<span class="sale">${escapeHTML(saveBadgeText(displayPrice, displayOld))}</span>` : ""}<span class="stock${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? " low" : ""}">${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? t("Only {0} left", totalStock) : badge}</span></div><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span><small class="save-line">${escapeHTML(t("You save {0}", moneyShort(displayOld - displayPrice)))}</small>` : ""}${rewardPreview(displayPrice)}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
     })
     .join("");
   bindFavoriteButtons(el);
@@ -1841,7 +1717,7 @@ async function openProductPage(slug) {
       old = variants.length
         ? Number(first.old_price || 0)
         : Number(p.old_price || 0);
-    main.innerHTML = `<section class="product-page container" ${kdAccentMarkup(p)}><div class="product-breadcrumb"><a href="/" data-home>${t("Store")}</a><span>/</span>${crumbCat(p)}<span>${escapeHTML(name)}</span></div><div class="product-detail">${productGalleryHTML(p, name)}<div class="product-detail-copy"><span class="eyebrow">${escapeHTML(cName({ name: p.category_name, name_ar: p.category_name_ar }) || t("DIGITAL PRODUCT"))}</span><h1>${escapeHTML(name)}</h1><div class="product-detail-price" id="productPrice">${money(price)} ${old > price ? `<del>${money(old)}</del>` : ""}${rewardPreview(price)}</div>${saleActive() && String(state.settings.sale_on_products) !== "0" ? saleBlockHTML("productSale", !(old > price)) : ""}<div class="product-detail-meta">${[
+    main.innerHTML = `<section class="product-page container"><div class="product-breadcrumb"><a href="/" data-home>${t("Store")}</a><span>/</span>${crumbCat(p)}<span>${escapeHTML(name)}</span></div><div class="product-detail">${productGalleryHTML(p, name)}<div class="product-detail-copy"><span class="eyebrow">${escapeHTML(cName({ name: p.category_name, name_ar: p.category_name_ar }) || t("DIGITAL PRODUCT"))}</span><h1>${escapeHTML(name)}</h1><div class="product-detail-price" id="productPrice">${money(price)} ${old > price ? `<del>${money(old)}</del>` : ""}${rewardPreview(price)}</div>${saleActive() && String(state.settings.sale_on_products) !== "0" ? saleBlockHTML("productSale", !(old > price)) : ""}<div class="product-detail-meta">${[
       p.platform,
       p.region,
       p.delivery_type === "code"
@@ -1959,7 +1835,7 @@ function recentList() {
 function miniCard(p) {
   const vs = (p.variants || []).filter((v) => Number(v.active) !== 0),
     price = vs.length ? Math.min(...vs.map((v) => Number(v.price))) : Number(p.price);
-  return `<div class="mini-card-wrap" ${kdAccentMarkup(p)}>${favoriteButton(p)}<a class="mini-card" href="/${encodeURIComponent(p.slug)}"><div class="mini-img">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span>K</span>`}</div><b>${escapeHTML(pName(p))}</b><small>${vs.length ? t("From") + " " : ""}${money(price)}</small></a></div>`;
+  return `<div class="mini-card-wrap">${favoriteButton(p)}<a class="mini-card" href="/${encodeURIComponent(p.slug)}"><div class="mini-img">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span>K</span>`}</div><b>${escapeHTML(pName(p))}</b><small>${vs.length ? t("From") + " " : ""}${money(price)}</small></a></div>`;
 }
 // "Recently viewed" comes from this browser; "You may also like" scores category and platform matches among in-stock products.
 function renderRecommendations(cur) {
@@ -2133,7 +2009,7 @@ function renderCartPage() {
   document.body.classList.remove("product-route"); document.body.classList.add("account-route");
   const items = cartItems();
   const subtotal = items.reduce((sum, i) => sum + Number(i.p.variants?.find(v => Number(v.id) === Number(i.variant_id))?.price ?? i.p.price) * i.quantity, 0);
-  $("main").innerHTML = `<section class="collection-page container cart-page"><div class="collection-hero"><div><span class="eyebrow">KARDIVO · ${t("Cart")}</span><h1>${t("Your cart")}</h1><p>${items.length} ${state.lang === "ar" ? "منتج في سلتك" : "items in your cart"}</p></div><a class="btn ghost" href="/#store" data-collection-store>${t("Continue shopping")}</a></div>${items.length ? `<div class="cart-page-layout"><div class="cart-page-items">${items.map(i=>{const v=i.p.variants?.find(x=>Number(x.id)===Number(i.variant_id));const price=Number(v?.price ?? i.p.price);return `<article class="cart-page-item" ${kdAccentMarkup(i.p)}><div class="cart-page-image">${stockImg(i.p.image_url,pName(i.p),stockArtFor(i.p))}</div><div class="cart-page-item-info"><b>${escapeHTML(pName(i.p))}</b>${v?`<small>${escapeHTML(v.name)}</small>`:""}<small>${money(price)} ${t("each")}</small><div class="cart-quantity"><button type="button" class="mini" data-minus="${escapeHTML(cartKey(i))}" aria-label="Decrease quantity">−</button><b>${i.quantity}</b><button type="button" class="mini" data-plus="${escapeHTML(cartKey(i))}" aria-label="Increase quantity">+</button><button type="button" class="mini" data-save-later="${escapeHTML(cartKey(i))}">${t("Save for later")}</button><button type="button" class="mini danger" data-remove="${escapeHTML(cartKey(i))}">${t("Remove")}</button></div></div><strong class="cart-line-total">${money(price*i.quantity)}</strong></article>`}).join("")}<div id="cartBundles" class="cart-bundles" hidden></div>${savedForLaterHTML()}</div><aside class="cart-page-summary"><span class="eyebrow">${t("Order summary")}</span><h2>${t("Subtotal")}</h2><div class="line"><span>${t("Subtotal")}</span><b>${money(subtotal)}</b></div><div class="line cart-auto" id="cartAuto" hidden><span id="cartAutoLabel"></span><b id="cartAutoAmt"></b></div><div class="line cart-est" id="cartEst" hidden><span>${t("Estimated total")}</span><b id="cartEstAmt"></b></div><p>${t("Shipping and final discounts are confirmed at checkout.")}</p><button class="btn primary cart-checkout" id="checkoutBtn">${t("Continue to checkout")}</button><a class="btn ghost cart-back" href="/#store" data-collection-store>${t("Continue shopping")}</a></aside></div>` : `${emptyState("cart")}`}</section>`;
+  $("main").innerHTML = `<section class="collection-page container cart-page"><div class="collection-hero"><div><span class="eyebrow">KARDIVO · ${t("Cart")}</span><h1>${t("Your cart")}</h1><p>${items.length} ${state.lang === "ar" ? "منتج في سلتك" : "items in your cart"}</p></div><a class="btn ghost" href="/#store" data-collection-store>${t("Continue shopping")}</a></div>${items.length ? `<div class="cart-page-layout"><div class="cart-page-items">${items.map(i=>{const v=i.p.variants?.find(x=>Number(x.id)===Number(i.variant_id));const price=Number(v?.price ?? i.p.price);return `<article class="cart-page-item"><div class="cart-page-image">${stockImg(i.p.image_url,pName(i.p),stockArtFor(i.p))}</div><div class="cart-page-item-info"><b>${escapeHTML(pName(i.p))}</b>${v?`<small>${escapeHTML(v.name)}</small>`:""}<small>${money(price)} ${t("each")}</small><div class="cart-quantity"><button type="button" class="mini" data-minus="${escapeHTML(cartKey(i))}" aria-label="Decrease quantity">−</button><b>${i.quantity}</b><button type="button" class="mini" data-plus="${escapeHTML(cartKey(i))}" aria-label="Increase quantity">+</button><button type="button" class="mini" data-save-later="${escapeHTML(cartKey(i))}">${t("Save for later")}</button><button type="button" class="mini danger" data-remove="${escapeHTML(cartKey(i))}">${t("Remove")}</button></div></div><strong class="cart-line-total">${money(price*i.quantity)}</strong></article>`}).join("")}<div id="cartBundles" class="cart-bundles" hidden></div>${savedForLaterHTML()}</div><aside class="cart-page-summary"><span class="eyebrow">${t("Order summary")}</span><h2>${t("Subtotal")}</h2><div class="line"><span>${t("Subtotal")}</span><b>${money(subtotal)}</b></div><div class="line cart-auto" id="cartAuto" hidden><span id="cartAutoLabel"></span><b id="cartAutoAmt"></b></div><div class="line cart-est" id="cartEst" hidden><span>${t("Estimated total")}</span><b id="cartEstAmt"></b></div><p>${t("Shipping and final discounts are confirmed at checkout.")}</p><button class="btn primary cart-checkout" id="checkoutBtn">${t("Continue to checkout")}</button><a class="btn ghost cart-back" href="/#store" data-collection-store>${t("Continue shopping")}</a></aside></div>` : `${emptyState("cart")}`}</section>`;
   $("[data-collection-store]")?.addEventListener("click",e=>{e.preventDefault();navigate("/#store","#store")});
   $$('[data-minus]').forEach(b=>b.onclick=()=>changeQty(b.dataset.minus,-1));
   $$('[data-plus]').forEach(b=>b.onclick=()=>changeQty(b.dataset.plus,1));
@@ -2149,7 +2025,7 @@ function savedForLaterHTML() {
   const inCart = new Set(state.cart.map((x) => x.product_id));
   const list = (state.favorites || []).map((id) => state.products.find((p) => Number(p.id) === Number(id))).filter((p) => p && !inCart.has(p.id)).slice(0, 4);
   if (!list.length) return "";
-  return `<section class="saved-later" aria-labelledby="savedLaterH"><h2 id="savedLaterH">${t("Saved for later")}</h2>${list.map((p) => { const soldOut = p.delivery_type === "code" && !(p.variants?.length ? p.variants.some((v) => Number(v.stock) > 0) : Number(p.stock) > 0); return `<div class="saved-later-item" ${kdAccentMarkup(p)}><span class="saved-later-img">${stockImg(p.image_url, pName(p), stockArtFor(p))}</span><span class="saved-later-name"><b>${escapeHTML(pName(p))}</b><small>${p.variants?.length ? t("From") + " " : ""}${money(Math.min(...(p.variants?.length ? p.variants.map((v) => Number(v.price)) : [Number(p.price)])))}</small></span><button type="button" class="mini" data-unsave="${Number(p.id)}" ${soldOut || p.variants?.length ? "disabled" : ""}>${soldOut ? t("Out of stock") : t("Move to cart")}</button></div>`; }).join("")}</section>`;
+  return `<section class="saved-later" aria-labelledby="savedLaterH"><h2 id="savedLaterH">${t("Saved for later")}</h2>${list.map((p) => { const soldOut = p.delivery_type === "code" && !(p.variants?.length ? p.variants.some((v) => Number(v.stock) > 0) : Number(p.stock) > 0); return `<div class="saved-later-item"><span class="saved-later-img">${stockImg(p.image_url, pName(p), stockArtFor(p))}</span><span class="saved-later-name"><b>${escapeHTML(pName(p))}</b><small>${p.variants?.length ? t("From") + " " : ""}${money(Math.min(...(p.variants?.length ? p.variants.map((v) => Number(v.price)) : [Number(p.price)])))}</small></span><button type="button" class="mini" data-unsave="${Number(p.id)}" ${soldOut || p.variants?.length ? "disabled" : ""}>${soldOut ? t("Out of stock") : t("Move to cart")}</button></div>`; }).join("")}</section>`;
 }
 function saveForLater(key) {
   const row = state.cart.find((x) => cartKey(x) === key);
@@ -2193,7 +2069,7 @@ async function loadCartBundles() {
     if (!p) return "";
     const v = p.variants?.find((x) => Number(x.id) === Number(s.variant_id));
     const title = s.kind === "more" ? t("Add one more {0}", pName(p)) : t("Add {0}", pName(p));
-    return `<div class="bundle-card" ${kdAccentMarkup(p)}><span class="bundle-img">${stockImg(p.image_url, pName(p), stockArtFor(p))}</span><span class="bundle-copy"><b>${escapeHTML(title)}${v ? ` <small>(${escapeHTML(v.name)})</small>` : ""}</b><small>${escapeHTML(t("Your discount becomes {0} ({1}% off)", moneyShort(s.new_discount), s.percent))}</small></span><button type="button" class="btn primary bundle-add" data-bundle-add="${Number(s.product_id)}:${Number(s.variant_id || 0)}">${t("Add")} · ${moneyShort(s.price)}</button></div>`;
+    return `<div class="bundle-card"><span class="bundle-img">${stockImg(p.image_url, pName(p), stockArtFor(p))}</span><span class="bundle-copy"><b>${escapeHTML(title)}${v ? ` <small>(${escapeHTML(v.name)})</small>` : ""}</b><small>${escapeHTML(t("Your discount becomes {0} ({1}% off)", moneyShort(s.new_discount), s.percent))}</small></span><button type="button" class="btn primary bundle-add" data-bundle-add="${Number(s.product_id)}:${Number(s.variant_id || 0)}">${t("Add")} · ${moneyShort(s.price)}</button></div>`;
   }).filter(Boolean);
   const box = $("#cartBundles");
   box.hidden = !cards.length;
@@ -6014,4 +5890,271 @@ function skRowsHTML() {
   new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) scan(n); }).observe(document.body, { childList: true, subtree: true });
   scan(document.body);
   document.documentElement.classList.add("kd-imgfx");
+})();
+
+// ==== V62 PRODUCT TINT ====
+// Every product gets its own accent colours, pulled from its picture: the dominant colour plus two more.
+// Black, white, grey and anything close to them are ignored, so a logo on a white or dark background still
+// gives its real colours. The three colours are written as --kd-a / --kd-b / --kd-c on whatever element shows
+// that product (card, row, tile, quick view, the product page...) and styles.css does the painting.
+// Results are cached per picture URL in localStorage, so a repeat visit tints on the first paint.
+(() => {
+  const KEY = "kd_tint_v1", MAX_CACHE = 600, SIZE = 64;
+  const mem = new Map(); // url -> [a,b,c] | 0 (no colour found) | Promise
+  let stored = {};
+  try { stored = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch {}
+  let saveTimer = 0;
+  const persist = (url, pal) => {
+    stored[url] = pal || 0;
+    const keys = Object.keys(stored);
+    if (keys.length > MAX_CACHE) keys.slice(0, keys.length - MAX_CACHE).forEach((k) => delete stored[k]);
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(stored)); } catch {} }, 400);
+  };
+
+  // ---- colour maths ----
+  const hex2 = (n) => Math.round(Math.max(0, Math.min(255, n))).toString(16).padStart(2, "0");
+  const toHex = (r, g, b) => "#" + hex2(r) + hex2(g) + hex2(b);
+  const rgb2hsl = (r, g, b) => {
+    r /= 255; g /= 255; b /= 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+    let h = 0, s = 0;
+    if (d) {
+      s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+      h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      h *= 60;
+    }
+    return [h, s, l];
+  };
+  const hsl2rgb = (h, s, l) => {
+    h = ((h % 360) + 360) % 360 / 360;
+    const f = (p, q, t) => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+    if (!s) return [l * 255, l * 255, l * 255];
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+    return [f(p, q, h + 1 / 3) * 255, f(p, q, h) * 255, f(p, q, h - 1 / 3) * 255];
+  };
+  const hueDist = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+  // Make a picked colour usable as UI glow on dark and light pages: vivid, but neither too dark nor too light.
+  const tidy = (r, g, b) => {
+    const [h, s, l] = rgb2hsl(r, g, b);
+    const [R, G, B] = hsl2rgb(h, Math.max(0.5, Math.min(0.92, s)), Math.max(0.46, Math.min(0.62, l)));
+    return toHex(R, G, B);
+  };
+
+  // data = RGBA bytes (e.g. canvas ImageData.data). Returns ["#dominant", "#second", "#third"] or null when the
+  // picture has no real colour (greyscale, or almost entirely black/white/grey).
+  function paletteFromPixels(data) {
+    const recs = []; // h, s, v, r, g, b per accepted pixel
+    let total = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 128) continue;
+      total++;
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b), v = mx / 255, s = mx ? (mx - mn) / mx : 0;
+      // not black (dark), not grey (low saturation), not white (bright and washed out)
+      if (v < 0.2 || s < 0.28 || (v > 0.92 && s < 0.4)) continue;
+      const d = mx - mn;
+      let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      h = (h * 60 + 360) % 360;
+      recs.push(h, s, v, r, g, b);
+    }
+    const n = recs.length / 6;
+    if (!total || n < Math.max(12, total * 0.04)) return null;
+    // hue histogram (10 degree bins, weighted toward vivid pixels), lightly smoothed around the circle
+    const BINS = 36, hist = new Float64Array(BINS);
+    for (let i = 0; i < recs.length; i += 6) hist[Math.floor(recs[i] / 10) % BINS] += 0.4 + recs[i + 1];
+    const sm = new Float64Array(BINS);
+    for (let i = 0; i < BINS; i++) for (let k = -2; k <= 2; k++) sm[i] += hist[(i + k + BINS) % BINS] * (3 - Math.abs(k));
+    const sum = sm.reduce((a, b) => a + b, 0);
+    const order = [...sm.keys()].sort((a, b) => sm[b] - sm[a]);
+    const picks = []; // hue centres
+    for (const bin of order) {
+      const centre = bin * 10 + 5;
+      if (picks.some((c) => hueDist(c, centre) < 45)) continue;
+      if (picks.length && (sm[bin] * 3) / sum < 0.05) break; // a colour needs about 5% of the coloured area
+      picks.push(centre);
+      if (picks.length === 3) break;
+    }
+    const colourAt = (centre) => {
+      let wr = 0, wg = 0, wb = 0, w = 0;
+      for (let i = 0; i < recs.length; i += 6) {
+        if (hueDist(recs[i], centre) > 25) continue;
+        const k = 0.4 + recs[i + 1];
+        wr += recs[i + 3] * k; wg += recs[i + 4] * k; wb += recs[i + 5] * k; w += k;
+      }
+      return w ? [wr / w, wg / w, wb / w] : hsl2rgb(centre, 0.7, 0.55);
+    };
+    const out = picks.map((c) => tidy(...colourAt(c)));
+    // A picture with one colour family still gets three: neighbouring hues of the dominant one.
+    if (out.length < 3) {
+      const [h, s, l] = rgb2hsl(...colourAt(picks[0]));
+      [38, -38].forEach((off) => { if (out.length < 3) out.push(tidy(...hsl2rgb(h + off, s, l))); });
+    }
+    return out.slice(0, 3);
+  }
+
+  // ---- loading + sampling ----
+  const sameOrigin = (u) => { try { return new URL(u, location.href).origin === location.origin; } catch { return true; } };
+  const loadImg = (url) => new Promise((res) => {
+    const im = new Image();
+    im.crossOrigin = "anonymous";
+    im.decoding = "async";
+    im.onload = () => res(im);
+    im.onerror = () => res(null);
+    im.src = url;
+  });
+  const sample = (im) => {
+    try {
+      const w0 = im.naturalWidth || im.width, h0 = im.naturalHeight || im.height;
+      if (!w0 || !h0) return null;
+      const k = SIZE / Math.max(w0, h0), w = Math.max(1, Math.round(w0 * k)), h = Math.max(1, Math.round(h0 * k));
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      const cx = cv.getContext("2d", { willReadFrequently: true });
+      cx.drawImage(im, 0, 0, w, h);
+      return cx.getImageData(0, 0, w, h).data; // throws on a tainted canvas
+    } catch { return null; }
+  };
+  // Direct first; if the image host does not allow canvas reads, our own server relays it (same origin).
+  async function extract(url) {
+    let im = await loadImg(url), px = im && sample(im);
+    if (!px && !sameOrigin(url)) {
+      im = await loadImg("/api/tint-image?u=" + encodeURIComponent(url));
+      px = im && sample(im);
+    }
+    if (!px) return undefined; // could not read the picture at all (do not remember as "no colour")
+    return paletteFromPixels(px);
+  }
+  // Small queue so a page of 30 cards does not decode 30 pictures at once.
+  const queue = []; let running = 0;
+  const pump = () => {
+    while (running < 3 && queue.length) {
+      const job = queue.shift();
+      running++;
+      extract(job.url).then((pal) => job.done(pal), () => job.done(undefined)).finally(() => { running--; pump(); });
+    }
+  };
+  function palette(url) {
+    if (mem.has(url)) return Promise.resolve(mem.get(url));
+    return new Promise((resolve) => {
+      queue.push({ url, done: (pal) => {
+        if (pal === undefined) { mem.set(url, 0); resolve(0); return; } // unreadable: neutral this session, retried next visit
+        mem.set(url, pal || 0); persist(url, pal); resolve(pal || 0);
+      } });
+      pump();
+    });
+  }
+  const cached = (url) => {
+    if (mem.has(url)) { const v = mem.get(url); return v && !(v instanceof Promise) ? v : v === 0 ? 0 : null; }
+    if (Object.prototype.hasOwnProperty.call(stored, url)) { mem.set(url, stored[url]); return stored[url]; }
+    return null;
+  };
+
+  // ---- painting ----
+  const rgbTriplet = (hex) => `${parseInt(hex.slice(1, 3), 16)} ${parseInt(hex.slice(3, 5), 16)} ${parseInt(hex.slice(5, 7), 16)}`;
+  const VARS = ["a", "b", "c"];
+  function paint(el, pal) {
+    if (pal && pal.length === 3) {
+      VARS.forEach((k, i) => { el.style.setProperty("--kd-" + k, pal[i]); el.style.setProperty("--kd-" + k + "-rgb", rgbTriplet(pal[i])); });
+      el.setAttribute("data-kd-tint", "1");
+    } else {
+      VARS.forEach((k) => { el.style.removeProperty("--kd-" + k); el.style.removeProperty("--kd-" + k + "-rgb"); });
+      el.setAttribute("data-kd-tint", "none");
+    }
+  }
+  const root = document.documentElement;
+  function paintPage(pal) {
+    if (pal && pal.length === 3) {
+      VARS.forEach((k, i) => root.style.setProperty("--kdp-" + k, pal[i]));
+      root.classList.add("kd-page-tint");
+    } else clearPage();
+  }
+  function clearPage() {
+    if (!root.classList.contains("kd-page-tint")) return;
+    root.classList.remove("kd-page-tint");
+    VARS.forEach((k) => root.style.removeProperty("--kdp-" + k));
+  }
+
+  // Where a product shows up: [element that carries the tint, the picture inside it].
+  const HOSTS = [
+    [".product-card:not(.skeleton-card)", ".product-image img"], // grids, search results, category pages
+    [".popular-product-wrap", ".popular-product-image img"], // featured
+    [".collection-product", ".collection-product-image img"], // favorites
+    [".mini-card-wrap", ".mini-img img"], // recommendations, recently viewed
+    [".cart-page-item", ".cart-page-image img"], // cart
+    [".saved-later-item", ".saved-later-img img"], // cart: saved for later
+    [".bundle-card", ".bundle-img img"], // cart: complete your bundle
+    [".bundle-option", "img"], // bundle builder
+    [".search-suggestion", "img"], // search dropdown
+    [".hero-product-tile", ".hero-product-art img"], // hero
+    [".category-card", ".category-art img"], // category cards (product art)
+    [".qv", ".qv-media img"], // quick view
+    [".product-page:not(.sk-page)", ".pgal-slide img, .product-detail-media img"], // product page
+    ["#toast", "img.toast-thumb"], // added-to-cart toast
+  ];
+  const HOST_SEL = HOSTS.map((h) => h[0]).join(",");
+
+  const io = "IntersectionObserver" in window
+    ? new IntersectionObserver((entries) => {
+        entries.forEach((e) => { if (e.isIntersecting) { io.unobserve(e.target); const f = e.target.__kdGo; if (f) f(); } });
+      }, { rootMargin: "500px 0px" })
+    : null;
+
+  function apply(host, pal, spec) {
+    paint(host, pal);
+    if (host.classList.contains("qv")) { const m = host.closest(".modal"); if (m) paint(m, pal); }
+    if (host.classList.contains("product-page")) paintPage(pal);
+  }
+  function process(host, spec) {
+    const img = host.querySelector(spec[1]);
+    if (!img) return;
+    const url = String(img.currentSrc || img.getAttribute("src") || "").trim();
+    if (!url || url.startsWith("data:")) return;
+    if (host.__kdUrl === url && host.hasAttribute("data-kd-tint")) return;
+    host.__kdUrl = url;
+    const hit = cached(url);
+    if (hit !== null && hit !== undefined) { apply(host, hit || null, spec); return; }
+    const go = () => {
+      host.__kdGo = null;
+      palette(url).then((pal) => { if (host.__kdUrl === url && host.isConnected) apply(host, pal || null, spec); });
+    };
+    const big = host.classList.contains("product-page") || host.classList.contains("qv") || host.id === "toast";
+    if (io && !big) { host.__kdGo = go; io.observe(host); } else go();
+  }
+  function scan(node) {
+    if (!node || node.nodeType !== 1) return;
+    for (const spec of HOSTS) {
+      if (node.matches(spec[0])) process(node, spec);
+      node.querySelectorAll(spec[0]).forEach((h) => process(h, spec));
+      const up = node.closest(spec[0]);
+      if (up && up !== node) process(up, spec);
+    }
+  }
+  new MutationObserver((ms) => {
+    for (const m of ms) {
+      m.addedNodes.forEach((n) => scan(n.nodeType === 3 ? n.parentElement : n));
+      if (m.type === "attributes") scan(m.target);
+    }
+    // leaving the product page: put the page background back
+    if (root.classList.contains("kd-page-tint") && !document.querySelector('.product-page[data-kd-tint="1"]')) clearPage();
+  }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["src"] });
+  // a picture that fails and swaps to its fallback art, or finishes loading late, re-tints its card
+  document.addEventListener("load", (e) => { const t = e.target; if (t && t.tagName === "IMG") { const h = t.closest(HOST_SEL); if (h) scan(h); } }, true);
+
+  // Promotional campaign: the banner picture is a CSS background, so read its URL from the style.
+  function tintCampaign() {
+    const card = document.querySelector("#campaignSection .campaign-card"), art = document.getElementById("campaignArt");
+    if (!card || !art) return;
+    const m = /url\(["']?([^"')]+)["']?\)/.exec(art.style.backgroundImage || "");
+    if (!m) return;
+    const url = m[1];
+    if (card.__kdUrl === url && card.hasAttribute("data-kd-tint")) return;
+    card.__kdUrl = url;
+    const hit = cached(url);
+    if (hit !== null && hit !== undefined) { paint(card, hit || null); return; }
+    palette(url).then((pal) => { if (card.__kdUrl === url) paint(card, pal || null); });
+  }
+  window.kdTintCampaign = tintCampaign;
+  window.kdTint = { paletteFromPixels, palette, scan, tintCampaign };
+  scan(document.body);
 })();
