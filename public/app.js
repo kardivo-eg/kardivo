@@ -1474,8 +1474,11 @@ function renderCampaign() {
   const art = $("#campaignArt");
   if (art) {
     const artwork = image && /^https?:\/\//i.test(image) ? image : STOCK_ART[0];
-    art.style.backgroundImage = `linear-gradient(90deg,var(--art-a) 0%,var(--art-b) 45%,var(--art-c) 100%),url("${artwork.replace(/["\\]/g, "")}")`;
+    art.style.backgroundImage = `linear-gradient(90deg,color-mix(in srgb,var(--product-accent,#827b91) 35%,transparent) 0%,color-mix(in srgb,var(--product-accent-2,#a39aae) 24%,transparent) 45%,color-mix(in srgb,var(--product-accent-3,#5b536b) 22%,transparent) 100%),url("${artwork.replace(/["\\]/g, "")}")`;
   }
+  // The campaign is a first-class storefront surface: derive its glow from its own artwork,
+  // or from the linked/featured product when no custom campaign artwork is supplied.
+  kdApplyCampaignAccent(image, link);
 }
 function renderSearchSuggestions() {
   const box = $("#searchSuggestions"), input = $("#search");
@@ -1721,6 +1724,27 @@ async function kdApplyProductAccents(root=document) {
     el.classList.add("has-product-accent");
   }
 }
+async function kdApplyCampaignAccent(imageUrl="", campaignLink="") {
+  const card=document.querySelector("#campaignSection .campaign-card");
+  if(!card) return;
+  let palette=null;
+  const cleanLink=String(campaignLink||"").replace(/^\/#/,"").replace(/^\//,"").split(/[?#]/)[0];
+  const linked=(state.products||[]).find(p=>cleanLink && (String(p.id)===cleanLink || String(p.slug||"")===decodeURIComponent(cleanLink)));
+  if(linked) palette=await kdAccentPalette(linked);
+  if(!palette && imageUrl && /^https?:\/\//i.test(imageUrl)) palette=await kdSamplePalette(imageUrl);
+  if(!palette){
+    const featured=(state.products||[]).find(p=>Number(p.featured)===1) || (state.products||[])[0];
+    if(featured) palette=await kdAccentPalette(featured);
+  }
+  if(!palette) palette=KD_ACCENT_NEUTRAL;
+  if(!card.isConnected) return;
+  card.style.setProperty("--product-accent",palette.primary);
+  card.style.setProperty("--product-accent-2",palette.secondary);
+  card.style.setProperty("--product-accent-3",palette.tertiary);
+  card.style.setProperty("--product-accent-glow",`color-mix(in srgb, ${palette.primary} 48%, transparent)`);
+  card.classList.add("campaign-has-product-accent");
+}
+
 if(typeof document!=="undefined"){
   const kdAccentStart=()=>{
     if(!document.body) return;
