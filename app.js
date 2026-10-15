@@ -643,6 +643,81 @@ function searchScore(p, query) {
   if (tokens.every(token => hay.includes(token))) return tokens.reduce((score, token) => score + (name.startsWith(token) ? 8 : name.includes(token) ? 5 : 2), 0);
   return -1;
 }
+// V65: shared image-derived product accents for every storefront surface.
+const kdAccentCache = new Map();
+const KD_ACCENT_NEUTRAL = {primary:"#827b91",secondary:"#a39aae",tertiary:"#5b536b"};
+function kdAccentMarkup(p){return `data-product-accent="${Number(p?.id)||0}"`;}
+function kdHex(rgb){return "#"+rgb.map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,"0")).join("");}
+function kdRgbDistance(a,b){return Math.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2);}
+function kdSamplePalette(url) {
+  if (kdAccentCache.has(url)) return kdAccentCache.get(imageUrl);
+  const task = new Promise(resolve => {
+    const img = new Image();
+    if (!url.startsWith("/")) img.crossOrigin = "anonymous";
+    img.decoding = "async";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", {willReadFrequently:true});
+        if (!ctx) throw new Error("Canvas unavailable");
+        canvas.width = canvas.height = 72;
+        ctx.drawImage(img, 0, 0, 72, 72);
+        const px = ctx.getImageData(0, 0, 72, 72).data;
+        const bins = new Map(); let valid = 0, chromaticPixels = 0;
+        for (let i=0; i<px.length; i+=4) {
+          if (px[i+3] < 150) continue;
+          const rgb=[px[i],px[i+1],px[i+2]], mx=Math.max(...rgb), mn=Math.min(...rgb);
+          if (mx < 12) continue;
+          const sat = mx ? (mx-mn)/mx : 0;
+          // Ignore near-white background pixels, but keep dark saturated artwork.
+          if (mx > 247 && mn > 226 && sat < .14) continue;
+          valid++;
+          if (sat >= .13 && mx-mn >= 24) chromaticPixels++;
+          // Fine quantization preserves more of the artwork's actual hues.
+          const q=rgb.map(v=>Math.min(255,Math.round(v/12)*12)), key=q.join(",");
+          const b=bins.get(key)||{rgb:q,count:0,satSum:0};
+          b.count++; b.satSum+=sat; bins.set(key,b);
+        }
+        if (!valid || !bins.size) throw new Error("No usable pixels");
+        const all=[...bins.values()].map(b=>({...b,sat:b.satSum/b.count}));
+        // If the image contains real color, rank chromatic bins separately so a gray
+        // background cannot outvote the colored product art. Monochrome art stays neutral.
+        const useColor = chromaticPixels / valid >= .012;
+        const candidates = useColor ? all.filter(b=>b.sat >= .13 && Math.max(...b.rgb)-Math.min(...b.rgb) >= 24) : all;
+        const ranked=candidates.map(b=>({...b,score:b.count*(.45+b.sat*4.2)*(b.sat>=.13?1.35:1)})).sort((a,b)=>b.score-a.score);
+        const chosen=[];
+        for (const c of ranked) {
+          if (!chosen.length || chosen.every(x=>kdRgbDistance(x.rgb,c.rgb)>42)) chosen.push(c);
+          if (chosen.length===3) break;
+        }
+        if (!chosen.length) throw new Error("No palette candidates");
+        const a=chosen[0].rgb;
+        const b=chosen[1]?.rgb || (useColor ? a.map(v=>v*.76+Math.max(...a)*.24) : a.map(v=>v*.72+255*.28));
+        const c=chosen[2]?.rgb || (useColor ? a.map(v=>v*.68) : a.map(v=>v*.55));
+        resolve({primary:kdHex(a),secondary:kdHex(b),tertiary:kdHex(c)});
+      } catch { resolve(null); }
+    };
+    img.onerror=()=>resolve(null);
+    img.src=url.startsWith("/")?url:(/^https:\/\//i.test(url)?"/api/palette-image?url="+encodeURIComponent(url):url);
+  });
+  kdAccentCache.set(url,task);
+  return task;
+}
+async function kdAccentPalette(p){for(const url of [p?.image_url,...(p?.images||[]),...(p?.gallery||[])].filter(x=>typeof x==="string"&&(/^(https?:\/\/|\/)/i).test(x))){const v=await kdSamplePalette(url);if(v)return v;}return KD_ACCENT_NEUTRAL;}
+async function kdApplyProductAccents(root=document){for(const el of (root.querySelectorAll?root.querySelectorAll("[data-product-accent]"):[])){if(el.dataset.accentReady==="1")continue;const p=(state.products||[]).find(x=>Number(x.id)===Number(el.dataset.productAccent));if(!p)continue;el.dataset.accentReady="1";const c=await kdAccentPalette(p);if(!el.isConnected)continue;el.style.setProperty("--product-accent",c.primary);el.style.setProperty("--product-accent-2",c.secondary);el.style.setProperty("--product-accent-3",c.tertiary);el.style.setProperty("--product-accent-glow",`color-mix(in srgb,${c.primary} 48%,transparent)`);el.classList.add("has-product-accent");}}
+async function kdApplyCampaignAccent(imageUrl,link){
+ const card=document.querySelector("#campaignSection .campaign-card");if(!card)return;let palette=null;
+ if(imageUrl&&(/^https?:\/\//i.test(imageUrl)||String(imageUrl).startsWith("/")))palette=await kdSamplePalette(imageUrl);
+ let path="";try{path=new URL(String(link||""),location.origin).pathname.replace(/^\//,"").replace(/^product\//,"");}catch{}
+ let linked=null;try{const decoded=decodeURIComponent(path);linked=(state.products||[]).find(p=>decoded&&(String(p.id)===decoded||String(p.slug||"")===decoded));}catch{}
+ if(!palette&&linked)palette=await kdAccentPalette(linked);
+ if(!palette){const p=(state.products||[]).find(x=>Number(x.featured)===1)||(state.products||[])[0];if(p)palette=await kdAccentPalette(p);}
+ if(!palette)palette=KD_ACCENT_NEUTRAL;if(!card.isConnected)return;
+ for(const [k,v]of [["--product-accent",palette.primary],["--product-accent-2",palette.secondary],["--product-accent-3",palette.tertiary]])card.style.setProperty(k,v);
+ card.style.setProperty("--product-accent-glow",`color-mix(in srgb,${palette.primary} 48%,transparent)`);card.classList.add("campaign-has-product-accent");
+}
+if(typeof document!=="undefined"){const start=()=>{if(!document.body)return;new MutationObserver(()=>kdApplyProductAccents(document)).observe(document.body,{childList:true,subtree:true});kdApplyProductAccents(document);};if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",start,{once:true});else start();}
+
 function renderCampaign() {
   const section = $("#campaignSection");
   if (!section) return;
@@ -657,8 +732,9 @@ function renderCampaign() {
   if (art) {
     art.style.backgroundImage = image && /^https?:\/\//i.test(image)
       ? `linear-gradient(90deg,#100b1be8,#100b1b35),url("${image.replace(/["\\]/g, "")}")`
-      : "radial-gradient(circle at 65% 35%,#a477ff66,transparent 28%),radial-gradient(circle at 80% 75%,#5b21b666,transparent 38%),linear-gradient(135deg,#1b1230,#0b0912)";
+      : "radial-gradient(circle at 65% 35%,var(--product-accent-glow,#a477ff66),transparent 28%),radial-gradient(circle at 80% 75%,color-mix(in srgb,var(--product-accent-2,#5b21b6) 45%,transparent),transparent 38%),linear-gradient(135deg,color-mix(in srgb,var(--product-accent) 18%,#1b1230),#0b0912)";
   }
+  kdApplyCampaignAccent(image,link);
 }
 function renderSearchSuggestions() {
   const box = $("#searchSuggestions"), input = $("#search");
@@ -666,7 +742,7 @@ function renderSearchSuggestions() {
   const q = input.value.trim().toLowerCase();
   if (q.length < 2) { box.hidden = true; box.innerHTML = ""; return; }
   const matches = state.products.map(p => ({ p, score: searchScore(p, q) })).filter(x => x.score >= 0).sort((a, b) => b.score - a.score || Number(b.p.featured || 0) - Number(a.p.featured || 0)).slice(0, 5).map(x => x.p);
-  box.innerHTML = matches.map((p) => `<a class="search-suggestion" href="/${encodeURIComponent(p.slug || p.id)}" data-suggestion-product="${p.id}">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span class="suggestion-placeholder">K</span>`}<span class="suggestion-copy"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</small></span><strong>${money(Number(p.price || 0))}</strong></a>`).join("") || `<div class="search-suggestion-empty">${state.lang === "ar" ? "مفيش نتائج مطابقة. جرّب اسم تاني." : "No matching products. Try another search."}</div>`;
+  box.innerHTML = matches.map((p) => `<a class="search-suggestion" ${kdAccentMarkup(p)} href="/${encodeURIComponent(p.slug || p.id)}" data-suggestion-product="${p.id}">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span class="suggestion-placeholder">K</span>`}<span class="suggestion-copy"><b>${escapeHTML(pName(p))}</b><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</small></span><strong>${money(Number(p.price || 0))}</strong></a>`).join("") || `<div class="search-suggestion-empty">${state.lang === "ar" ? "مفيش نتائج مطابقة. جرّب اسم تاني." : "No matching products. Try another search."}</div>`;
   box.hidden = false;
 }
 function renderCategoryCards() {
@@ -796,7 +872,7 @@ function renderProducts() {
         href = "/" + encodeURIComponent(p.slug),
         name = pName(p),
         cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
-      return `<article class="product-card product-card-link"><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-image">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(name)}" loading="lazy">` : `<div class="no-image">K</div>`}${sale ? `<span class="sale">${t("SALE")}</span>` : ""}<span class="stock">${badge}</span></div><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span>` : ""}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
+      return `<article class="product-card product-card-link" ${kdAccentMarkup(p)}><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-image">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(name)}" loading="lazy">` : `<div class="no-image">K</div>`}${sale ? `<span class="sale">${t("SALE")}</span>` : ""}<span class="stock">${badge}</span></div><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span>` : ""}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
     })
     .join("");
   $$("[data-add]").forEach(
@@ -831,7 +907,7 @@ async function openProductPage(slug) {
       old = variants.length
         ? Number(first.old_price || 0)
         : Number(p.old_price || 0);
-    main.innerHTML = `<section class="product-page container"><div class="product-breadcrumb"><a href="/" data-home>${t("Store")}</a><span>/</span><span>${escapeHTML(name)}</span></div><div class="product-detail"><div class="product-detail-media">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(name)}">` : `<div class="product-detail-placeholder">K</div>`}</div><div class="product-detail-copy"><span class="eyebrow">${escapeHTML(cName({ name: p.category_name, name_ar: p.category_name_ar }) || t("DIGITAL PRODUCT"))}</span><h1>${escapeHTML(name)}</h1><div class="product-detail-price" id="productPrice">${money(price)} ${old > price ? `<del>${money(old)}</del>` : ""}</div><div class="product-detail-meta">${[
+    main.innerHTML = `<section class="product-page container" ${kdAccentMarkup(p)}><div class="product-breadcrumb"><a href="/" data-home>${t("Store")}</a><span>/</span><span>${escapeHTML(name)}</span></div><div class="product-detail"><div class="product-detail-media">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="${escapeHTML(name)}">` : `<div class="product-detail-placeholder">K</div>`}</div><div class="product-detail-copy"><span class="eyebrow">${escapeHTML(cName({ name: p.category_name, name_ar: p.category_name_ar }) || t("DIGITAL PRODUCT"))}</span><h1>${escapeHTML(name)}</h1><div class="product-detail-price" id="productPrice">${money(price)} ${old > price ? `<del>${money(old)}</del>` : ""}</div><div class="product-detail-meta">${[
       p.platform,
       p.region,
       p.delivery_type === "code"
@@ -904,7 +980,7 @@ function recentList() {
 function miniCard(p) {
   const vs = (p.variants || []).filter((v) => Number(v.active) !== 0),
     price = vs.length ? Math.min(...vs.map((v) => Number(v.price))) : Number(p.price);
-  return `<a class="mini-card" href="/${encodeURIComponent(p.slug)}"><div class="mini-img">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span>K</span>`}</div><b>${escapeHTML(pName(p))}</b><small>${vs.length ? t("From") + " " : ""}${money(price)}</small></a>`;
+  return `<div class="mini-card-wrap" ${kdAccentMarkup(p)}><a class="mini-card" href="/${encodeURIComponent(p.slug)}"><div class="mini-img">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : `<span>K</span>`}</div><b>${escapeHTML(pName(p))}</b><small>${vs.length ? t("From") + " " : ""}${money(price)}</small></a></div>`;
 }
 // "Recently viewed" comes from this browser; "You may also like" scores category and platform matches among in-stock products.
 function renderRecommendations(cur) {
