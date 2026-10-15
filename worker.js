@@ -312,7 +312,7 @@ const DEFAULTS = {
   auto_bundle_max_egp: "100",
   auto_bundle_min_products: "2",
 };
-const SCHEMA_VERSION = 18; // 18: products.gallery (extra product images, JSON list) // 17: products SEO fields + image_original (AI SEO text, AI image cleanup) // 16: users.points_redeemed (V41 added the column but never bumped the version, so existing DBs skipped the migration)
+const SCHEMA_VERSION = 19; // 19: promo_campaigns (many promo campaigns for /deals, optionally also on the homepage) // 18: products.gallery (extra product images, JSON list) // 17: products SEO fields + image_original (AI SEO text, AI image cleanup) // 16: users.points_redeemed (V41 added the column but never bumped the version, so existing DBs skipped the migration)
 // Columns added over time. Each is added only if missing (additive, never destructive).
 const COLUMN_ADDS = [
   ["discounts", "max_uses", "INTEGER"],
@@ -401,6 +401,9 @@ const SCHEMA_TABLES = [
   "CREATE TABLE IF NOT EXISTS kd_job_runs(job TEXT PRIMARY KEY,ran_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,ok INTEGER NOT NULL DEFAULT 1,detail TEXT DEFAULT '')",
   "CREATE INDEX IF NOT EXISTS idx_orders_hash ON orders(payment_proof_hash)",
   "CREATE INDEX IF NOT EXISTS idx_orders_ref ON orders(payment_ref)",
+  // ---- V74: promo campaigns (any number; all live ones show on /deals, the ones flagged show_on_home also show on the homepage) ----
+  "CREATE TABLE IF NOT EXISTS promo_campaigns(id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,title_ar TEXT DEFAULT '',eyebrow TEXT DEFAULT '',eyebrow_ar TEXT DEFAULT '',body TEXT DEFAULT '',body_ar TEXT DEFAULT '',cta_text TEXT DEFAULT '',cta_text_ar TEXT DEFAULT '',link TEXT DEFAULT '',image_url TEXT DEFAULT '',discount_code TEXT DEFAULT '',product_ids TEXT DEFAULT '',starts_at TEXT,ends_at TEXT,active INTEGER NOT NULL DEFAULT 1,show_on_home INTEGER NOT NULL DEFAULT 0,sort_order INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE INDEX IF NOT EXISTS idx_promo_campaigns_live ON promo_campaigns(active,sort_order,id)",
 ];
 async function ensureSchema(env) {
   if (schemaReady) return;
@@ -1404,6 +1407,55 @@ function validateDiscount(b) {
   return null;
 }
 const expiryOf = (v) => (v ? new Date(Date.parse(v)).toISOString() : null);
+// ---- promo campaigns ----
+const campaignLink = (v) => {
+  const x = clean(v).slice(0, 500);
+  return !x || /^\/(?!\/)/.test(x) || /^https:\/\//i.test(x) ? x : null;
+};
+const campaignImage = (v) => {
+  const x = clean(v).slice(0, 1000);
+  return !x || /^https:\/\//i.test(x) ? x : null;
+};
+const campaignIds = (v) =>
+  [...new Set((Array.isArray(v) ? v : []).map((n) => Math.floor(Number(n))).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 24);
+function validateCampaign(b) {
+  if (!clean(b.title)) return "Enter a campaign headline.";
+  if (campaignLink(b.link) === null) return "The button link must start with / (a page on your store) or https://.";
+  if (campaignImage(b.image_url) === null) return "The artwork link must start with https://.";
+  if (b.starts_at && !Number.isFinite(Date.parse(b.starts_at))) return "Start date is not valid.";
+  if (b.ends_at && !Number.isFinite(Date.parse(b.ends_at))) return "End date is not valid.";
+  if (b.starts_at && b.ends_at && Date.parse(b.ends_at) <= Date.parse(b.starts_at)) return "The end date must be after the start date.";
+  return null;
+}
+const campaignBind = (b) => [
+  clean(b.title).slice(0, 160),
+  clean(b.title_ar).slice(0, 160),
+  clean(b.eyebrow).slice(0, 60),
+  clean(b.eyebrow_ar).slice(0, 60),
+  clean(b.body).slice(0, 500),
+  clean(b.body_ar).slice(0, 500),
+  clean(b.cta_text).slice(0, 40),
+  clean(b.cta_text_ar).slice(0, 40),
+  campaignLink(b.link) || "",
+  campaignImage(b.image_url) || "",
+  clean(b.discount_code).toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 40),
+  JSON.stringify(campaignIds(b.product_ids)),
+  b.starts_at ? expiryOf(b.starts_at) : null,
+  b.ends_at ? expiryOf(b.ends_at) : null,
+  b.active === undefined || b.active ? 1 : 0,
+  b.show_on_home ? 1 : 0,
+  Math.max(-9999, Math.min(9999, Math.floor(Number(b.sort_order)) || 0)),
+];
+function campaignOut(r) {
+  let ids = [];
+  try { ids = campaignIds(JSON.parse(r.product_ids || "[]")); } catch {}
+  return {
+    id: r.id, title: r.title, title_ar: r.title_ar || "", eyebrow: r.eyebrow || "", eyebrow_ar: r.eyebrow_ar || "",
+    body: r.body || "", body_ar: r.body_ar || "", cta_text: r.cta_text || "", cta_text_ar: r.cta_text_ar || "",
+    link: r.link || "", image_url: r.image_url || "", discount_code: r.discount_code || "", product_ids: ids,
+    starts_at: r.starts_at || "", ends_at: r.ends_at || "", active: r.active ? 1 : 0, show_on_home: r.show_on_home ? 1 : 0, sort_order: r.sort_order || 0,
+  };
+}
 async function planMerge(env, b) {
   const rawTarget = Number(b.target_id) || 0,
     newName = rawTarget ? "" : clean(b.new_name).slice(0, 120),
@@ -2250,7 +2302,7 @@ function buildTimeline(o, events) {
   return steps;
 }
 // ---- backups: D1 -> gzipped SQL dump in R2 ----
-const BACKUP_TABLES = ["users","categories","products","product_variants","variant_sources","kd_supplier_batches","inventory","discounts","orders","order_items","settings","kd_order_events","kd_order_messages","kd_refund_log","kd_stock_subscriptions","kd_credit_ledger","audit_logs","checkout_events","product_reviews","customer_notifications"];
+const BACKUP_TABLES = ["users","categories","products","product_variants","variant_sources","kd_supplier_batches","inventory","discounts","promo_campaigns","orders","order_items","settings","kd_order_events","kd_order_messages","kd_refund_log","kd_stock_subscriptions","kd_credit_ledger","audit_logs","checkout_events","product_reviews","customer_notifications"];
 async function runBackup(env, keep = 14) {
   const bucket = bucketOf(env);
   if (!bucket) return { ok: false, error: "R2 storage is not configured." };
@@ -2521,6 +2573,37 @@ async function api(req, env, url, ctx) {
       delete r.photo_key;
     }
     return json(product);
+  }
+  if (path === "/api/campaigns" && method === "GET") {
+    // Only live campaigns (active, started, not ended). A promo code is shown only while that discount code is still usable.
+    const nowIso = new Date().toISOString();
+    const rows = (
+      await env.DB.prepare(
+        "SELECT * FROM promo_campaigns WHERE active=1 AND (starts_at IS NULL OR starts_at<=?) AND (ends_at IS NULL OR ends_at>?) ORDER BY sort_order ASC,id DESC",
+      )
+        .bind(nowIso, nowIso)
+        .all()
+    ).results;
+    let live = new Set();
+    if (rows.some((r) => clean(r.discount_code)))
+      live = new Set(
+        (
+          await env.DB.prepare(
+            "SELECT code FROM discounts WHERE active=1 AND (expires_at IS NULL OR expires_at>?) AND (max_uses IS NULL OR COALESCE(used_count,0)<max_uses)",
+          )
+            .bind(nowIso)
+            .all()
+        ).results.map((d) => String(d.code).toUpperCase()),
+      );
+    return json({
+      server_time: Date.now(),
+      campaigns: rows.map((r) => {
+        const c = campaignOut(r);
+        if (!live.has(c.discount_code)) c.discount_code = "";
+        delete c.active;
+        return c;
+      }),
+    });
   }
   if (path === "/api/settings/public" && method === "GET") {
     const s = await allSettings(env),
@@ -3887,6 +3970,41 @@ async function api(req, env, url, ctx) {
       .run();
     return json({ ok: true });
   }
+  if (path === "/api/admin/campaigns" && method === "GET")
+    return json((await env.DB.prepare("SELECT * FROM promo_campaigns ORDER BY sort_order ASC,id DESC").all()).results.map(campaignOut));
+  if (path === "/api/admin/campaigns" && method === "POST") {
+    const b = await readJson(req),
+      err = validateCampaign(b);
+    if (err) return json({ error: err }, 400);
+    const r = await env.DB.prepare(
+      "INSERT INTO promo_campaigns(title,title_ar,eyebrow,eyebrow_ar,body,body_ar,cta_text,cta_text_ar,link,image_url,discount_code,product_ids,starts_at,ends_at,active,show_on_home,sort_order) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    )
+      .bind(...campaignBind(b))
+      .run();
+    await audit(env, me, "campaign_create", "campaign", r.meta?.last_row_id, clean(b.title).slice(0, 80));
+    return json({ ok: true, id: r.meta?.last_row_id }, 201);
+  }
+  const campMatch = path.match(/^\/api\/admin\/campaigns\/(\d+)$/);
+  if (campMatch && method === "PUT") {
+    const b = await readJson(req),
+      err = validateCampaign(b),
+      id = Number(campMatch[1]);
+    if (err) return json({ error: err }, 400);
+    const r = await env.DB.prepare(
+      "UPDATE promo_campaigns SET title=?,title_ar=?,eyebrow=?,eyebrow_ar=?,body=?,body_ar=?,cta_text=?,cta_text_ar=?,link=?,image_url=?,discount_code=?,product_ids=?,starts_at=?,ends_at=?,active=?,show_on_home=?,sort_order=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+    )
+      .bind(...campaignBind(b), id)
+      .run();
+    if (!r.meta?.changes) return json({ error: "Campaign not found." }, 404);
+    await audit(env, me, "campaign_update", "campaign", id, clean(b.title).slice(0, 80));
+    return json({ ok: true });
+  }
+  if (campMatch && method === "DELETE") {
+    const id = Number(campMatch[1]);
+    await env.DB.prepare("DELETE FROM promo_campaigns WHERE id=?").bind(id).run();
+    await audit(env, me, "campaign_delete", "campaign", id, "");
+    return json({ ok: true });
+  }
   if (path === "/api/admin/orders/export.csv" && method === "GET") {
     const q = url.searchParams,
       where = [],
@@ -4826,7 +4944,7 @@ export default {
         return `<url><loc>${htmlEsc(ar)}</loc>${lm}${alt}</url><url><loc>${htmlEsc(en)}</loc>${lm}${alt}</url>`;
       };
       return new Response(
-        `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${entry("/")}${entry("/products")}${catRows.map((c) => entry("/c/" + encodeURIComponent(c.slug), c.updated_at)).join("")}${rows.map((p) => entry("/" + encodeURIComponent(p.slug), p.updated_at)).join("")}</urlset>`,
+        `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${entry("/")}${entry("/products")}${entry("/deals")}${catRows.map((c) => entry("/c/" + encodeURIComponent(c.slug), c.updated_at)).join("")}${rows.map((p) => entry("/" + encodeURIComponent(p.slug), p.updated_at)).join("")}</urlset>`,
         {
           headers: {
             "content-type": "application/xml; charset=utf-8",
@@ -4864,6 +4982,17 @@ export default {
             ar = lang === "ar",
             title = ar ? "كل المنتجات | Kardivo" : "All products | Kardivo",
             desc = ar ? "تصفح كل ألعاب وكروت واشتراكات كارديفو، وابحث وفلتر بسهولة." : "Browse every game, gift card and subscription on Kardivo. Search, filter and sort the full catalog.",
+            head = seoHead({ url, lang, title, desc, type: "website" });
+          return new Response(applySeo(html, { lang, title, desc, head }), HTML_HEADERS());
+        }
+        if (pagePath === "/deals") {
+          const shell = await shellFetch(env, url, request);
+          if (!shell.ok) return shell;
+          const html = await shell.text(),
+            lang = pageLang(url),
+            ar = lang === "ar",
+            title = ar ? "العروض | Kardivo" : "Deals & offers | Kardivo",
+            desc = ar ? "أحدث عروض وحملات كارديفو على الألعاب والكروت والاشتراكات." : "The latest Kardivo deals and promotions on games, gift cards and subscriptions.",
             head = seoHead({ url, lang, title, desc, type: "website" });
           return new Response(applySeo(html, { lang, title, desc, head }), HTML_HEADERS());
         }

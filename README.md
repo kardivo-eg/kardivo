@@ -1,3 +1,12 @@
+# Kardivo V75 — /deals page + multiple promo campaigns
+
+- **New `/deals` page.** The header "Deals" link (and any old `/#deals` link or bookmark) now opens `/deals`. It lists every live promo campaign as a banner card with an optional countdown, an optional copyable promo code, a button, and the products you pick for it. English and Arabic (RTL), light and dark. If you have no campaigns yet it shows your old Settings banner, and a friendly empty state if that is off too.
+- **Admin > Campaigns (new tab).** Add as many campaigns as you want: English and Arabic headline, small label, description and button text; button link (store path or https), artwork image URL, promo code (only shown to shoppers while that discount is still active), products to show under it, start and end dates (scheduled campaigns appear by themselves and hide themselves when they end), order (lowest first), **Show on homepage** and **Active**.
+- **Homepage.** Campaigns marked **Show on homepage** appear at the top of the home page (up to 3, in your order, with a "See all deals" link when more are live). The single banner in Settings is kept only as a fallback: it shows when no campaign is set for the homepage (or the campaigns request fails), so nothing disappears after upgrading.
+- **Backend.** New table `promo_campaigns` (created automatically on first request, `SCHEMA_VERSION` 19; `migration-v7-campaigns.sql` is the same statement if you prefer running it by hand). New routes: `GET /api/campaigns` (public, live campaigns only) and `GET/POST/PUT/DELETE /api/admin/campaigns` (admin, audited). Links must start with `/` or `https://`, artwork must be `https://`. `/deals` has its own title/description and is in `sitemap.xml`; the table is included in the daily backup.
+- **Not touched:** checkout, orders, payments, discounts logic, auth, wrangler.toml. A product whose slug is literally `deals` would be shadowed by the page.
+- Files changed: `worker.js`, `public/app.js`, `public/index.html`, `public/styles.css`, `app.js?v=75`, `styles.css?v=75`. The old home "Deals that actually calculate" band stays and now links to `/deals`.
+
 # Kardivo V74 — Social icons + Wallet page
 
 - **Social icons**: the footer links are now round line-icon buttons (hover colours per brand, keyboard focus, opens in a new tab with `noopener`). New admin fields in Settings > Support & footer: **YouTube URL** and **X (Twitter) URL** (next to Instagram, Facebook, TikTok). A WhatsApp icon appears automatically when the "WhatsApp number" setting is filled. Only links that start with `https://` or `http://` are shown, and nothing is drawn for empty fields.
@@ -375,3 +384,14 @@ Visual only (no order, price, payment or API code touched). CSS is the last bloc
 - Phones (<=700px): dialogs are bottom sheets, category and filter chips are single-row swipe lists, 44px touch targets, 16px inputs (no focus zoom), full-width hero buttons, press feedback on touch, no text selection or long-press callout on UI chrome (inputs and delivered codes stay selectable).
 - To allow zoom again, restore the old viewport meta and delete the V60 blocks in `styles.css` and `app.js`.
 - Asset versions: `styles.css?v=46`, `app.js?v=53`.
+
+## V76 homepage campaign carousel
+
+- Campaigns marked **Show on homepage** now rotate in one slot every 5 seconds (cap raised from 3 to 6, lowest order first). One campaign shows as a plain card with no dots, arrows or timer.
+- Code: `hcMarkup` / `hcBuild` / `hcGo` / `renderHomeCampaigns` in `public/app.js` (V76 block, next to the V75 campaign code); CSS is the last block of `public/styles.css`.
+- All slides share one grid cell, so the slot is as tall as the tallest slide. Inactive slides get `aria-hidden` and `inert`.
+- The progress bar on the active dot is the timer (a Web Animation); pausing it pauses the rotation. Pauses on mouse hover, keyboard focus (`:focus-visible`), touch drag, hidden tab and when scrolled off screen.
+- Only `transform` and `opacity` are animated. Reduced motion: plain cross-fade, no zoom or parallax, rotation every 10 s.
+- A re-render with the same data does nothing. If the data or language changed, the carousel is rebuilt on the same slide (or the next live one if the current campaign expired).
+- Other slides' artwork and glow colours load when the browser is idle (artwork is skipped on Data Saver and loads on demand).
+- Asset versions are `styles.css?v=76` and `app.js?v=76`.

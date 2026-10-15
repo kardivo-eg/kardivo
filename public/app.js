@@ -729,11 +729,14 @@ function applyLang() {
   else if (routePath === "/cart") renderCartPage();
   else if (routePath === "/order-confirmed") renderOrderConfirmed();
   else if (routePath === "/products") renderProductsPage();
+  else if (routePath === "/deals") renderDealsPage();
   else if (isProductRoute())
     openProductPage(
       decodeURIComponent(location.pathname.slice(1)).replace(/\/$/, ""),
     );
   else {
+    renderCampaign();
+    renderHomeCampaigns();
     renderCategoryCards();
     renderPopularProducts();
     renderHomeOpener();
@@ -1049,6 +1052,7 @@ function toggleCurrency() {
   updateCurrencyButton();
   // A click before API boot completes is still honored; boot will render using this state.
   if (!state.ready) return;
+  if ((location.pathname.replace(/\/$/, "") || "/") === "/deals") { renderDealsPage(); return; }
   if (isProductRoute()) {
     openProductPage(decodeURIComponent(location.pathname.slice(1)).replace(/\/$/, ""));
     return;
@@ -1117,6 +1121,7 @@ function showBootSkeleton() {
   const path = location.pathname.replace(/\/$/, "") || "/";
   const m = $("main");
   if (path === "/cart") { document.body.classList.add("account-route"); m.innerHTML = skCartHTML(); return; }
+  if (path === "/deals") { m.innerHTML = skCategoryHTML(); return; }
   if (path.startsWith("/c/")) { m.innerHTML = skCategoryHTML(); return; }
   if (path === "/favorites") { document.body.classList.add("account-route"); m.innerHTML = skCategoryHTML(true); return; }
   if (path === "/wallet") { document.body.classList.add("account-route"); m.innerHTML = skCartHTML(); return; }
@@ -1162,6 +1167,7 @@ addEventListener("online", () => setOffline(false));
 async function boot() {
   homeHTML = $("main").innerHTML;
   showBootSkeleton();
+  loadCampaigns();
   $("#year").textContent = new Date().getFullYear();
   const qs = new URLSearchParams(location.search);
   try {
@@ -1461,6 +1467,8 @@ function productShareData(p, name, variants) {
 function renderCampaign() {
   const section = $("#campaignSection");
   if (!section) return;
+  // The single Settings banner is only the fallback: it shows once campaigns have loaded and none is set for the homepage.
+  if (!state.campaignsReady || homeCampaignList().length) { section.hidden = true; return; }
   const enabledValue = state.settings.campaign_enabled;
   // Missing legacy settings should not silently hide the banner; only an explicit admin "off" hides it.
   const enabled = enabledValue == null ? true : String(enabledValue) === "1";
@@ -2756,6 +2764,7 @@ const ADMIN_TABS = [
   ["waitlist", "Back-in-stock"],
   ["customers", "Customers"],
   ["discounts", "Discounts"],
+  ["campaigns", "Campaigns"],
   ["reviews", "Reviews"],
   ["refunds", "Refunds & disputes"],
   ["audit", "Audit log"],
@@ -2800,6 +2809,7 @@ async function renderAdminTab() {
     waitlist: adminWaitlist,
     customers: adminCustomers,
     discounts: adminDiscounts,
+    campaigns: adminCampaigns,
     reviews: adminReviews,
     refunds: adminRefunds,
     audit: adminAudit,
@@ -4767,7 +4777,7 @@ const SETTINGS_SCHEMA = [
     ],
   ],
   [
-    "Promotional campaign",
+    "Promotional campaign (single banner, used only while the Campaigns tab has no live campaign for the homepage)",
     [
       ["campaign_enabled", "Show homepage campaign banner", "toggle"],
       ["campaign_eyebrow", "Campaign eyebrow"],
@@ -5049,6 +5059,7 @@ function showHome() {
   translateStatic();
   applySettings();
   renderCampaign();
+  renderHomeCampaigns();
   renderCategoryCards();
   renderPopularProducts();
   renderHomeOpener();
@@ -5098,6 +5109,8 @@ function renderAdminPage() {
   renderAdminTab().then(() => { if (state.admin.tab !== "dashboard") adminBadges(); });
 }
 async function route() {
+  // old /#deals links and bookmarks land on the real /deals page
+  if ((location.pathname.replace(/\/$/, "") || "/") === "/" && location.hash === "#deals") history.replaceState({}, "", "/deals" + location.search);
   const path = location.pathname.replace(/\/$/, "") || "/";
   { const m = $("main"); if (m) { m.classList.remove("page-enter"); void m.offsetWidth; if (!document.documentElement.classList.contains("vt-active")) m.classList.add("page-enter"); } }
   [["/account", "#accountBtn"], ["/cart", "#cartBtn"], ["/favorites", "#wishlistBtn"], ["/wallet", "#walletBtn"]].forEach(([p, selector]) => {
@@ -5105,7 +5118,7 @@ async function route() {
   });
   $$("[data-tab]").forEach((el) => {
     const tp = el.dataset.tab;
-    const active = tp === "/" ? !["/account", "/cart", "/favorites", "/wallet", "/admin", "/order-confirmed", "/products"].includes(path) : path === tp;
+    const active = tp === "/" ? !["/account", "/cart", "/favorites", "/wallet", "/admin", "/order-confirmed", "/products", "/deals"].includes(path) : path === tp;
     el.classList.toggle("is-active", active);
     if (active) el.setAttribute("aria-current", "page"); else el.removeAttribute("aria-current");
   });
@@ -5116,6 +5129,7 @@ async function route() {
   else if (path === "/wallet") renderWalletPage();
   else if (path === "/order-confirmed") renderOrderConfirmed();
   else if (path === "/products") renderProductsPage();
+  else if (path === "/deals") renderDealsPage();
   else if (path.startsWith("/c/")) renderCategoryPage(decodeURIComponent(path.slice(3)));
   else if (isProductRoute())
     await openProductPage(
@@ -5125,6 +5139,7 @@ async function route() {
 }
 function navigate(path, scrollTo) {
   if (path === "/#store") { path = "/products"; scrollTo = null; }
+  if (path === "/#deals") { path = "/deals"; scrollTo = null; }
   if (String(path).split("?")[0] === "/products") state.freshProducts = true;
   const go = () => { history.pushState({}, "", path); return route(); };
   // V61: View Transitions where the browser has them (cross-fade, product picture grows into its page).
@@ -5242,6 +5257,7 @@ document.addEventListener("click", (e) => {
   if (u.pathname === "/" && u.hash) {
     e.preventDefault();
     if (u.hash === "#store") { closeModal(); navigate("/products"); return; }
+    if (u.hash === "#deals") { closeModal(); navigate("/deals"); return; }
     if (isProductRoute()) navigate("/" + u.hash, u.hash);
     else {
       history.replaceState({}, "", "/" + u.hash);
@@ -5412,6 +5428,444 @@ async function renderWalletPage() {
   main.innerHTML = `<section class="collection-page wallet-page container">${head()}<div class="wallet-grid">${creditCard}${pointsCard}${stats}${how}${referral}${history}</div></section>`;
   bindShop();
   $$("[data-wallet-shop2]").forEach((el) => el.addEventListener("click", () => navigate("/products")));
+}
+
+// ---- V75: promo campaigns. /deals lists every live campaign; campaigns flagged "show on homepage" also appear on the home page. ----
+(function addCampaignStrings() {
+  const add = {
+    "Promotions, discount codes and hand-picked products in one place.": "حملات وأكواد خصم ومنتجات مختارة في مكان واحد.",
+    "No live deals right now.": "مفيش عروض شغالة دلوقتي.",
+    "Check back soon, or browse the full catalog.": "ارجع تاني قريب، أو تصفح كل المنتجات.",
+    "Loading deals...": "بنحمّل العروض...",
+    "Ends in": "بينتهي بعد",
+    "Use code": "استخدم كود",
+    "Copy": "انسخ",
+    "Copied": "اتنسخ",
+    "See all deals": "شوف كل العروض",
+    "Previous deal": "العرض السابق",
+    "Next deal": "العرض التالي",
+    "Deal": "عرض",
+  };
+  for (const [k, v] of Object.entries(add)) if (!(k in AR)) AR[k] = v;
+})();
+let campaignsLoading = null;
+let promoTick = null;
+const campaignNow = () => Date.now() + (state.timeOffset || 0);
+const campaignLive = (c) =>
+  (!c.starts_at || Date.parse(c.starts_at) <= campaignNow()) && (!c.ends_at || Date.parse(c.ends_at) > campaignNow());
+const campaignText = (c, k) => (state.lang === "ar" && String(c[k + "_ar"] || "").trim()) || String(c[k] || "");
+const safeCampaignLink = (v) => {
+  const s = String(v || "").trim();
+  return /^\/(?!\/)/.test(s) || /^https:\/\//i.test(s) ? s : "";
+};
+const homeCampaignList = () => (state.campaigns || []).filter((c) => c.show_on_home && campaignLive(c)).slice(0, HC_MAX);
+function loadCampaigns() {
+  if (campaignsLoading) return campaignsLoading;
+  campaignsLoading = api("/api/campaigns")
+    .then((r) => {
+      state.campaigns = Array.isArray(r?.campaigns) ? r.campaigns : [];
+      if (r?.server_time) state.timeOffset = Number(r.server_time) - Date.now();
+      state.campaignsAt = Date.now();
+    })
+    .catch(() => { state.campaigns = state.campaigns || []; })
+    .then(() => {
+      state.campaignsReady = true;
+      campaignsLoading = null;
+      refreshCampaignViews();
+    });
+  return campaignsLoading;
+}
+function refreshCampaignViews() {
+  const path = location.pathname.replace(/\/$/, "") || "/";
+  renderCampaign();
+  if (path === "/") renderHomeCampaigns();
+  else if (path === "/deals") fillDeals();
+}
+function campaignCardHTML(c, where, eager) {
+  const ar = state.lang === "ar";
+  const img = /^https:\/\//i.test(c.image_url || "") ? c.image_url : STOCK_ART[Math.abs(Number(c.id) || 0) % STOCK_ART.length];
+  const hasProducts = where === "deals" && (c.product_ids || []).length > 0;
+  let link = safeCampaignLink(c.link);
+  if (!link && !hasProducts) link = where === "home" ? "/deals" : "/products";
+  const cta = campaignText(c, "cta_text") || (where === "home" ? (ar ? "شوف العرض" : "See the deal") : (ar ? "تسوّق دلوقتي" : "Shop now"));
+  const external = /^https:\/\//i.test(link) && !link.startsWith(location.origin);
+  const eyebrow = campaignText(c, "eyebrow") || (ar ? "عروض كارديفو" : "KARDIVO DEALS");
+  const left = c.ends_at ? Date.parse(c.ends_at) - campaignNow() : 0;
+  const timer = c.ends_at && left > 0
+    ? `<div class="sale-timer promo-timer" role="timer" data-promo-end="${escapeHTML(c.ends_at)}"><span class="sale-dot" aria-hidden="true"></span><span class="sale-label">${escapeHTML(t("Ends in"))}</span><bdi dir="ltr" class="sale-clock" data-promo-clock>${saleClockText(left)}</bdi></div>`
+    : "";
+  const code = c.discount_code
+    ? `<button type="button" class="promo-code" data-copy-code="${escapeHTML(c.discount_code)}" aria-label="${escapeHTML(t("Copy"))}"><span>${escapeHTML(t("Use code"))}</span><b dir="ltr">${escapeHTML(c.discount_code)}</b><i>${escapeHTML(t("Copy"))}</i></button>`
+    : "";
+  const body = campaignText(c, "body");
+  const art = String(img).replace(/['"\\<>]/g, "").replace(/\(/g, "%28").replace(/\)/g, "%29");
+  return `<article class="campaign-card promo-card" data-campaign="${Number(c.id) || 0}"><div class="campaign-copy"><span class="eyebrow">${escapeHTML(eyebrow)}</span><h2>${escapeHTML(campaignText(c, "title"))}</h2>${body ? `<p>${escapeHTML(body).replace(/\n/g, "<br>")}</p>` : ""}${timer}${code}${link ? `<a class="btn primary" href="${escapeHTML(link)}"${external ? ' target="_blank" rel="noopener noreferrer"' : ""}><span>${escapeHTML(cta)}</span><span data-arrow>${arrow()}</span></a>` : ""}</div>${where === "home"
+    ? `<div class="campaign-art hc-art" aria-hidden="true"><i class="hc-img" data-art="${escapeHTML(art)}"${eager ? ` style="background-image:url('${escapeHTML(art)}')"` : ""}></i></div>`
+    : `<div class="campaign-art" aria-hidden="true" style="background-image:linear-gradient(90deg,var(--art-a) 0%,var(--art-b) 45%,var(--art-c) 100%),url('${art}')"></div>`}</article>`;
+}
+function dealProductCardHTML(p) {
+  const variants = (p.variants || []).filter((v) => Number(v.active) !== 0);
+  const price = variants.length ? Math.min(...variants.map((v) => Number(v.price))) : Number(p.price || 0);
+  const old = Number(p.old_price || 0);
+  const name = pName(p);
+  const cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
+  const img = stockImg(p.image_url, name, stockArtFor(p));
+  return `<article class="popular-product-wrap">${favoriteButton(p)}<a class="popular-product" href="/${encodeURIComponent(p.slug || p.id)}"><div class="popular-product-image">${img}</div><div class="popular-product-copy"><span class="popular-product-category">${escapeHTML(cat || (state.lang === "ar" ? "منتج رقمي" : "Digital product"))}</span><span class="popular-product-name">${escapeHTML(name)}</span><span class="popular-product-price">${money(price)}${old > price ? `<del>${money(old)}</del>` : ""}</span></div></a></article>`;
+}
+// ---- V76: homepage campaign carousel. One card at a time, all slides stacked in one grid cell so the slot never changes height. ----
+const HC_MAX = 6;
+const HC_MS = 5000, HC_MS_REDUCED = 10000;
+let hcCtrl = null;
+const hcReduced = () => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
+const hcRTL = () => document.documentElement.dir === "rtl";
+const hcChev = (d) => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
+
+function hcMarkup(list, start, more) {
+  const n = list.length;
+  const slides = list.map((c, i) => {
+    const on = i === start;
+    return `<div class="hc-slide"${n > 1 ? ` role="group" aria-roledescription="slide" aria-label="${i + 1} / ${n}"` : ""} data-state="${on ? "active" : "idle"}"${on ? "" : " aria-hidden=\"true\" inert"}>${campaignCardHTML(c, "home", on)}</div>`;
+  }).join("");
+  const controls = n > 1
+    ? `<div class="hc-controls"><button type="button" class="hc-arrow" data-hc-act="-1" data-hc-f="prev" aria-label="${escapeHTML(t("Previous deal"))}">${hcChev("M15 6l-6 6 6 6")}</button><div class="hc-dots">${list.map((c, i) => `<button type="button" class="hc-dot" data-hc-dot="${i}" data-hc-f="dot-${i}" aria-label="${escapeHTML(t("Deal"))} ${i + 1}"${i === start ? ' aria-current="true"' : ""}><span class="hc-dot-bar"><i class="hc-fill"></i></span></button>`).join("")}</div><button type="button" class="hc-arrow" data-hc-act="1" data-hc-f="next" aria-label="${escapeHTML(t("Next deal"))}">${hcChev("M9 6l6 6-6 6")}</button></div>`
+    : "";
+  const link = more ? `<a class="section-link hc-more" href="/deals">${escapeHTML(t("See all deals"))}</a>` : "";
+  const bar = controls || link ? `<div class="hc-bar">${controls}${link}</div>` : "";
+  const attrs = n > 1 ? ` role="group" aria-roledescription="carousel" aria-label="${escapeHTML(t("Deals"))}"` : "";
+  return `<div class="hc${n > 1 ? "" : " hc-single"} hc-still"${attrs}><div class="hc-stage" aria-live="off">${slides}</div>${bar}</div>`;
+}
+
+function hcEnsureArt(slide) {
+  const el = slide.querySelector(".hc-img");
+  if (el && el.dataset.art && !el.style.backgroundImage) el.style.backgroundImage = `url("${el.dataset.art.replace(/"/g, "%22")}")`;
+}
+// Give each slide's card its own accent glow from its artwork, using the same palette reader as the product cards.
+function hcTint(slide) {
+  const el = slide.querySelector(".hc-img"), card = slide.querySelector(".campaign-card");
+  const T = window.kdTint;
+  if (!el || !card || !el.dataset.art || !T || !T.palette || card.hasAttribute("data-kd-tint")) return;
+  const rgb = (h) => `${parseInt(h.slice(1, 3), 16)} ${parseInt(h.slice(3, 5), 16)} ${parseInt(h.slice(5, 7), 16)}`;
+  Promise.resolve(T.palette(el.dataset.art)).then((pal) => {
+    if (!card.isConnected || !pal || pal.length !== 3) return;
+    ["a", "b", "c"].forEach((k, i) => { card.style.setProperty("--kd-" + k, pal[i]); card.style.setProperty("--kd-" + k + "-rgb", rgb(pal[i])); });
+    card.setAttribute("data-kd-tint", "1");
+  }).catch(() => {});
+}
+function hcStagger(slide) {
+  if (!slide.animate || hcReduced()) return;
+  [...slide.querySelectorAll(".campaign-copy > *")].forEach((el, k) =>
+    el.animate(
+      [{ opacity: 0, transform: "translate3d(0,14px,0)" }, { opacity: 1, transform: "none" }],
+      { duration: 620, delay: 200 + k * 80, easing: "cubic-bezier(.22,.8,.24,1)", fill: "backwards" },
+    ));
+}
+
+function hcSync(ctrl) {
+  const paused = ctrl.reasons.size > 0;
+  ctrl.root.classList.toggle("is-paused", paused);
+  ctrl.stage.setAttribute("aria-live", paused ? "polite" : "off");
+  const a = ctrl.timer;
+  if (!a) return;
+  if (paused) a.pause();
+  else if (a.playState !== "finished") a.play();
+}
+function hcStop(ctrl) {
+  const a = ctrl.timer;
+  if (!a) return;
+  ctrl.timer = null;
+  a.onfinish = null;
+  a.cancel();
+}
+// The progress bar IS the timer: when its animation finishes we advance. Pausing the animation pauses both.
+function hcStart(ctrl, offset) {
+  hcStop(ctrl);
+  if (ctrl.n < 2) return;
+  const fill = ctrl.dots[ctrl.i] && ctrl.dots[ctrl.i].querySelector(".hc-fill");
+  if (!fill || !fill.animate) return;
+  const dur = hcReduced() ? HC_MS_REDUCED : HC_MS;
+  const a = fill.animate([{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }], { duration: dur, easing: "linear", fill: "forwards" });
+  if (offset > 0) a.currentTime = Math.min(offset, dur - 1);
+  a.onfinish = () => {
+    if (ctrl.timer !== a) return;
+    if (!ctrl.root.isConnected) { hcDestroy(ctrl); return; }
+    hcGo(ctrl, ctrl.i + 1, 1);
+  };
+  ctrl.timer = a;
+  hcSync(ctrl);
+}
+function hcDestroy(ctrl) {
+  if (!ctrl) return;
+  ctrl.dead = true;
+  hcStop(ctrl);
+  if (ctrl.io) ctrl.io.disconnect();
+  if (hcCtrl === ctrl) hcCtrl = null;
+}
+function hcGo(ctrl, to, dir) {
+  if (ctrl.dead) return;
+  const n = ctrl.n;
+  to = ((to % n) + n) % n;
+  if (to === ctrl.i) return;
+  const from = ctrl.i, slides = ctrl.slides, nextEl = slides[to], root = ctrl.root;
+  hcEnsureArt(nextEl);
+  // Park every slide that is not on screen at its "waiting" spot on the side the new one will come from, without animating that move.
+  root.style.setProperty("--in-x", dir * (hcRTL() ? -1 : 1) * 7 + "%");
+  root.classList.add("hc-snap");
+  slides.forEach((s, k) => { if (k !== from) s.dataset.state = "idle"; });
+  const img = nextEl.querySelector(".hc-img");
+  if (img) img.style.removeProperty("--kb-delay");
+  void root.offsetWidth;
+  root.classList.remove("hc-snap");
+  slides[from].dataset.state = "out";
+  nextEl.dataset.state = "active";
+  slides.forEach((s, k) => {
+    const on = k === to;
+    if (on) s.removeAttribute("aria-hidden"); else s.setAttribute("aria-hidden", "true");
+    s.inert = !on;
+  });
+  ctrl.dots.forEach((d, k) => { if (k === to) d.setAttribute("aria-current", "true"); else d.removeAttribute("aria-current"); });
+  ctrl.i = to;
+  hcStart(ctrl, 0);
+  hcStagger(nextEl);
+}
+
+function hcBuild(box, list, more, keep, elapsed, sig) {
+  if (hcCtrl) hcDestroy(hcCtrl);
+  const focusKey = box.contains(document.activeElement) && document.activeElement.dataset ? document.activeElement.dataset.hcF : "";
+  const n = list.length, i0 = Math.max(0, Math.min(keep | 0, n - 1));
+  box.innerHTML = hcMarkup(list, i0, more);
+  const root = box.querySelector(".hc"), stage = root.querySelector(".hc-stage");
+  const ctrl = {
+    box, root, stage, n, i: i0, sig, more,
+    ids: list.map((c) => String(c.id)),
+    slides: [...root.querySelectorAll(".hc-slide")],
+    dots: [...root.querySelectorAll(".hc-dot")],
+    timer: null, reasons: new Set(), io: null, dead: false,
+  };
+  box.__hc = ctrl;
+  hcCtrl = ctrl;
+  // the first slide is already painted; wait two frames before switching transitions back on
+  requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("hc-still")));
+  // rebuilt in place (language switch, reload, expiry): continue the Ken Burns zoom from where it was
+  if (elapsed > 0) { const im = ctrl.slides[i0].querySelector(".hc-img"); if (im) im.style.setProperty("--kb-delay", -elapsed + "ms"); }
+  hcTint(ctrl.slides[i0]);
+  if (focusKey) { const f = root.querySelector(`[data-hc-f="${focusKey}"]`); if (f) f.focus({ preventScroll: true }); }
+  if (n < 2) return;
+
+  // other slides: artwork and glow colours load quietly once the browser is idle
+  const saver = !!(navigator.connection && navigator.connection.saveData);
+  const warm = () => { if (ctrl.dead) return; ctrl.slides.forEach((s, k) => { if (k === ctrl.i) return; if (!saver) hcEnsureArt(s); hcTint(s); }); };
+  if (window.requestIdleCallback) requestIdleCallback(warm, { timeout: 3000 }); else setTimeout(warm, 1500);
+
+  const pause = (r) => { ctrl.reasons.add(r); hcSync(ctrl); };
+  const resume = (r) => { ctrl.reasons.delete(r); hcSync(ctrl); };
+  if (document.hidden) ctrl.reasons.add("tab");
+
+  root.addEventListener("click", (e) => {
+    const dot = e.target.closest("[data-hc-dot]"), act = e.target.closest("[data-hc-act]");
+    if (dot) { const k = Number(dot.dataset.hcDot); hcGo(ctrl, k, k > ctrl.i ? 1 : -1); }
+    else if (act) { const d = Number(act.dataset.hcAct); hcGo(ctrl, ctrl.i + d, d); }
+  });
+  root.addEventListener("keydown", (e) => {
+    if ((e.key !== "ArrowLeft" && e.key !== "ArrowRight") || !e.target.closest(".hc-controls")) return;
+    const visual = e.key === "ArrowRight" ? 1 : -1, d = hcRTL() ? -visual : visual;
+    e.preventDefault();
+    hcGo(ctrl, ctrl.i + d, d);
+    if (e.target.closest(".hc-dots") && ctrl.dots[ctrl.i]) ctrl.dots[ctrl.i].focus();
+  });
+  // pause: mouse hover, keyboard focus, drag, hidden tab, scrolled out of view
+  root.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") pause("hover"); });
+  root.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") resume("hover"); });
+  root.addEventListener("focusin", (e) => { let vis = false; try { vis = e.target.matches(":focus-visible"); } catch {} if (vis) pause("focus"); });
+  root.addEventListener("focusout", (e) => { if (!e.relatedTarget || !root.contains(e.relatedTarget)) resume("focus"); });
+  if ("IntersectionObserver" in window) {
+    ctrl.io = new IntersectionObserver((es) => { const e = es[es.length - 1]; if (e.isIntersecting) resume("off"); else pause("off"); }, { threshold: 0.15 });
+    ctrl.io.observe(root);
+  }
+
+  // swipe (touch and pen). Vertical scrolling stays native thanks to touch-action: pan-y.
+  let sx = 0, sy = 0, tracking = false, moved = false, mute = 0;
+  stage.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" || !e.isPrimary) return;
+    tracking = true; moved = false; sx = e.clientX; sy = e.clientY;
+    pause("drag");
+  });
+  stage.addEventListener("pointermove", (e) => {
+    if (!tracking) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) moved = true;
+  });
+  const endDrag = (e, cancelled) => {
+    if (!tracking) return;
+    tracking = false;
+    const dx = e.clientX - sx;
+    if (!cancelled && moved && Math.abs(dx) > 40) {
+      const d = (dx < 0 ? 1 : -1) * (hcRTL() ? -1 : 1);
+      mute = Date.now() + 450;
+      hcGo(ctrl, ctrl.i + d, d);
+    }
+    resume("drag");
+  };
+  stage.addEventListener("pointerup", (e) => endDrag(e, false));
+  stage.addEventListener("pointercancel", (e) => endDrag(e, true));
+  // a swipe that starts on a link must not follow it
+  stage.addEventListener("click", (e) => { if (Date.now() < mute) { e.preventDefault(); e.stopPropagation(); } }, true);
+
+  hcStart(ctrl, Number(elapsed) || 0);
+}
+document.addEventListener("visibilitychange", () => {
+  const c = hcCtrl;
+  if (!c || c.dead) return;
+  if (document.hidden) c.reasons.add("tab"); else c.reasons.delete("tab");
+  hcSync(c);
+});
+
+function renderHomeCampaigns() {
+  const box = $("#homeCampaigns");
+  if (!box) return;
+  const list = homeCampaignList();
+  const more = (state.campaigns || []).filter(campaignLive).length > list.length;
+  box.hidden = !list.length;
+  const cur = box.__hc && !box.__hc.dead ? box.__hc : null;
+  if (!list.length) { hcDestroy(cur); box.__hc = null; box.innerHTML = ""; return; }
+  const sig = state.lang + "|" + more + "|" + JSON.stringify(list);
+  if (cur && cur.sig === sig) { if (list.some((c) => c.ends_at)) ensurePromoTicker(); return; } // same content: leave the running carousel alone
+  let keep = 0, elapsed = 0;
+  if (cur) {
+    // stay on the slide being shown; if it just expired, move on to the next one that is still live
+    const ids = list.map((c) => String(c.id));
+    for (let k = 0; k < cur.ids.length; k++) {
+      const j = ids.indexOf(cur.ids[(cur.i + k) % cur.ids.length]);
+      if (j >= 0) { keep = j; if (k === 0 && cur.timer) elapsed = Number(cur.timer.currentTime) || 0; break; }
+    }
+  }
+  hcBuild(box, list, more, keep, elapsed, sig);
+  if (list.some((c) => c.ends_at)) ensurePromoTicker();
+}
+function fillDeals() {
+  const box = $("#dealsList");
+  if (!box) return;
+  if (!state.campaignsReady) { box.innerHTML = `<div class="empty">${escapeHTML(t("Loading deals..."))}</div>`; return; }
+  let list = (state.campaigns || []).filter(campaignLive);
+  if (!list.length) {
+    // No campaigns created yet: fall back to the old single banner from Settings, so the page is never empty by accident.
+    const s = state.settings, on = s.campaign_enabled == null ? true : String(s.campaign_enabled) === "1";
+    if (on && String(S("campaign_title") || "").trim())
+      list = [{
+        id: 0, title: s.campaign_title, title_ar: s.campaign_title_ar, eyebrow: s.campaign_eyebrow, eyebrow_ar: s.campaign_eyebrow_ar,
+        body: s.campaign_text, body_ar: s.campaign_text_ar, cta_text: s.campaign_cta, cta_text_ar: s.campaign_cta_ar,
+        link: s.campaign_link, image_url: s.campaign_image, product_ids: [], discount_code: "", ends_at: saleActive() ? s.sale_ends_at : "",
+      }];
+  }
+  box.innerHTML = list.length
+    ? list.map((c) => {
+        const prods = (c.product_ids || []).map((id) => state.products.find((p) => Number(p.id) === Number(id))).filter(Boolean).slice(0, 12);
+        return `<section class="deal-campaign">${campaignCardHTML(c, "deals")}${prods.length ? `<div class="popular-products deal-products">${prods.map(dealProductCardHTML).join("")}</div>` : ""}</section>`;
+      }).join("")
+    : `<div class="deals-empty"><h2>${escapeHTML(t("No live deals right now."))}</h2><p>${escapeHTML(t("Check back soon, or browse the full catalog."))}</p><a class="btn primary" href="/products"><span>${escapeHTML(t("Browse all products"))}</span><span data-arrow>${arrow()}</span></a></div>`;
+  bindFavoriteButtons(box);
+  if (list.some((c) => c.ends_at)) ensurePromoTicker();
+}
+function renderDealsPage() {
+  document.body.classList.remove("product-route", "account-route", "admin-route");
+  if (state.catSaved) { Object.assign(state, state.catSaved); state.catSaved = null; }
+  $("main").innerHTML = `<section class="deals-page container"><nav class="product-breadcrumb" aria-label="Breadcrumb"><a href="/" data-home data-i18n="Home">Home</a><span>/</span><span data-i18n="Deals">Deals</span></nav><div class="pp-head"><span class="eyebrow">KARDIVO</span><h1 data-i18n="Deals">Deals</h1><p class="section-subtitle" data-i18n="Promotions, discount codes and hand-picked products in one place.">Promotions, discount codes and hand-picked products in one place.</p></div><div id="dealsList" class="deals-list"></div></section>`;
+  translateStatic();
+  fillDeals();
+  document.title = `${t("Deals")} | ${state.settings.store_name || "Kardivo"}`;
+  // refresh in the background when the list is older than a minute, so a new campaign shows up without a full reload
+  if (!state.campaignsAt || Date.now() - state.campaignsAt > 60000) loadCampaigns();
+}
+function ensurePromoTicker() {
+  if (promoTick) return;
+  promoTick = setInterval(() => {
+    const els = $$("[data-promo-end]");
+    if (!els.length) { clearInterval(promoTick); promoTick = null; return; }
+    let ended = false;
+    els.forEach((el) => {
+      const left = Date.parse(el.dataset.promoEnd) - campaignNow();
+      if (!(left > 0)) { ended = true; return; }
+      const clock = el.querySelector("[data-promo-clock]");
+      if (clock) clock.textContent = saleClockText(left);
+    });
+    if (ended) refreshCampaignViews();
+  }, 1000);
+}
+document.addEventListener("click", async (event) => {
+  const b = event.target.closest("[data-copy-code]");
+  if (!b) return;
+  event.preventDefault();
+  const ok = await copyText(b.dataset.copyCode);
+  toast(ok ? `${t("Copied")}: ${b.dataset.copyCode}` : b.dataset.copyCode);
+});
+// ---- admin: Campaigns tab ----
+async function adminCampaigns(main) {
+  const rows = await api("/api/admin/campaigns");
+  const now = Date.now();
+  const status = (c) =>
+    !c.active ? "Paused" : c.starts_at && Date.parse(c.starts_at) > now ? "Scheduled" : c.ends_at && Date.parse(c.ends_at) <= now ? "Ended" : "Live";
+  const when = (v) => new Date(v).toLocaleString();
+  main.innerHTML =
+    adminHeader("Campaigns", "Add campaign", "addCampaign") +
+    `<div class="notice" style="margin-bottom:12px">Every live campaign appears on <b>/deals</b>. Campaigns marked <b>Show on homepage</b> also appear at the top of the homepage (up to 6, lowest order first; with more than one they rotate every 5 seconds). Set a start and end date to schedule a campaign; it hides itself when it ends. The single banner under Settings is only used while there are no live campaigns.</div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th>Campaign</th><th>Status</th><th>Schedule</th><th>Products</th><th>Homepage</th><th>Order</th><th>Actions</th></tr></thead><tbody>${
+      rows.map((c) => `<tr><td><b>${escapeHTML(c.title)}</b>${c.discount_code ? `<br><small>Code: ${escapeHTML(c.discount_code)}</small>` : ""}</td><td>${status(c)}</td><td><small>${c.starts_at ? "From " + escapeHTML(when(c.starts_at)) : "Starts now"}<br>${c.ends_at ? "Until " + escapeHTML(when(c.ends_at)) : "No end date"}</small></td><td>${c.product_ids.length}</td><td>${c.show_on_home ? "Yes" : "No"}</td><td>${c.sort_order}</td><td><button class="mini" data-edit-camp="${c.id}">Edit</button> <button class="mini danger" data-del-camp="${c.id}">Delete</button></td></tr>`).join("") ||
+      `<tr><td colspan="7" class="empty">No campaigns yet. Add one to fill the /deals page.</td></tr>`
+    }</tbody></table></div></div>`;
+  $("#addCampaign").onclick = () => campaignForm();
+  $$("[data-edit-camp]").forEach((b) => (b.onclick = () => campaignForm(rows.find((x) => x.id == b.dataset.editCamp))));
+  $$("[data-del-camp]").forEach((b) => (b.onclick = async () => {
+    if (!confirm("Delete this campaign?")) return;
+    try {
+      await api("/api/admin/campaigns/" + b.dataset.delCamp, { method: "DELETE" });
+      toast("Campaign deleted.");
+      loadCampaigns();
+      renderAdminTab();
+    } catch (e) { toast(e.message); }
+  }));
+}
+async function campaignForm(c = null) {
+  const [prods, discs] = await Promise.all([
+    api("/api/admin/products").catch(() => []),
+    api("/api/admin/discounts").catch(() => []),
+  ]);
+  const picked = new Set((c?.product_ids || []).map(Number));
+  const inp = (id, label, val, extra = "") => `<div class="field"><label>${label}</label><input id="${id}" value="${escapeHTML(val || "")}" ${extra}></div>`;
+  const area = (id, label, val, extra = "") => `<div class="field"><label>${label}</label><textarea id="${id}" rows="3" maxlength="500" ${extra}>${escapeHTML(val || "")}</textarea></div>`;
+  openModal(
+    c ? "Edit campaign" : "Add campaign",
+    `<form id="campForm"><div class="form-grid">${inp("cTitle", "Headline (English)", c?.title, 'required maxlength="160"')}${inp("cTitleAr", "Headline (Arabic)", c?.title_ar, 'dir="rtl" maxlength="160"')}${inp("cEyebrow", "Small label above the headline (English, optional)", c?.eyebrow, 'maxlength="60"')}${inp("cEyebrowAr", "Small label (Arabic, optional)", c?.eyebrow_ar, 'dir="rtl" maxlength="60"')}${area("cBody", "Description (English)", c?.body)}${area("cBodyAr", "Description (Arabic)", c?.body_ar, 'dir="rtl"')}${inp("cCta", "Button text (English, optional)", c?.cta_text, 'maxlength="40"')}${inp("cCtaAr", "Button text (Arabic, optional)", c?.cta_text_ar, 'dir="rtl" maxlength="40"')}${inp("cLink", "Button link (a store path like /products, or https://..., optional)", c?.link, 'placeholder="/products"')}${inp("cImage", "Artwork image URL (https, optional)", c?.image_url, 'placeholder="https://..."')}<div class="field"><label>Promo code to show (optional, shown only while that discount is active)</label><input id="cCode" list="cCodes" value="${escapeHTML(c?.discount_code || "")}"><datalist id="cCodes">${discs.map((d) => `<option value="${escapeHTML(d.code)}"></option>`).join("")}</datalist></div><div class="field"><label>Order (lowest first)</label><input id="cOrder" type="number" value="${c?.sort_order ?? 0}"></div><div class="field"><label>Starts (optional)</label><input id="cStart" type="datetime-local" value="${toLocalInput(c?.starts_at)}"></div><div class="field"><label>Ends (optional, shows a countdown)</label><input id="cEnd" type="datetime-local" value="${toLocalInput(c?.ends_at)}"></div></div>
+    <div class="field" style="margin-top:10px"><label>Products shown under this campaign on /deals</label><input id="cProdFilter" type="search" placeholder="Filter products..."><div id="cProdList" style="max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:8px;margin-top:6px">${
+      prods.map((p) => `<label data-name="${escapeHTML(String(p.name || "").toLowerCase())}" style="display:flex;gap:8px;align-items:center;padding:4px 2px"><input type="checkbox" value="${p.id}" ${picked.has(Number(p.id)) ? "checked" : ""}> ${escapeHTML(p.name)}${Number(p.active) === 0 ? " (hidden)" : ""}</label>`).join("") || "<small>No products yet.</small>"
+    }</div></div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin:12px 0"><label><input id="cHome" type="checkbox" ${c?.show_on_home ? "checked" : ""}> Show on homepage</label><label><input id="cActive" type="checkbox" ${!c || c.active ? "checked" : ""}> Active</label></div>
+    <div class="modal-actions"><button type="button" class="btn ghost" id="cancelCamp">Cancel</button><button class="btn primary">Save campaign</button></div></form>`,
+    true,
+  );
+  $("#cancelCamp").onclick = () => { closeModal(); openAdmin(); };
+  $("#cProdFilter").oninput = (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    $$("#cProdList label").forEach((l) => (l.style.display = !q || (l.dataset.name || "").includes(q) ? "flex" : "none"));
+  };
+  $("#campForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const dt = (id) => ($(id).value ? new Date($(id).value).toISOString() : "");
+    try {
+      await api("/api/admin/campaigns" + (c ? "/" + c.id : ""), {
+        method: c ? "PUT" : "POST",
+        body: JSON.stringify({
+          title: $("#cTitle").value, title_ar: $("#cTitleAr").value, eyebrow: $("#cEyebrow").value, eyebrow_ar: $("#cEyebrowAr").value,
+          body: $("#cBody").value, body_ar: $("#cBodyAr").value, cta_text: $("#cCta").value, cta_text_ar: $("#cCtaAr").value,
+          link: $("#cLink").value, image_url: $("#cImage").value, discount_code: $("#cCode").value,
+          product_ids: $$("#cProdList input:checked").map((i) => Number(i.value)),
+          starts_at: dt("#cStart"), ends_at: dt("#cEnd"), sort_order: $("#cOrder").value,
+          show_on_home: $("#cHome").checked, active: $("#cActive").checked,
+        }),
+      });
+      toast("Campaign saved.");
+      state.admin.tab = "campaigns";
+      loadCampaigns();
+      openAdmin();
+    } catch (err) { toast(err.message); }
+  };
 }
 
 boot();

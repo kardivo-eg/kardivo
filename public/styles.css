@@ -1827,3 +1827,80 @@ html[dir] .footer-social a.soc-btn:hover,html[dir] .footer-social a.soc-btn:focu
 @media(max-width:700px){.wallet-card{grid-column:1/-1;padding:20px}.wallet-stats{gap:8px}.wallet-stat{padding:12px}.wallet-stat b{font-size:19px}}
 @media(prefers-reduced-motion:reduce){.wallet-bar i{transition:none}}
 .nav-actions .wallet-nav-btn svg{width:17px;height:17px;min-width:17px;flex:0 0 17px;display:block}
+
+/* V75: /deals page, promo campaigns, promo code chip */
+.deals-page{padding:34px 0 96px}
+.deals-list{display:grid;gap:44px}
+.deal-campaign .deal-products{margin-top:20px}
+.home-campaigns .campaign-card+.campaign-card{margin-top:18px}
+.home-campaigns-more{display:flex;justify-content:flex-end;margin-top:14px}
+.promo-code{display:inline-flex;align-items:center;gap:10px;margin:12px 12px 4px 0;padding:8px 8px 8px 14px;border-radius:999px;border:1px dashed #a78bfa88;background:#8b5cf61f;color:var(--text);font:inherit;cursor:pointer}
+[dir="rtl"] .promo-code{margin:12px 0 4px 12px;padding:8px 14px 8px 8px}
+.promo-code span{font-size:12px;color:var(--muted)}
+.promo-code b{font-size:15px;letter-spacing:.08em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.promo-code i{font-style:normal;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--purple);color:#fff}
+.promo-code:hover{border-color:#a78bfa;background:#8b5cf633}
+.promo-code:focus-visible{outline:2px solid var(--purple);outline-offset:2px}
+.promo-card .campaign-copy .btn{margin-top:12px}
+.deals-empty{text-align:center;padding:64px 20px;border:1px solid var(--line);border-radius:24px;background:var(--panel)}
+.deals-empty h2{margin:0 0 8px}
+.deals-empty p{margin:0 0 22px;color:var(--muted)}
+.deal-band-link{margin-top:18px}
+.promo-timer{margin-inline-end:10px}
+
+
+/* V76: homepage campaign carousel.
+   Every slide sits in the same grid cell (the slot is as tall as the tallest one, so nothing jumps).
+   Only transform and opacity are animated. */
+.hc-stage{display:grid;touch-action:pan-y}
+.hc-slide{grid-area:1/1;display:flex;min-width:0;opacity:0;visibility:hidden;pointer-events:none;
+  transform:translate3d(var(--in-x,7%),0,0);
+  transition:opacity .55s ease,transform .75s cubic-bezier(.22,.8,.24,1),visibility 0s linear .75s}
+.hc-slide>.campaign-card{flex:1;min-width:0}
+.hc-slide[data-state="active"]{opacity:1;visibility:visible;pointer-events:auto;transform:none;transition-delay:0s,0s,0s;will-change:transform,opacity}
+.hc-slide[data-state="out"]{transform:translate3d(calc(var(--in-x,7%)*-1),0,0) scale(.96);will-change:transform,opacity}
+/* parked slides move without animating; same while the first slide settles in */
+.hc-snap .hc-slide,.hc-snap .hc-img,.hc-still .hc-slide,.hc-still .hc-img{transition:none!important}
+/* the scroll-reveal and backdrop blur from the festival layer would fight the slide animation */
+.hc .campaign-card{opacity:1!important;animation:none!important;backdrop-filter:none;-webkit-backdrop-filter:none}
+
+/* artwork: slow zoom, plus extra travel against the text for a little depth */
+.hc-art{position:relative;overflow:hidden}
+.hc-art:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,var(--art-a) 0%,var(--art-b) 45%,var(--art-c) 100%)}
+.hc-img{position:absolute;inset:-3% -10%;background-position:center 45%;background-size:cover;transform:scale(1.04);
+  translate:calc(var(--in-x,7%)*1.5) 0;transition:translate 1s cubic-bezier(.22,.8,.24,1)}
+.hc-slide[data-state="active"] .hc-img{translate:0 0;animation:hcKen 8s cubic-bezier(.25,.6,.35,1) var(--kb-delay,0s) forwards}
+.hc-slide[data-state="out"] .hc-img{translate:calc(var(--in-x,7%)*-1.5) 0;animation:hcKen 8s cubic-bezier(.25,.6,.35,1) var(--kb-delay,0s) forwards}
+.hc.is-paused .hc-img{animation-play-state:paused}
+@keyframes hcKen{from{transform:scale(1.04)}to{transform:scale(1.13)}}
+
+/* dots with a progress bar on the active one, and arrows (desktop only) */
+.hc-bar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;margin-top:10px;min-height:32px}
+.hc-controls{grid-column:2;display:flex;align-items:center;gap:4px}
+.hc-more{grid-column:3;justify-self:end}
+.hc-dots{display:flex;align-items:center}
+.hc-dot{display:grid;place-items:center;width:30px;height:32px;padding:0;border:0;background:none;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.hc-dot-bar{position:relative;display:block;width:22px;height:4px;border-radius:4px;overflow:hidden;background:color-mix(in srgb,var(--muted) 38%,transparent);transition:background-color .3s}
+.hc-dot:hover .hc-dot-bar{background:color-mix(in srgb,var(--muted) 62%,transparent)}
+.hc-dot[aria-current="true"] .hc-dot-bar{background:color-mix(in srgb,var(--accent) 26%,transparent)}
+.hc-fill{position:absolute;inset:0;display:block;border-radius:inherit;background:linear-gradient(90deg,var(--accent-2),var(--accent));transform:scaleX(0);transform-origin:0 50%;opacity:0}
+[dir="rtl"] .hc-fill{transform-origin:100% 50%}
+.hc-dot[aria-current="true"] .hc-fill{opacity:1}
+.hc-arrow{display:grid;place-items:center;width:32px;height:32px;padding:0;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;transition:color .2s,border-color .2s,background-color .2s}
+.hc-arrow:hover{color:var(--text);border-color:color-mix(in srgb,var(--accent) 60%,transparent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+[dir="rtl"] .hc-arrow svg{transform:scaleX(-1)}
+.hc-dot:focus-visible,.hc-arrow:focus-visible{outline:2px solid var(--purple);outline-offset:2px}
+@media(max-width:700px),(pointer:coarse){
+  .hc-arrow{display:none}
+  .hc-dot{height:44px}
+  .hc-bar{grid-template-columns:1fr}
+  .hc-controls,.hc-more{grid-column:1}
+  .hc-controls{justify-self:center}
+}
+
+/* reduce motion: no sliding, zooming or parallax, just a plain cross-fade */
+@media(prefers-reduced-motion:reduce){
+  .hc-slide,.hc-slide[data-state="out"]{transform:none;transition:opacity .45s ease,visibility 0s linear .45s}
+  .hc-slide[data-state="active"]{transition-delay:0s,0s,0s}
+  .hc-img,.hc-slide[data-state="active"] .hc-img,.hc-slide[data-state="out"] .hc-img{animation:none;translate:none;transform:none;transition:none}
+}
