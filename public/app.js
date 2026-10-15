@@ -1668,36 +1668,36 @@ function kdSamplePalette(imageUrl) {
       try {
         const canvas=document.createElement("canvas"),ctx=canvas.getContext("2d",{willReadFrequently:true});
         if(!ctx) throw new Error("Canvas unavailable");
-        const size=64;canvas.width=size;canvas.height=size;ctx.drawImage(img,0,0,size,size);
+        const size=72;canvas.width=size;canvas.height=size;ctx.drawImage(img,0,0,size,size);
         const pixels=ctx.getImageData(0,0,size,size).data,bins=new Map();let valid=0,chromaticPixels=0;
         for(let i=0;i<pixels.length;i+=4){
-          if(pixels[i+3]<150)continue;
-          const rgb=[pixels[i],pixels[i+1],pixels[i+2]],mx=Math.max(...rgb),mn=Math.min(...rgb),sat=mx?(mx-mn)/mx:0;
-          valid++;if(sat>=.16)chromaticPixels++;
-          // Finer quantization keeps earthy greens/browns distinct without making noise dominant.
-          const q=rgb.map(v=>Math.min(255,Math.round(v/16)*16)),key=q.join(",");
+          if(pixels[i+3]<100)continue;
+          const rgb=[pixels[i],pixels[i+1],pixels[i+2]],mx=Math.max(...rgb),mn=Math.min(...rgb),sat=mx?((mx-mn)/mx):0;
+          valid++;if(sat>=.10)chromaticPixels++;
+          // Quantize gently: preserve actual hues, including muted greens, browns and reds.
+          const q=rgb.map(v=>Math.min(255,Math.round(v/12)*12)),key=q.join(",");
           const b=bins.get(key)||{rgb:q,count:0,satSum:0};b.count++;b.satSum+=sat;bins.set(key,b);
         }
-        if(!valid)throw new Error("No opaque image pixels");
+        if(!valid)throw new Error("No readable pixels");
         const all=[...bins.values()].map(b=>({...b,sat:b.satSum/b.count}));
-        // Ignore near-black/near-white neutrals whenever the image contains a meaningful
-        // amount of color. For truly monochrome art, neutrals remain eligible by design.
-        const chromatic=all.filter(b=>b.sat>=.16);
-        const useChromatic=chromaticPixels/valid>=.035 && chromatic.length>0;
+        // If even a small part of the artwork has real color, prefer those sampled colors.
+        // Do not discard the whole colorful palette because its cover also contains neutrals.
+        const chromatic=all.filter(b=>b.sat>=.10);
+        const useChromatic=chromaticPixels/valid>=.01&&chromatic.length>0;
         const candidates=(useChromatic?chromatic:all).map(b=>{
           const [r,g,bl]=b.rgb,lum=(.2126*r+.7152*g+.0722*bl)/255;
-          const neutralPenalty=useChromatic&&b.sat<.16?.02:1;
-          const contrastBonus=lum>.08&&lum<.92?1.12:1;
-          return {...b,score:b.count*(1+b.sat*2.25)*contrastBonus*neutralPenalty};
+          const contrast=(lum>.06&&lum<.94)?1.12:1;
+          return {...b,score:b.count*(1+Math.min(1,b.sat)*1.35)*contrast};
         }).sort((a,b)=>b.score-a.score);
         const chosen=[];
-        for(const c of candidates){if(!chosen.length||chosen.every(x=>kdRgbDistance(x.rgb,c.rgb)>48))chosen.push(c);if(chosen.length===3)break;}
-        if(!chosen.length)throw new Error("No usable palette");
+        for(const c of candidates){
+          if(!chosen.length||chosen.every(x=>kdRgbDistance(x.rgb,c.rgb)>32))chosen.push(c);
+          if(chosen.length===3)break;
+        }
+        if(!chosen.length)throw new Error("No palette colors");
         const first=chosen[0].rgb;
-        // For colorful artwork, synthesize close color harmonies rather than introducing
-        // black/white. For monochrome art, retain the sampled neutral range.
-        const second=chosen[1]?.rgb||(useChromatic?first.map(v=>v*.78+Math.max(...first)*.22):first.map(v=>v*.72+255*.28));
-        const third=chosen[2]?.rgb||(useChromatic?first.map(v=>v*.72):first.map(v=>v*.55));
+        const second=chosen[1]?.rgb || (useChromatic ? first.map(v=>Math.min(255,v*.78+24)) : first.map(v=>v*.72+255*.28));
+        const third=chosen[2]?.rgb || (useChromatic ? first.map(v=>v*.62) : first.map(v=>v*.55));
         resolve({primary:kdHex(first),secondary:kdHex(second),tertiary:kdHex(third)});
       }catch{resolve(null);}
     };
