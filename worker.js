@@ -1019,6 +1019,14 @@ async function fetchImageForAi(env, req, imageUrl) {
     return null;
   }
 }
+// Google uses 429 both for "too many requests per minute" and for "this key has no quota for this model" (limit: 0). Say which one it is.
+function geminiQuotaMsg(msg, model) {
+  const m = String(msg || "");
+  if (/limit:\s*0\b/i.test(m) || /free[_ ]tier/i.test(m))
+    return `Google says this key has no free quota for "${model}" (${m.slice(0, 160)}). Pick another model in Settings > AI auto-fill (try gemini-2.5-flash), or enable billing on the key's project.`;
+  if (/per\s*day|daily|PerDay/i.test(m)) return `Gemini daily quota used up for "${model}". ${m.slice(0, 140)}`;
+  return `Gemini rate limit: ${m.slice(0, 200) || "wait a minute and try again."}`;
+}
 const aiText = (v, n) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
 async function geminiProduct(env, req, cfg, b) {
   const cats = (Array.isArray(b.categories) ? b.categories : []).map((c) => aiText(c, 60)).filter(Boolean).slice(0, 40);
@@ -1074,8 +1082,8 @@ async function geminiProduct(env, req, cfg, b) {
   let res, searched = true;
   try {
     res = await call(true);
-    if (res.status === 400) {
-      // Some keys/models do not allow the search tool. Try again without it rather than failing.
+    if (res.status === 400 || res.status === 429) {
+      // Some keys/models do not allow the search tool, and search grounding has its own quota. Try again without it rather than failing.
       const retry = await call(false);
       if (retry.ok) { res = retry; searched = false; }
     }
@@ -1085,7 +1093,7 @@ async function geminiProduct(env, req, cfg, b) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = String(data?.error?.message || "");
-    if (res.status === 429) return { error: "Gemini rate limit reached. Wait a minute and try again.", status: 429 };
+    if (res.status === 429) return { error: geminiQuotaMsg(msg, cfg.model), status: 429 };
     if (res.status === 404) return { error: `Gemini does not know the model "${cfg.model}". Change it in Settings > AI auto-fill.`, status: 400 };
     if (/api key/i.test(msg) || res.status === 401 || res.status === 403)
       return { error: "Gemini rejected the API key. Check it in Settings > AI auto-fill.", status: 400 };
@@ -1147,7 +1155,7 @@ async function geminiReply(env, cfg, orderId) {
     return { error: "Could not reach Gemini.", status: 504 };
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) return { error: res.status === 429 ? "Gemini rate limit reached. Try again in a minute." : `Gemini error: ${String(data?.error?.message || res.status).slice(0, 160)}`, status: res.status === 429 ? 429 : 502 };
+  if (!res.ok) return { error: res.status === 429 ? geminiQuotaMsg(String(data?.error?.message || ""), cfg.model) : `Gemini error: ${String(data?.error?.message || res.status).slice(0, 160)}`, status: res.status === 429 ? 429 : 502 };
   const text = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("").trim().replace(/^["“]|["”]$/g, "");
   if (!text) return { error: "Gemini returned nothing. Try again.", status: 502 };
   return { draft: text.slice(0, 1000) };
@@ -1176,7 +1184,7 @@ async function geminiGenerate(cfg, model, body, ms = 50000) {
 }
 function geminiHttpError(res, data, model) {
   const msg = String(data?.error?.message || "");
-  if (res.status === 429) return { error: "Gemini rate limit reached. Wait a minute and try again.", status: 429 };
+  if (res.status === 429) return { error: geminiQuotaMsg(msg, model), status: 429 };
   if (res.status === 404) return { error: `Gemini does not know the model "${model}". Change it in Settings > AI auto-fill.`, status: 400 };
   if (/api key/i.test(msg) || res.status === 401 || res.status === 403)
     return { error: "Gemini rejected the API key, or this key cannot use that model. Check it in Settings > AI auto-fill.", status: 400 };
