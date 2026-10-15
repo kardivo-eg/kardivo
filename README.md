@@ -314,3 +314,26 @@ No DROP/TRUNCATE/reset/mass migration is included. Existing `schema.sql` and `wr
 - Admin > product form > "Gallery images": add links or upload several files, reorder, remove. Uploads are stored in R2 when you press Save product (`POST /api/admin/products/:id/image?gallery=1` returns the URL without changing the cover).
 - Saves validate links: http(s) URLs or our own `/media/product/...` URLs, with the key URL-decoded first, so both `products%2F1%2Fid.png` and `products/1/id.png` are accepted. An admin page that doesn't send `gallery` leaves the existing gallery alone; `gallery: []` clears it.
 - Storefront: swipeable gallery on phones (dots), thumbnails and arrows on desktop, tap/click opens a zoom viewer (pinch, double-tap, wheel, drag to pan, swipe or arrow keys). Product JSON-LD lists the cover plus gallery images for Google.
+
+
+## V59 festival layer
+
+Visual only (no order, price, payment or API code touched). CSS is the last block of `public/styles.css` ("V59 FESTIVAL LAYER"); JS is the last block of `public/app.js`.
+
+- **Backdrop**: three slow purple/fuchsia/indigo glow blobs, a soft cursor glow (mouse only), a sparse particle canvas and a gradient scroll-progress bar.
+- **Hero**: breathing glow plus a slowly rotating light ring behind the frame, a shimmering headline, twinkling stars, a string of festival lights, and a ticker of your category names under the trust strip (built from real categories, so it follows Arabic/English).
+- **Category cards**: one accent colour each, slow glow, cursor spotlight, travelling gradient rim and soft 3D tilt on hover.
+- **Featured picks**: own particle stage and breathing glow, cards float and carry a slowly circling rim.
+- **Everywhere**: header light line, twinkling eyebrows, scroll reveal, button shimmer, card/step/deal hover glow, footer gradient line, dialog and toast glow. Works in dark and light themes and in RTL.
+- **Accessibility/performance**: `prefers-reduced-motion` and Data Saver turn off canvases, cursor glow, tilt and reveal; canvases pause when off-screen or the tab is hidden and use fewer particles on phones and low-end devices.
+- **Tuning**: glow strength is `--fest-glow` (1 dark, .55 light); colours are `--fest-a/b/c`; particle counts are the `dens`/`max` values in `decorate()`. To remove everything, delete the two V59 blocks.
+- Asset versions bumped to `styles.css?v=45` and `app.js?v=52` so browsers fetch the new files.
+
+## V60 app mode (mobile)
+
+- `index.html` viewport is locked (`maximum-scale=1, user-scalable=no, viewport-fit=cover`). iOS Safari ignores that for pinch, so `app.js` also cancels `gesturestart` and two-finger `touchmove` (not inside the photo lightbox, which keeps its own pinch zoom). Double-tap zoom is off via `touch-action:manipulation`.
+- No sideways scrolling: `overflow-x` is clipped on `html`/`body`, `overscroll-behavior-x:none`, and a scroll guard snaps back if anything drifts. Pull-to-refresh and edge bounce chaining are off (`overscroll-behavior-y:contain`).
+- Safe areas: notch/home-indicator padding for the header, progress bar, bottom tab bar and dialogs.
+- Phones (<=700px): dialogs are bottom sheets, category and filter chips are single-row swipe lists, 44px touch targets, 16px inputs (no focus zoom), full-width hero buttons, press feedback on touch, no text selection or long-press callout on UI chrome (inputs and delivered codes stay selectable).
+- To allow zoom again, restore the old viewport meta and delete the V60 blocks in `styles.css` and `app.js`.
+- Asset versions: `styles.css?v=46`, `app.js?v=53`.

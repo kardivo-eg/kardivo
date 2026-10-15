@@ -5276,3 +5276,261 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("#bundleBuilderBtn")) { openBundleBuilder(); return; }
 });
 window.addEventListener("DOMContentLoaded", () => { renderAbandonedCartNudge(); });
+
+
+// V59 festival layer: glow, particles, string lights, category ticker, card spotlight, scroll reveal.
+// Purely visual. It never touches orders, prices, payments or API calls, and any failure just leaves the plain site.
+(() => {
+  if (window.__kardivoFest) return;
+  window.__kardivoFest = true;
+  const doc = document, root = doc.documentElement;
+  const mq = (q) => { try { return matchMedia(q).matches; } catch { return false; } };
+  const reduce = mq("(prefers-reduced-motion: reduce)");
+  const saver = !!(navigator.connection && navigator.connection.saveData);
+  const still = reduce || saver; // no canvas, cursor glow or tilt
+  const fine = mq("(hover: hover) and (pointer: fine)");
+  const weak = innerWidth < 700 || (navigator.hardwareConcurrency || 4) <= 2;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const CARD_SEL = ".category-card,.popular-product";
+  const REVEAL = ".category-card,.popular-product-wrap,.section-head,.steps article,.deal-band,.campaign-card,.ts-item,.fest-marquee";
+
+  // ---------- page-wide backdrop ----------
+  const bg = doc.createElement("div");
+  bg.className = "fest-bg";
+  bg.setAttribute("aria-hidden", "true");
+  bg.innerHTML = '<i class="fest-blob fb1"></i><i class="fest-blob fb2"></i><i class="fest-blob fb3"></i>' +
+    (fine && !still ? '<i class="fest-cursor"></i>' : "") + (still ? "" : '<canvas class="fest-canvas"></canvas>');
+  doc.body.prepend(bg);
+  const prog = doc.createElement("div");
+  prog.className = "fest-progress";
+  prog.setAttribute("aria-hidden", "true");
+  doc.body.append(prog);
+
+  // ---------- particles: one shared loop for every canvas ----------
+  const PAL = { dark: [[196, 168, 255], [232, 121, 249], [129, 140, 248], [253, 224, 71]], light: [[109, 63, 232], [168, 40, 200], [79, 70, 229], [176, 110, 0]] };
+  const PICK = [0, 0, 0, 0, 0, 1, 1, 2, 2, 3];
+  const engines = new Set();
+  let raf = 0, last = 0;
+  function spawn(e, anywhere) {
+    const big = Math.random() < e.star;
+    return { x: Math.random() * e.w, y: anywhere ? Math.random() * e.h : e.h + 10, r: big ? rnd(1.4, 2.6) : rnd(0.7, 2), star: big, vx: rnd(-0.07, 0.07), vy: rnd(0.05, 0.2), a: rnd(0.4, 0.95), t: rnd(0, 6.28), s: rnd(0.015, 0.04), c: PICK[(Math.random() * PICK.length) | 0] };
+  }
+  function addEngine(c, opts) {
+    if (c.__fe) return;
+    const ctx = c.getContext && c.getContext("2d");
+    if (!ctx) return;
+    const e = (c.__fe = { c, ctx, w: 1, h: 1, ps: [], visible: false, dens: opts.dens, max: opts.max, star: opts.star });
+    e.size = () => {
+      const w = c.clientWidth, h = c.clientHeight;
+      if (w < 2 || h < 2) { e.w = 1; e.h = 1; e.ps = []; return; }
+      const dpr = Math.min(devicePixelRatio || 1, 1.5);
+      c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      e.w = w; e.h = h;
+      const n = Math.round(Math.max(5, Math.min(e.max, (w * h) / e.dens)) * (weak ? 0.5 : 1));
+      e.ps = Array.from({ length: n }, () => spawn(e, true));
+    };
+    e.io = new IntersectionObserver(([en]) => { e.visible = en.isIntersecting; if (e.visible) kick(); });
+    e.ro = new ResizeObserver(() => { e.size(); kick(); });
+    e.io.observe(c); e.ro.observe(c);
+    engines.add(e);
+    e.size();
+  }
+  function draw(e, k) {
+    const { ctx, w, h } = e, light = root.dataset.theme === "light", pal = PAL[light ? "light" : "dark"], gain = light ? 0.8 : 1;
+    ctx.clearRect(0, 0, w, h);
+    ctx.globalCompositeOperation = light ? "source-over" : "lighter";
+    for (const p of e.ps) {
+      p.y -= p.vy * k; p.x += p.vx * k; p.t += p.s * k;
+      if (p.y < -12) Object.assign(p, spawn(e, false));
+      if (p.x < -12) p.x = w + 12; else if (p.x > w + 12) p.x = -12;
+      const al = p.a * (0.25 + 0.75 * (0.5 + 0.5 * Math.sin(p.t))) * gain, col = pal[p.c];
+      if (al < 0.03) continue;
+      const rgb = col[0] + "," + col[1] + "," + col[2];
+      if (p.star || p.r > 1.6) { ctx.fillStyle = "rgba(" + rgb + "," + (al * 0.16).toFixed(3) + ")"; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 3.4, 0, 6.283); ctx.fill(); }
+      ctx.fillStyle = "rgba(" + rgb + "," + al.toFixed(3) + ")";
+      ctx.beginPath();
+      if (p.star) {
+        const R = p.r * 2.8, q = R * 0.2;
+        ctx.moveTo(p.x, p.y - R); ctx.quadraticCurveTo(p.x + q, p.y - q, p.x + R, p.y); ctx.quadraticCurveTo(p.x + q, p.y + q, p.x, p.y + R);
+        ctx.quadraticCurveTo(p.x - q, p.y + q, p.x - R, p.y); ctx.quadraticCurveTo(p.x - q, p.y - q, p.x, p.y - R);
+      } else ctx.arc(p.x, p.y, p.r, 0, 6.283);
+      ctx.fill();
+    }
+  }
+  function loop(now) {
+    raf = 0;
+    if (doc.hidden) return;
+    let live = false;
+    for (const e of engines) {
+      if (!e.c.isConnected) { e.io.disconnect(); e.ro.disconnect(); engines.delete(e); continue; }
+      if (e.visible) live = true;
+    }
+    if (!live) return;
+    raf = requestAnimationFrame(loop);
+    if (now - last < 33) return;
+    const k = Math.min((now - last) / 33, 3);
+    last = now;
+    for (const e of engines) if (e.visible && e.ps.length) draw(e, k);
+  }
+  function kick() { if (!raf && !doc.hidden && engines.size) raf = requestAnimationFrame(loop); }
+  doc.addEventListener("visibilitychange", kick);
+  const globalCanvas = bg.querySelector(".fest-canvas");
+  if (globalCanvas) addEngine(globalCanvas, { dens: 52000, max: 34, star: 0.12 });
+
+  // ---------- pointer: cursor glow, card spotlight and tilt ----------
+  if (fine && !still) {
+    const cursor = bg.querySelector(".fest-cursor");
+    let px = 0, py = 0, cx = 0, cy = 0, pending = false, target = null;
+    const frame = () => {
+      pending = false;
+      cx += (px - cx) * 0.2; cy += (py - cy) * 0.2;
+      if (cursor) cursor.style.transform = "translate3d(" + cx.toFixed(1) + "px," + cy.toFixed(1) + "px,0)";
+      const card = target && target.closest ? target.closest(CARD_SEL) : null;
+      if (card) {
+        const r = card.getBoundingClientRect(), x = px - r.left, y = py - r.top;
+        card.style.setProperty("--mx", x.toFixed(0) + "px");
+        card.style.setProperty("--my", y.toFixed(0) + "px");
+        card.style.setProperty("--fest-ry", (((x / r.width) - 0.5) * 7).toFixed(2) + "deg");
+        card.style.setProperty("--fest-rx", ((0.5 - (y / r.height)) * 7).toFixed(2) + "deg");
+      }
+      if (Math.abs(px - cx) > 0.5 || Math.abs(py - cy) > 0.5) { pending = true; requestAnimationFrame(frame); }
+    };
+    doc.addEventListener("pointermove", (ev) => {
+      if (ev.pointerType && ev.pointerType !== "mouse") return;
+      if (!bg.classList.contains("has-pointer")) { cx = ev.clientX; cy = ev.clientY; bg.classList.add("has-pointer"); }
+      px = ev.clientX; py = ev.clientY; target = ev.target;
+      if (!pending) { pending = true; requestAnimationFrame(frame); }
+    }, { passive: true });
+    doc.addEventListener("pointerout", (ev) => {
+      const card = ev.target.closest && ev.target.closest(CARD_SEL);
+      if (card && !card.contains(ev.relatedTarget)) { card.style.removeProperty("--fest-rx"); card.style.removeProperty("--fest-ry"); }
+    }, { passive: true });
+  }
+
+  // ---------- scroll progress ----------
+  let sp = 0;
+  const onScroll = () => {
+    if (sp) return;
+    sp = requestAnimationFrame(() => {
+      sp = 0;
+      const h = root.scrollHeight - innerHeight;
+      prog.style.transform = "scaleX(" + (h > 0 ? Math.min(1, Math.max(0, scrollY / h)) : 0).toFixed(4) + ")";
+    });
+  };
+  addEventListener("scroll", onScroll, { passive: true });
+  addEventListener("resize", onScroll, { passive: true });
+
+  // ---------- scroll reveal ----------
+  let rio = null;
+  if (!still && "IntersectionObserver" in window) {
+    rio = new IntersectionObserver((es) => es.forEach((en) => { if (en.isIntersecting) { en.target.classList.add("fest-in"); rio.unobserve(en.target); } }), { rootMargin: "0px 0px -5% 0px", threshold: 0.06 });
+    root.classList.add("fest-ready");
+  }
+  function reveal() {
+    if (!rio) return;
+    doc.querySelectorAll(REVEAL).forEach((el) => {
+      if (el.__fr) return;
+      el.__fr = 1;
+      const i = el.parentElement ? Array.prototype.indexOf.call(el.parentElement.children, el) : 0;
+      el.style.setProperty("--fi", Math.min(i, 8));
+      rio.observe(el);
+    });
+  }
+
+  // ---------- hero pieces ----------
+  const COLS = ["139,92,246", "217,70,239", "129,140,248", "253,224,71", "192,132,252", "244,114,182"];
+  function buildLights() {
+    const N = 28, W = 1000, H = 46, swags = 3;
+    const y = (x) => 5 + 20 * Math.sin(Math.PI * ((x * swags) % 1));
+    let d = "", bulbs = "";
+    for (let i = 0; i <= 120; i++) { const x = i / 120; d += (i ? "L" : "M") + (x * W).toFixed(1) + " " + y(x).toFixed(1) + " "; }
+    for (let i = 0; i < N; i++) {
+      const x = (i + 0.5) / N;
+      bulbs += '<i class="fest-bulb" style="left:' + (x * 100).toFixed(2) + "%;top:" + (y(x) + 1).toFixed(1) + "px;--c:" + COLS[i % COLS.length] + ";--d:" + (-((i * 0.53) % 3.6)).toFixed(2) + 's"></i>';
+    }
+    const el = doc.createElement("div");
+    el.className = "fest-lights";
+    el.setAttribute("aria-hidden", "true");
+    el.innerHTML = '<div class="fest-lights-in"><svg class="fest-wire" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none"><path d="' + d + '" fill="none" stroke="currentColor" stroke-width="1" vector-effect="non-scaling-stroke"/></svg>' + bulbs + "</div>";
+    return el;
+  }
+  const star = (pos, s, c, t, d) => '<svg class="fest-spark" style="' + pos + ";--s:" + s + "px;--c:" + c + ";--t:" + t + "s;--d:" + d + 's" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0c1 8 4 11 12 12-8 1-11 4-12 12-1-8-4-11-12-12 8-1 11-4 12-12z"/></svg>';
+  const SPARKS = star("top:2%;left:-1%", 22, "196,168,255", 4.2, "0s") + star("top:20%;right:-2%", 14, "244,114,182", 3.6, "-1.4s") + star("bottom:14%;left:3%", 16, "253,224,71", 5, "-2.6s") + star("bottom:4%;right:12%", 20, "232,121,249", 4.6, "-0.8s") + star("top:-3%;right:34%", 12, "129,140,248", 3.9, "-3.1s");
+
+  function marqueeNames() {
+    try {
+      return state.categories.filter((c) => state.products.some((p) => String(p.category_id) === String(c.id))).map((c) => cName(c)).filter(Boolean);
+    } catch { return []; }
+  }
+  function syncMarquee(hero) {
+    const names = marqueeNames(), sig = names.join("|") + "|" + root.lang;
+    let m = doc.querySelector(".fest-marquee");
+    if (names.length < 2) { if (m) m.remove(); return; }
+    if (m && m.dataset.sig === sig) return;
+    let list = names.slice();
+    while (list.length < 10) list = list.concat(names);
+    const esc = typeof escapeHTML === "function" ? escapeHTML : (s) => String(s).replace(/[&<>"']/g, "");
+    const set = '<div class="fest-set">' + list.map((n) => "<span>" + esc(n) + "</span><b>\u2726</b>").join("") + "</div>";
+    if (!m) {
+      m = doc.createElement("div");
+      m.className = "fest-marquee";
+      m.setAttribute("aria-hidden", "true");
+      const anchor = doc.querySelector(".trust-strip") || hero;
+      anchor.after(m);
+    }
+    m.dataset.sig = sig;
+    m.innerHTML = '<div class="fest-track">' + set + set + "</div>";
+  }
+
+  // ---------- keep everything attached as the app re-renders ----------
+  function decorate() {
+    doc.querySelectorAll(CARD_SEL).forEach((el) => {
+      if (el.dataset.fd) return;
+      el.dataset.fd = "1";
+      el.insertAdjacentHTML("beforeend", '<i class="fest-spot" aria-hidden="true"></i><i class="fest-rim" aria-hidden="true"></i>');
+    });
+    const hero = doc.querySelector("section.hero");
+    if (hero) {
+      if (!(hero.previousElementSibling && hero.previousElementSibling.classList.contains("fest-lights"))) hero.before(buildLights());
+      const vis = hero.querySelector(".hero-visual");
+      if (vis && !vis.querySelector(".fest-spark")) vis.insertAdjacentHTML("beforeend", SPARKS);
+      syncMarquee(hero);
+    }
+    if (!still) {
+      [["#popularSection", { dens: 8000, max: 50, star: 0.26 }], ["#categoryDiscovery", { dens: 15000, max: 26, star: 0.18 }]].forEach(([sel, o]) => {
+        const sec = doc.querySelector(sel);
+        if (!sec || sec.querySelector(".fest-section-canvas")) return;
+        const c = doc.createElement("canvas");
+        c.className = "fest-section-canvas";
+        c.setAttribute("aria-hidden", "true");
+        sec.prepend(c);
+        addEngine(c, o);
+      });
+    }
+    reveal();
+  }
+  let timer = 0;
+  const schedule = () => { if (timer) return; timer = setTimeout(() => { timer = 0; try { decorate(); } catch (e) { /* visual only */ } }, 80); };
+  new MutationObserver((muts) => {
+    for (const m of muts) for (const n of m.addedNodes) if (n.nodeType === 1) { schedule(); return; }
+  }).observe(doc.body, { childList: true, subtree: true });
+  try { decorate(); } catch (e) { root.classList.remove("fest-ready"); }
+  onScroll();
+  kick();
+})();
+
+
+// V60 app mode: stop pinch zoom and double-tap zoom (iOS Safari ignores user-scalable=no) and any sideways page drift.
+(() => {
+  if (window.__kardivoApp) return;
+  window.__kardivoApp = true;
+  const inLightbox = (t) => !!(t && t.closest && t.closest(".zlb"));
+  ["gesturestart", "gesturechange", "gestureend"].forEach((n) =>
+    document.addEventListener(n, (e) => { if (!inLightbox(e.target)) e.preventDefault(); }, { passive: false }));
+  document.addEventListener("touchmove", (e) => {
+    if (e.touches.length > 1 && !inLightbox(e.target)) e.preventDefault();
+  }, { passive: false });
+  // belt and braces: if anything ever pushes the page sideways, snap back
+  addEventListener("scroll", () => { if (scrollX) scrollTo(0, scrollY); }, { passive: true });
+})();
