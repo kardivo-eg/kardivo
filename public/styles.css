@@ -1521,7 +1521,8 @@ html[dir="rtl"] .swipe-bg{flex-direction:row-reverse}
 .product-card.has-product-accent,
 .popular-product-wrap.has-product-accent,
 .collection-product.has-product-accent,
-.mini-card-wrap.has-product-accent {
+.mini-card-wrap.has-product-accent,
+.hero-product-tile.has-product-accent {
   position: relative;
   isolation: isolate;
   background: linear-gradient(145deg, color-mix(in srgb,var(--product-accent) 11%,var(--panel,#17141f)), color-mix(in srgb,var(--product-accent-2) 7%,var(--panel2,#100e16)) 54%, color-mix(in srgb,var(--product-accent-3) 8%,var(--panel,#17141f)));
@@ -1533,6 +1534,7 @@ html[dir="rtl"] .swipe-bg{flex-direction:row-reverse}
 .popular-product-wrap.has-product-accent::before,
 .collection-product.has-product-accent::before,
 .mini-card-wrap.has-product-accent::before,
+.hero-product-tile.has-product-accent::before,
 .cart-page-item.has-product-accent::before,
 .saved-later-item.has-product-accent::before,
 .bundle-card.has-product-accent::before {
@@ -1543,16 +1545,18 @@ html[dir="rtl"] .swipe-bg{flex-direction:row-reverse}
 .product-card.has-product-accent:hover,
 .popular-product-wrap.has-product-accent:hover,
 .collection-product.has-product-accent:hover,
-.mini-card-wrap.has-product-accent:hover {
+.mini-card-wrap.has-product-accent:hover,
+.hero-product-tile.has-product-accent:hover {
   border-color:color-mix(in srgb,var(--product-accent) 72%,var(--line,#34303e));
   box-shadow:0 15px 34px -15px var(--product-accent-glow),0 0 25px -13px var(--product-accent-2),inset 0 0 0 1px color-mix(in srgb,var(--product-accent) 22%,transparent);
   transform:translateY(-2px);
 }
-.product-card.has-product-accent:hover::before,.popular-product-wrap.has-product-accent:hover::before,.collection-product.has-product-accent:hover::before,.mini-card-wrap.has-product-accent:hover::before{opacity:.9;filter:blur(23px)}
+.product-card.has-product-accent:hover::before,.popular-product-wrap.has-product-accent:hover::before,.collection-product.has-product-accent:hover::before,.mini-card-wrap.has-product-accent:hover::before,.hero-product-tile.has-product-accent:hover::before{opacity:.9;filter:blur(23px)}
 .has-product-accent .product-image,
 .has-product-accent .popular-product-image,
 .has-product-accent .collection-product-image,
 .has-product-accent .mini-img,
+.has-product-accent .hero-product-art,
 .has-product-accent .cart-page-image,
 .has-product-accent .saved-later-img,
 .has-product-accent .bundle-img,
@@ -1563,6 +1567,7 @@ html[dir="rtl"] .swipe-bg{flex-direction:row-reverse}
 .has-product-accent .popular-product-image img,
 .has-product-accent .collection-product-image img,
 .has-product-accent .mini-img img,
+.has-product-accent .hero-product-art img,
 .has-product-accent .cart-page-image img,
 .has-product-accent .saved-later-img img,
 .has-product-accent .bundle-img img,

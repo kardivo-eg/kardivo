@@ -1260,7 +1260,7 @@ function renderHeroShowcase() {
   if (!picks.length) return;
   visual.classList.add("hero-visual-products");
   visual.querySelector(".hero-product-stack")?.remove();
-  visual.insertAdjacentHTML("beforeend", `<div class="hero-product-stack" aria-label="Featured products">${picks.map((p,i) => `<a class="hero-product-tile hero-product-tile-${i+1}" href="/${encodeURIComponent(p.slug || p.id)}"><span class="hero-product-art">${stockImg(p.image_url, pName(p), stockArtFor(p))}</span><span class="hero-product-tile-copy"><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || t("Featured"))}</small><b>${escapeHTML(pName(p))}</b><strong>${money(Number(p.price || 0))}</strong></span></a>`).join("")}</div>`);
+  visual.insertAdjacentHTML("beforeend", `<div class="hero-product-stack" aria-label="Featured products">${picks.map((p,i) => `<a class="hero-product-tile hero-product-tile-${i+1}" ${kdAccentMarkup(p)} href="/${encodeURIComponent(p.slug || p.id)}"><span class="hero-product-art">${stockImg(p.image_url, pName(p), stockArtFor(p))}</span><span class="hero-product-tile-copy"><small>${escapeHTML(cName({name:p.category_name,name_ar:p.category_name_ar}) || t("Featured"))}</small><b>${escapeHTML(pName(p))}</b><strong>${money(Number(p.price || 0))}</strong></span></a>`).join("")}</div>`);
 }
 
 function productAvailable(p) {
@@ -1665,6 +1665,8 @@ function kdSamplePalette(imageUrl) {
         for(let i=0;i<pixels.length;i+=4){
           const a=pixels[i+3]; if(a<150) continue;
           const rgb=[pixels[i],pixels[i+1],pixels[i+2]], max=Math.max(...rgb), min=Math.min(...rgb), sat=max ? (max-min)/max : 0;
+          // Ignore pure black/white and near-neutral pixels when real artwork colours exist.
+          // Keep them in a secondary histogram only for genuinely monochrome artwork.
           if(max>248 && min>228) continue;
           if(max<22) continue;
           const q=rgb.map(v=>Math.min(255,Math.round(v/24)*24)), key=q.join(",");
@@ -1672,7 +1674,12 @@ function kdSamplePalette(imageUrl) {
           const weight=1 + sat*1.8 + (lum>.12 && lum<.88 ? .25 : 0);
           const b=bins.get(key)||{rgb:q,count:0,weight:0,sat:0}; b.count++; b.weight+=weight; b.sat+=sat; bins.set(key,b);
         }
-        const ranked=[...bins.values()].map(b=>({...b,score:b.weight*(.62+Math.min(1,b.sat/Math.max(1,b.count))*0.65)})).sort((a,b)=>b.score-a.score);
+        const allBins=[...bins.values()];
+        const chromatic=allBins.filter(b=>b.sat/Math.max(1,b.count)>=.16);
+        // Prefer actual hues (green, brown, blue, etc.) over black/white/grey.
+        // Neutral colours are eligible only when the image has no meaningful chromatic pixels.
+        const paletteBins=chromatic.length ? chromatic : allBins;
+        const ranked=paletteBins.map(b=>({...b,score:b.weight*(.62+Math.min(1,b.sat/Math.max(1,b.count))*0.65)})).sort((a,b)=>b.score-a.score);
         const chosen=[];
         for(const candidate of ranked){
           if(!chosen.length || chosen.every(c=>kdRgbDistance(c.rgb,candidate.rgb)>62)) chosen.push(candidate);
