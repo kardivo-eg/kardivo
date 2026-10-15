@@ -4947,11 +4947,11 @@ function initHeroParticles() {
   const ctx = c.getContext("2d");
   if (!ctx) return;
   const few = innerWidth < 700 || (navigator.hardwareConcurrency || 4) <= 2;
-  const count = few ? 16 : 32;
+  const count = few ? 8 : 18;
   let w = 1, h = 1, ps = [], color = "196,168,255", running = false, visible = true, last = 0, frame = 0;
   const rnd = (a, b) => a + Math.random() * (b - a);
   const size = () => {
-    const dpr = Math.min(devicePixelRatio || 1, 1.5), r = c.getBoundingClientRect();
+    const dpr = 1, r = c.getBoundingClientRect();
     w = Math.max(1, r.width); h = Math.max(1, r.height);
     c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -4962,9 +4962,9 @@ function initHeroParticles() {
   const stop = () => { io?.disconnect(); ro?.disconnect(); document.removeEventListener("visibilitychange", onVis); };
   function tick(now) {
     if (!c.isConnected) { running = false; stop(); return; }
-    if (!visible || document.hidden) { running = false; return; }
+    if (!visible || document.hidden || document.documentElement.classList.contains("fest-lite")) { running = false; return; }
     requestAnimationFrame(tick);
-    if (now - last < 33) return;
+    if (now - last < 40 || window.__kdScrolling) return;
     last = now;
     if (frame++ % 90 === 0) color = getComputedStyle(c).getPropertyValue("--particle").trim() || color;
     ctx.clearRect(0, 0, w, h);
@@ -5327,24 +5327,48 @@ window.addEventListener("DOMContentLoaded", () => { renderAbandonedCartNudge(); 
   const PICK = [0, 0, 0, 0, 0, 1, 1, 2, 2, 3];
   const engines = new Set();
   let raf = 0, last = 0;
+  // V72: every dot, halo and star is drawn once into a tiny sprite; frames only drawImage() it (no paths, no fillStyle strings).
+  const sprites = {};
+  function sprite(kind, ci, light) {
+    const key = kind + ci + (light ? "L" : "D");
+    if (sprites[key]) return sprites[key];
+    const S = kind === "star" ? 48 : 24, c = doc.createElement("canvas");
+    c.width = c.height = S;
+    const g = c.getContext("2d"), col = PAL[light ? "light" : "dark"][ci], rgb = col[0] + "," + col[1] + "," + col[2], m = S / 2;
+    if (kind === "dot") {
+      g.fillStyle = "rgba(" + rgb + ",1)"; g.beginPath(); g.arc(m, m, m * 0.5, 0, 6.283); g.fill();
+    } else if (kind === "halo") {
+      const gr = g.createRadialGradient(m, m, 0, m, m, m);
+      gr.addColorStop(0, "rgba(" + rgb + ",.55)"); gr.addColorStop(1, "rgba(" + rgb + ",0)");
+      g.fillStyle = gr; g.fillRect(0, 0, S, S);
+    } else {
+      const R = m * 0.9, q = R * 0.2;
+      g.fillStyle = "rgba(" + rgb + ",1)"; g.beginPath();
+      g.moveTo(m, m - R); g.quadraticCurveTo(m + q, m - q, m + R, m); g.quadraticCurveTo(m + q, m + q, m, m + R);
+      g.quadraticCurveTo(m - q, m + q, m - R, m); g.quadraticCurveTo(m - q, m - q, m, m - R); g.fill();
+    }
+    return (sprites[key] = c);
+  }
   function spawn(e, anywhere) {
     const big = Math.random() < e.star;
     return { x: Math.random() * e.w, y: anywhere ? Math.random() * e.h : e.h + 10, r: big ? rnd(1.4, 2.6) : rnd(0.7, 2), star: big, vx: rnd(-0.07, 0.07), vy: rnd(0.05, 0.2), a: rnd(0.4, 0.95), t: rnd(0, 6.28), s: rnd(0.015, 0.04), c: PICK[(Math.random() * PICK.length) | 0] };
   }
+  // V72: total particle budget is shared by every canvas and shrinks on weak devices / when the governor steps in.
+  let quality = weak ? 0.55 : 1; // 1 = full, lower = fewer particles
   function addEngine(c, opts) {
     if (c.__fe) return;
     const ctx = c.getContext && c.getContext("2d");
     if (!ctx) return;
-    const e = (c.__fe = { c, ctx, w: 1, h: 1, ps: [], visible: false, dens: opts.dens, max: opts.max, star: opts.star });
+    const e = (c.__fe = { c, ctx, w: 1, h: 1, ps: [], visible: false, dens: opts.dens, max: opts.max, star: opts.star, fade: !!opts.fade });
     e.size = () => {
       const w = c.clientWidth, h = c.clientHeight;
       if (w < 2 || h < 2) { e.w = 1; e.h = 1; e.ps = []; return; }
-      const dpr = Math.min(devicePixelRatio || 1, 1.5);
+      const dpr = 1; // particles are soft blobs: 1x is indistinguishable and a quarter of the pixels at 2x screens
       c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       e.w = w; e.h = h;
-      const n = Math.round(Math.max(5, Math.min(e.max, (w * h) / e.dens)) * (weak ? 0.5 : 1));
-      e.ps = Array.from({ length: n }, () => spawn(e, true));
+      e.n = Math.max(5, Math.min(e.max, (w * h) / e.dens));
+      e.ps = Array.from({ length: Math.max(3, Math.round(e.n * quality)) }, () => spawn(e, true));
     };
     e.io = new IntersectionObserver(([en]) => { e.visible = en.isIntersecting; if (e.visible) kick(); });
     e.ro = new ResizeObserver(() => { e.size(); kick(); });
@@ -5352,39 +5376,64 @@ window.addEventListener("DOMContentLoaded", () => { renderAbandonedCartNudge(); 
     engines.add(e);
     e.size();
   }
+  function setQuality(q) {
+    quality = q;
+    for (const e of engines) if (e.n) e.ps = Array.from({ length: Math.max(3, Math.round(e.n * quality)) }, () => spawn(e, true));
+  }
   function draw(e, k) {
-    const { ctx, w, h } = e, light = root.dataset.theme === "light", pal = PAL[light ? "light" : "dark"], gain = light ? 0.8 : 1;
+    const { ctx, w, h } = e, light = root.dataset.theme === "light", gain = light ? 0.8 : 1;
     ctx.clearRect(0, 0, w, h);
-    ctx.globalCompositeOperation = light ? "source-over" : "lighter";
     for (const p of e.ps) {
       p.y -= p.vy * k; p.x += p.vx * k; p.t += p.s * k;
       if (p.y < -12) Object.assign(p, spawn(e, false));
       if (p.x < -12) p.x = w + 12; else if (p.x > w + 12) p.x = -12;
-      const al = p.a * (0.25 + 0.75 * (0.5 + 0.5 * Math.sin(p.t))) * gain, col = pal[p.c];
+      let al = p.a * (0.25 + 0.75 * (0.5 + 0.5 * Math.sin(p.t))) * gain;
+      if (e.fade) { // soft edges without a CSS mask: fade out toward the borders of the section
+        const dx = Math.abs(p.x / w - 0.5) * 2, dy = Math.abs(p.y / h - 0.5) * 2, d = Math.max(dx, dy);
+        if (d > 0.55) al *= Math.max(0, 1 - (d - 0.55) / 0.45);
+      }
       if (al < 0.03) continue;
-      const rgb = col[0] + "," + col[1] + "," + col[2];
-      if (p.star || p.r > 1.6) { ctx.fillStyle = "rgba(" + rgb + "," + (al * 0.16).toFixed(3) + ")"; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 3.4, 0, 6.283); ctx.fill(); }
-      ctx.fillStyle = "rgba(" + rgb + "," + al.toFixed(3) + ")";
-      ctx.beginPath();
+      ctx.globalAlpha = al > 1 ? 1 : al;
       if (p.star) {
-        const R = p.r * 2.8, q = R * 0.2;
-        ctx.moveTo(p.x, p.y - R); ctx.quadraticCurveTo(p.x + q, p.y - q, p.x + R, p.y); ctx.quadraticCurveTo(p.x + q, p.y + q, p.x, p.y + R);
-        ctx.quadraticCurveTo(p.x - q, p.y + q, p.x - R, p.y); ctx.quadraticCurveTo(p.x - q, p.y - q, p.x, p.y - R);
-      } else ctx.arc(p.x, p.y, p.r, 0, 6.283);
-      ctx.fill();
+        const R = p.r * 5.6; ctx.drawImage(sprite("star", p.c, light), p.x - R, p.y - R, R * 2, R * 2);
+        const H = p.r * 6.8; ctx.globalAlpha = al * 0.4; ctx.drawImage(sprite("halo", p.c, light), p.x - H, p.y - H, H * 2, H * 2);
+      } else {
+        const R = p.r * 2; ctx.drawImage(sprite("dot", p.c, light), p.x - R, p.y - R, R * 2, R * 2);
+        if (p.r > 1.6) { const H = p.r * 6.8; ctx.globalAlpha = al * 0.4; ctx.drawImage(sprite("halo", p.c, light), p.x - H, p.y - H, H * 2, H * 2); }
+      }
     }
+    ctx.globalAlpha = 1;
+  }
+  // V72: pause the dots while the page is scrolling (the main thread is busy enough), and watch the frame rate:
+  // if the device can't keep up, first halve the particles, then stop them. The glow, drift and ticker stay.
+  let scrolling = 0, scrollT = 0, slow = 0, fast = 0, lastNow = 0, step = 33, lite = false;
+  addEventListener("scroll", () => { scrolling = 1; window.__kdScrolling = 1; clearTimeout(scrollT); scrollT = setTimeout(() => { scrolling = 0; window.__kdScrolling = 0; kick(); }, 140); }, { passive: true });
+  function govern(now) {
+    if (lastNow) {
+      const dt = now - lastNow;
+      if (dt > 42) { slow++; fast = 0; } else if (dt < 26) { fast++; slow = Math.max(0, slow - 1); } // raw frame gap: >42ms = under ~24fps
+      if (slow > 45) { // roughly 2 seconds of dropped frames
+        slow = 0;
+        if (quality > 0.3) setQuality(quality * 0.5);
+        else if (!lite) { lite = true; root.classList.add("fest-lite"); }
+        else if (step < 66) step = 66;
+      }
+    }
+    lastNow = now;
   }
   function loop(now) {
     raf = 0;
-    if (doc.hidden) return;
+    if (doc.hidden) { lastNow = 0; return; }
     let live = false;
     for (const e of engines) {
       if (!e.c.isConnected) { e.io.disconnect(); e.ro.disconnect(); engines.delete(e); continue; }
       if (e.visible) live = true;
     }
-    if (!live) return;
+    if (!live || lite) return; // lite = the governor gave up on particles; CSS hides the canvases
+    if (scrolling) { lastNow = 0; raf = requestAnimationFrame(loop); return; }
     raf = requestAnimationFrame(loop);
-    if (now - last < 33) return;
+    govern(now);
+    if (now - last < step) return;
     const k = Math.min((now - last) / 33, 3);
     last = now;
     for (const e of engines) if (e.visible && e.ps.length) draw(e, k);
@@ -5392,7 +5441,7 @@ window.addEventListener("DOMContentLoaded", () => { renderAbandonedCartNudge(); 
   function kick() { if (!raf && !doc.hidden && engines.size) raf = requestAnimationFrame(loop); }
   doc.addEventListener("visibilitychange", kick);
   const globalCanvas = bg.querySelector(".fest-canvas");
-  if (globalCanvas) addEngine(globalCanvas, { dens: 52000, max: 34, star: 0.12 });
+  if (globalCanvas) addEngine(globalCanvas, { dens: 60000, max: 24, star: 0.12 });
 
   // ---------- pointer: cursor glow, card spotlight and tilt ----------
   if (fine && !still) {
@@ -5497,7 +5546,7 @@ window.addEventListener("DOMContentLoaded", () => { renderAbandonedCartNudge(); 
       syncMarquee(hero);
     }
     if (!still) {
-      [["#popularSection", { dens: 8000, max: 50, star: 0.26 }], ["#categoryDiscovery", { dens: 15000, max: 26, star: 0.18 }]].forEach(([sel, o]) => {
+      [["#popularSection", { dens: 12000, max: 28, star: 0.26, fade: true }], ["#categoryDiscovery", { dens: 20000, max: 16, star: 0.18, fade: true }]].forEach(([sel, o]) => {
         const sec = doc.querySelector(sel);
         if (!sec || sec.querySelector(".fest-section-canvas")) return;
         const c = doc.createElement("canvas");
@@ -5899,7 +5948,7 @@ function skRowsHTML() {
 // that product (card, row, tile, quick view, the product page...) and styles.css does the painting.
 // Results are cached per picture URL in localStorage, so a repeat visit tints on the first paint.
 (() => {
-  const KEY = "kd_tint_v1", MAX_CACHE = 600, SIZE = 64;
+  const KEY = "kd_tint_v2", MAX_CACHE = 600, SIZE = 64;
   const mem = new Map(); // url -> [a,b,c] | 0 (no colour found) | Promise
   let stored = {};
   try { stored = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch {}
@@ -5943,7 +5992,17 @@ function skRowsHTML() {
 
   // data = RGBA bytes (e.g. canvas ImageData.data). Returns ["#dominant", "#second", "#third"] or null when the
   // picture has no real colour (greyscale, or almost entirely black/white/grey).
+  // Tries a strict pass first; pictures that fail it (small coloured logo on a big white/black field, muted or
+  // pastel artwork) get a looser pass, so far fewer products end up with no glow at all.
   function paletteFromPixels(data) {
+    return paletteTier(data, 0) || paletteTier(data, 1) || paletteTier(data, 2);
+  }
+  function paletteTier(data, tier) {
+    const T = [
+      { v: 0.2, s: 0.28, wv: 0.92, ws: 0.4, share: 0.04, min: 12 },
+      { v: 0.15, s: 0.16, wv: 0.95, ws: 0.2, share: 0.008, min: 8 },
+      { v: 0.12, s: 0.09, wv: 0.97, ws: 0.1, share: 0.002, min: 6 },
+    ][tier];
     const recs = []; // h, s, v, r, g, b per accepted pixel
     let total = 0;
     for (let i = 0; i < data.length; i += 4) {
@@ -5952,14 +6011,14 @@ function skRowsHTML() {
       const r = data[i], g = data[i + 1], b = data[i + 2];
       const mx = Math.max(r, g, b), mn = Math.min(r, g, b), v = mx / 255, s = mx ? (mx - mn) / mx : 0;
       // not black (dark), not grey (low saturation), not white (bright and washed out)
-      if (v < 0.2 || s < 0.28 || (v > 0.92 && s < 0.4)) continue;
+      if (v < T.v || s < T.s || (v > T.wv && s < T.ws)) continue;
       const d = mx - mn;
       let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
       h = (h * 60 + 360) % 360;
       recs.push(h, s, v, r, g, b);
     }
     const n = recs.length / 6;
-    if (!total || n < Math.max(12, total * 0.04)) return null;
+    if (!total || n < Math.max(T.min, total * T.share)) return null;
     // hue histogram (10 degree bins, weighted toward vivid pixels), lightly smoothed around the circle
     const BINS = 36, hist = new Float64Array(BINS);
     for (let i = 0; i < recs.length; i += 6) hist[Math.floor(recs[i] / 10) % BINS] += 0.4 + recs[i + 1];
@@ -5993,6 +6052,15 @@ function skRowsHTML() {
     return out.slice(0, 3);
   }
 
+  // Last resort for greyscale pictures or ones that cannot be read: a stable, vivid palette derived from the
+  // picture URL, so every product has a glow (and the same product always gets the same one).
+  const fallbackPalette = (url) => {
+    let h = 0;
+    for (let i = 0; i < url.length; i++) h = (h * 31 + url.charCodeAt(i)) >>> 0;
+    const base = h % 360;
+    return [0, 42, -42].map((off) => toHex(...hsl2rgb(base + off, 0.7, 0.54)));
+  };
+
   // ---- loading + sampling ----
   const sameOrigin = (u) => { try { return new URL(u, location.href).origin === location.origin; } catch { return true; } };
   const loadImg = (url) => new Promise((res) => {
@@ -6023,7 +6091,7 @@ function skRowsHTML() {
       px = im && sample(im);
     }
     if (!px) return undefined; // could not read the picture at all (do not remember as "no colour")
-    return paletteFromPixels(px);
+    return paletteFromPixels(px) || fallbackPalette(url);
   }
   // Small queue so a page of 30 cards does not decode 30 pictures at once.
   const queue = []; let running = 0;
@@ -6038,7 +6106,7 @@ function skRowsHTML() {
     if (mem.has(url)) return Promise.resolve(mem.get(url));
     return new Promise((resolve) => {
       queue.push({ url, done: (pal) => {
-        if (pal === undefined) { mem.set(url, 0); resolve(0); return; } // unreadable: neutral this session, retried next visit
+        if (pal === undefined) { const fb = fallbackPalette(url); mem.set(url, fb); resolve(fb); return; } // unreadable: stable fallback glow this session, real colours retried next visit
         mem.set(url, pal || 0); persist(url, pal); resolve(pal || 0);
       } });
       pump();

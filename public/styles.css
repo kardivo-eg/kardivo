@@ -1628,3 +1628,95 @@ html.kd-page-tint .ambient-a{background:var(--kdp-a);opacity:.2}
 html.kd-page-tint .ambient-b{background:var(--kdp-b);opacity:.18}
 html.kd-page-tint body{transition:background-color .4s}
 }
+
+/* ==== V72 PERFORMANCE ====
+   Same festival look, far less work for the browser. The rules of thumb used here:
+   - animate only transform and opacity (they run on the GPU); never box-shadow, background-position or @property angles
+   - no mask-image / backdrop-filter / big blur on anything that sits over moving layers
+   - big soft shadows are painted once as gradients instead of three 120px blurred inset shadows per card
+   - html.fest-lite is switched on by app.js when it sees dropped frames: it switches off the heaviest extras */
+
+/* 1. the particle canvases: the fade now happens inside the drawing code, so the CSS mask (re-composited every frame) goes */
+.fest-section-canvas{-webkit-mask-image:none;mask-image:none}
+.hero-particles{-webkit-mask-image:none;mask-image:none}
+
+/* 2. category cards sit over animated layers: a 20px backdrop blur there re-blurs every frame. A slightly denser tint looks the same. */
+.category-card{backdrop-filter:none;-webkit-backdrop-filter:none;background:linear-gradient(145deg,#ffffff12,#ffffff06 54%,#8b5cf61a),#0e0b15}
+html[data-theme="light"] .category-card{background:linear-gradient(145deg,#ffffffcc,#ffffff88 54%,#8b5cf622),#f4f0fa}
+.category-card .cat-arrow{backdrop-filter:none;-webkit-backdrop-filter:none}
+.trust-strip{backdrop-filter:none;-webkit-backdrop-filter:none;background:linear-gradient(135deg,#171126f0,#0d0b12f0)}
+html[data-theme="light"] .trust-strip{background:linear-gradient(135deg,#ffffffee,#f3effaee)}
+
+/* 3. things that used to repaint every frame now only move or fade */
+/* 3a. pulsing button glow: was an animated box-shadow on every primary button; now only the hero button breathes, using opacity */
+main .btn.primary{animation:none}
+.hero .btn.primary{position:relative}
+.hero .btn.primary::after{content:"";position:absolute;inset:-2px;border-radius:inherit;pointer-events:none;box-shadow:0 14px 46px rgba(var(--fest-a),.55),0 0 0 4px rgba(var(--fest-a),.12);opacity:0;animation:kdBtnPulse 4.8s ease-in-out infinite alternate}
+@keyframes kdBtnPulse{to{opacity:1}}
+/* 3b. sale badge shimmer: animated background-position on every badge in the grid; now a static highlight */
+.sale{animation:none;background-size:100% 100%;background-position:0 0}
+/* 3c. trust icons: animated box-shadow -> animated opacity of a glow layer */
+.ts-icon{animation:none;position:relative}
+.ts-icon::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;box-shadow:0 0 22px 2px rgba(var(--fest-a),.38);opacity:0;animation:kdIconGlow 5s ease-in-out infinite}
+.ts-item:nth-child(2) .ts-icon::after{animation-delay:-1.2s}.ts-item:nth-child(3) .ts-icon::after{animation-delay:-2.4s}.ts-item:nth-child(4) .ts-icon::after{animation-delay:-3.6s}
+@keyframes kdIconGlow{0%,100%{opacity:0}50%{opacity:1}}
+/* 3d. the rotating rim on featured cards used an animated @property angle + a mask: repaints the card every frame, for every card.
+       Now it is a static soft rim, and it spins only on the one card you hover. */
+.popular-product .fest-rim{animation-play-state:paused;opacity:.45}
+.popular-product:hover .fest-rim{animation-play-state:running;opacity:1}
+/* 3e. header light: background-position animation -> keep it, but only a few cycles then rest */
+.site-header::after{animation-iteration-count:3}
+/* 3f. headline shine: animated background-clip:text repaints a huge text block every frame; play it twice on load, then rest */
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+  .hero h1{animation-iteration-count:2;animation-fill-mode:forwards}
+}
+/* 3g. floating featured cards: 8s float on up to a dozen cards; keep it but only while the grid is on screen (JS reveal already gates it) and cheaper easing */
+.popular-product-wrap.fest-in{will-change:auto}
+/* 3h. twinkling eyebrow stars on every section title: they are tiny, but each one is its own animation */
+main .eyebrow::before{animation-duration:5s}
+
+/* 4. hero glow: rotating blurred ring is the most expensive single layer. Keep it, slower, smaller, and not at all on phones. */
+.hero-visual::after{filter:blur(28px);animation-duration:40s}
+@media(max-width:700px){
+  .hero-visual::after{display:none}
+  .fest-blob.fb3{display:none}
+  .fest-spark:nth-child(n+4){display:none}
+  .popular-section::before{animation:none}
+}
+
+/* 5. product tint (V62): three 120px-blur inset shadows per card were the most expensive paint in the grid.
+       Same three colours, but two softer shadows with a much smaller blur (cost grows with blur radius), card backgrounds untouched. */
+.product-card[data-kd-tint="1"],
+.popular-product-wrap[data-kd-tint="1"] .popular-product,
+.collection-product[data-kd-tint="1"],
+.mini-card-wrap[data-kd-tint="1"] .mini-card,
+.cart-page-item[data-kd-tint="1"],
+.saved-later-item[data-kd-tint="1"],
+.bundle-card[data-kd-tint="1"],
+.bundle-option[data-kd-tint="1"],
+.hero-product-tile[data-kd-tint="1"]{
+  box-shadow:inset 0 1px 0 var(--kd-a-m),inset 50px -60px 60px -56px var(--kd-a-m),inset -44px 0 56px -56px var(--kd-b-m),0 18px 40px -26px var(--kd-a-x);
+}
+.product-card[data-kd-tint="1"]:hover,
+.popular-product-wrap[data-kd-tint="1"] .popular-product:hover,
+.collection-product[data-kd-tint="1"]:hover,
+.mini-card-wrap[data-kd-tint="1"] .mini-card:hover,
+.cart-page-item[data-kd-tint="1"]:hover,
+.bundle-card[data-kd-tint="1"]:hover,
+.bundle-option[data-kd-tint="1"]:hover{
+  box-shadow:inset 0 1px 0 var(--kd-a-l),inset 50px -60px 60px -50px var(--kd-a-l),inset -44px 0 56px -50px var(--kd-b-l),0 22px 48px -20px var(--kd-a-x),0 0 28px -8px var(--kd-b-m);
+}
+.modal[data-kd-tint="1"]{box-shadow:0 30px 90px -24px var(--kd-a-x),0 0 50px -20px var(--kd-b-x),inset 0 1px 0 var(--kd-a-m),inset 70px -80px 90px -80px var(--kd-a-m)}
+
+/* 6. page-level: the static 120px-blur "ambient" blobs get rasterised once on their own layer instead of repainting with the page */
+.ambient{will-change:transform;transform:translateZ(0)}
+
+/* 7. content-visibility: below-the-fold sections are not laid out or painted until they get near the screen */
+footer{content-visibility:auto;contain-intrinsic-size:auto 360px}
+
+/* 8. governor says the device is struggling: keep the glow and the ticker, drop the particle canvases and the rotating ring */
+html.fest-lite .fest-canvas,html.fest-lite .fest-section-canvas,html.fest-lite .hero-particles,html.fest-lite .fest-cursor{display:none}
+html.fest-lite .hero-visual::after,html.fest-lite .fest-rim,html.fest-lite .fest-spark{display:none}
+html.fest-lite .popular-product-wrap.fest-in{animation:festRise .75s cubic-bezier(.2,.7,.2,1) backwards}
+html.fest-lite .fest-blob{animation-duration:90s}
+@media(prefers-reduced-motion:reduce){.hero .btn.primary::after,.ts-icon::after{animation:none}}
