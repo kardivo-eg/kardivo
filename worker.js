@@ -4759,6 +4759,37 @@ export default {
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/api/palette-image") {
+      if (request.method !== "GET") return new Response("Method not allowed", {status:405, headers:{"Allow":"GET"}});
+      let target;
+      try { target = new URL(url.searchParams.get("url") || ""); } catch { return new Response("Invalid image URL", {status:400}); }
+      const host=target.hostname.toLowerCase();
+      const allowedHosts=["i.ibb.co","ibb.co","images.unsplash.com","cdn.cloudflare.steamstatic.com","shared.akamai.steamstatic.com","cdn.akamai.steamstatic.com","image.api.playstation.com","store-images.s-microsoft.com","images.igdb.com","cdn.shopify.com","static.wikia.nocookie.net","terraria.wiki.gg","upload.wikimedia.org","raw.githubusercontent.com","images.ctfassets.net","cdn.discordapp.com","media.discordapp.net"];
+      const isAllowedImageHost=(candidate)=>candidate.protocol==="https:"&&!candidate.username&&!candidate.password&&!candidate.port&&allowedHosts.some(h=>candidate.hostname.toLowerCase()===h||candidate.hostname.toLowerCase().endsWith("."+h));
+      if(!isAllowedImageHost(target)) return new Response("Image host not allowed",{status:403});
+      try {
+        let upstream=null;
+        // Revalidate each redirect so an approved image host cannot redirect this endpoint
+        // to a private/internal host or turn it into an open proxy.
+        for(let hop=0;hop<4;hop++){
+          upstream=await fetch(target.href,{headers:{Accept:"image/avif,image/webp,image/png,image/jpeg,image/gif,image/*;q=0.8"},redirect:"manual"});
+          if(upstream.status<300||upstream.status>=400) break;
+          const location=upstream.headers.get("location");
+          if(!location||hop===3) return new Response("Image redirect rejected",{status:502});
+          const next=new URL(location,target);
+          if(!isAllowedImageHost(next)) return new Response("Image redirect host not allowed",{status:403});
+          target=next;
+        }
+        if(!upstream||!upstream.ok) return new Response("Image fetch failed",{status:502});
+        const type=(upstream.headers.get("content-type")||"").split(";")[0].toLowerCase();
+        if(!type.startsWith("image/")) return new Response("Not an image",{status:415});
+        const length=Number(upstream.headers.get("content-length")||0);
+        if(length>8*1024*1024) return new Response("Image too large",{status:413});
+        const bytes=await upstream.arrayBuffer();
+        if(bytes.byteLength>8*1024*1024) return new Response("Image too large",{status:413});
+        return new Response(bytes,{headers:{"content-type":type,"cache-control":"public, max-age=86400, s-maxage=86400","x-content-type-options":"nosniff"}});
+      } catch { return new Response("Image fetch failed",{status:502}); }
+    }
     if (url.pathname.startsWith("/api/")) {
       try {
         return await api(request, env, url, ctx);

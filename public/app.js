@@ -1473,7 +1473,7 @@ function renderCampaign() {
   }
   const art = $("#campaignArt");
   if (art) {
-    const artwork = image && /^https?:\/\//i.test(image) ? image : STOCK_ART[0];
+    const artwork = image && (/^https?:\/\//i.test(image) || image.startsWith("/")) ? image : STOCK_ART[0];
     art.style.backgroundImage = `linear-gradient(90deg,color-mix(in srgb,var(--product-accent,#827b91) 35%,transparent) 0%,color-mix(in srgb,var(--product-accent-2,#a39aae) 24%,transparent) 45%,color-mix(in srgb,var(--product-accent-3,#5b536b) 22%,transparent) 100%),url("${artwork.replace(/["\\]/g, "")}")`;
   }
   // The campaign is a first-class storefront surface: derive its glow from its own artwork,
@@ -1650,56 +1650,61 @@ function kdAccentImages(p) {
 }
 function kdHex(rgb) { return "#" + rgb.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2,"0")).join(""); }
 function kdRgbDistance(a,b) { return Math.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2); }
+function kdPaletteReadableURL(imageUrl) {
+  const value=String(imageUrl||"").trim();
+  if(!value) return "";
+  // Same-origin media can be sampled directly. Remote artwork goes through a restricted
+  // same-origin image endpoint so canvas pixel reads are not blocked by missing CORS headers.
+  if(value.startsWith("/")) return value;
+  if(/^https:\/\//i.test(value)) return "/api/palette-image?url="+encodeURIComponent(value);
+  return "";
+}
 function kdSamplePalette(imageUrl) {
   if (kdAccentCache.has(imageUrl)) return kdAccentCache.get(imageUrl);
   const task = new Promise(resolve => {
     const img = new Image();
-    // Same-origin Kardivo product uploads are readable; external hosts must explicitly allow CORS.
-    if (!imageUrl.startsWith("/")) img.crossOrigin = "anonymous";
     img.decoding = "async";
     img.onload = () => {
       try {
-        const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d", {willReadFrequently:true});
-        if (!ctx) throw new Error("Canvas unavailable");
-        const size=56; canvas.width=size; canvas.height=size;
-        ctx.drawImage(img,0,0,size,size);
-        const pixels=ctx.getImageData(0,0,size,size).data, bins=new Map();
-        // Quantized colour histogram; discount white/black/transparent pixels and weight vivid colours.
+        const canvas=document.createElement("canvas"),ctx=canvas.getContext("2d",{willReadFrequently:true});
+        if(!ctx) throw new Error("Canvas unavailable");
+        const size=64;canvas.width=size;canvas.height=size;ctx.drawImage(img,0,0,size,size);
+        const pixels=ctx.getImageData(0,0,size,size).data,bins=new Map();let valid=0,chromaticPixels=0;
         for(let i=0;i<pixels.length;i+=4){
-          const a=pixels[i+3]; if(a<150) continue;
-          const rgb=[pixels[i],pixels[i+1],pixels[i+2]], max=Math.max(...rgb), min=Math.min(...rgb), sat=max ? (max-min)/max : 0;
-          // Ignore pure black/white and near-neutral pixels when real artwork colours exist.
-          // Keep them in a secondary histogram only for genuinely monochrome artwork.
-          if(max>248 && min>228) continue;
-          if(max<22) continue;
-          const q=rgb.map(v=>Math.min(255,Math.round(v/24)*24)), key=q.join(",");
-          const lum=(0.2126*q[0]+0.7152*q[1]+0.0722*q[2])/255;
-          const weight=1 + sat*1.8 + (lum>.12 && lum<.88 ? .25 : 0);
-          const b=bins.get(key)||{rgb:q,count:0,weight:0,sat:0}; b.count++; b.weight+=weight; b.sat+=sat; bins.set(key,b);
+          if(pixels[i+3]<150)continue;
+          const rgb=[pixels[i],pixels[i+1],pixels[i+2]],mx=Math.max(...rgb),mn=Math.min(...rgb),sat=mx?(mx-mn)/mx:0;
+          valid++;if(sat>=.16)chromaticPixels++;
+          // Finer quantization keeps earthy greens/browns distinct without making noise dominant.
+          const q=rgb.map(v=>Math.min(255,Math.round(v/16)*16)),key=q.join(",");
+          const b=bins.get(key)||{rgb:q,count:0,satSum:0};b.count++;b.satSum+=sat;bins.set(key,b);
         }
-        const allBins=[...bins.values()];
-        const chromatic=allBins.filter(b=>b.sat/Math.max(1,b.count)>=.16);
-        // Prefer actual hues (green, brown, blue, etc.) over black/white/grey.
-        // Neutral colours are eligible only when the image has no meaningful chromatic pixels.
-        const paletteBins=chromatic.length ? chromatic : allBins;
-        const ranked=paletteBins.map(b=>({...b,score:b.weight*(.62+Math.min(1,b.sat/Math.max(1,b.count))*0.65)})).sort((a,b)=>b.score-a.score);
+        if(!valid)throw new Error("No opaque image pixels");
+        const all=[...bins.values()].map(b=>({...b,sat:b.satSum/b.count}));
+        // Ignore near-black/near-white neutrals whenever the image contains a meaningful
+        // amount of color. For truly monochrome art, neutrals remain eligible by design.
+        const chromatic=all.filter(b=>b.sat>=.16);
+        const useChromatic=chromaticPixels/valid>=.035 && chromatic.length>0;
+        const candidates=(useChromatic?chromatic:all).map(b=>{
+          const [r,g,bl]=b.rgb,lum=(.2126*r+.7152*g+.0722*bl)/255;
+          const neutralPenalty=useChromatic&&b.sat<.16?.02:1;
+          const contrastBonus=lum>.08&&lum<.92?1.12:1;
+          return {...b,score:b.count*(1+b.sat*2.25)*contrastBonus*neutralPenalty};
+        }).sort((a,b)=>b.score-a.score);
         const chosen=[];
-        for(const candidate of ranked){
-          if(!chosen.length || chosen.every(c=>kdRgbDistance(c.rgb,candidate.rgb)>62)) chosen.push(candidate);
-          if(chosen.length===3) break;
-        }
-        if(!chosen.length) throw new Error("No usable colours");
-        // If artwork is mostly monochrome, derive tasteful neighbours from the strongest sampled colour.
+        for(const c of candidates){if(!chosen.length||chosen.every(x=>kdRgbDistance(x.rgb,c.rgb)>48))chosen.push(c);if(chosen.length===3)break;}
+        if(!chosen.length)throw new Error("No usable palette");
         const first=chosen[0].rgb;
-        const second=chosen[1]?.rgb || first.map(v=>v*.72+255*.28);
-        const third=chosen[2]?.rgb || first.map(v=>v*.55);
+        // For colorful artwork, synthesize close color harmonies rather than introducing
+        // black/white. For monochrome art, retain the sampled neutral range.
+        const second=chosen[1]?.rgb||(useChromatic?first.map(v=>v*.78+Math.max(...first)*.22):first.map(v=>v*.72+255*.28));
+        const third=chosen[2]?.rgb||(useChromatic?first.map(v=>v*.72):first.map(v=>v*.55));
         resolve({primary:kdHex(first),secondary:kdHex(second),tertiary:kdHex(third)});
-      } catch { resolve(null); }
+      }catch{resolve(null);}
     };
     img.onerror=()=>resolve(null);
-    img.src=imageUrl;
+    img.src=kdPaletteReadableURL(imageUrl);
   });
-  kdAccentCache.set(imageUrl,task); return task;
+  kdAccentCache.set(imageUrl,task);return task;
 }
 async function kdAccentPalette(p) {
   const urls=kdAccentImages(p);
@@ -1725,26 +1730,23 @@ async function kdApplyProductAccents(root=document) {
   }
 }
 async function kdApplyCampaignAccent(imageUrl="", campaignLink="") {
-  const card=document.querySelector("#campaignSection .campaign-card");
-  if(!card) return;
+  const card=document.querySelector("#campaignSection .campaign-card");if(!card)return;
   let palette=null;
-  const cleanLink=String(campaignLink||"").replace(/^\/#/,"").replace(/^\//,"").split(/[?#]/)[0];
-  const linked=(state.products||[]).find(p=>cleanLink && (String(p.id)===cleanLink || String(p.slug||"")===decodeURIComponent(cleanLink)));
-  if(linked) palette=await kdAccentPalette(linked);
-  if(!palette && imageUrl && /^https?:\/\//i.test(imageUrl)) palette=await kdSamplePalette(imageUrl);
-  if(!palette){
-    const featured=(state.products||[]).find(p=>Number(p.featured)===1) || (state.products||[])[0];
-    if(featured) palette=await kdAccentPalette(featured);
-  }
-  if(!palette) palette=KD_ACCENT_NEUTRAL;
-  if(!card.isConnected) return;
-  card.style.setProperty("--product-accent",palette.primary);
-  card.style.setProperty("--product-accent-2",palette.secondary);
-  card.style.setProperty("--product-accent-3",palette.tertiary);
+  // The campaign's own artwork is the most direct source of its accent. A linked product
+  // is second, followed by a featured product. Parse paths safely for absolute and relative links.
+  if(imageUrl && (/^https:\/\//i.test(imageUrl)||String(imageUrl).startsWith("/"))) palette=await kdSamplePalette(imageUrl);
+  let path="";
+  try{path=new URL(String(campaignLink||""),location.origin).pathname.replace(/^\//,"").replace(/^product\//,"");}catch{}
+  let linked=null;
+  try{const decoded=decodeURIComponent(path);linked=(state.products||[]).find(p=>decoded&&(String(p.id)===decoded||String(p.slug||"")===decoded));}catch{}
+  if(!palette&&linked)palette=await kdAccentPalette(linked);
+  if(!palette){const featured=(state.products||[]).find(p=>Number(p.featured)===1)||(state.products||[])[0];if(featured)palette=await kdAccentPalette(featured);}
+  if(!palette)palette=KD_ACCENT_NEUTRAL;
+  if(!card.isConnected)return;
+  for(const [k,v]of [["--product-accent",palette.primary],["--product-accent-2",palette.secondary],["--product-accent-3",palette.tertiary]])card.style.setProperty(k,v);
   card.style.setProperty("--product-accent-glow",`color-mix(in srgb, ${palette.primary} 48%, transparent)`);
   card.classList.add("campaign-has-product-accent");
 }
-
 if(typeof document!=="undefined"){
   const kdAccentStart=()=>{
     if(!document.body) return;
