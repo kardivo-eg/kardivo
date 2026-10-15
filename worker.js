@@ -4824,7 +4824,7 @@ export default {
         return `<url><loc>${htmlEsc(ar)}</loc>${lm}${alt}</url><url><loc>${htmlEsc(en)}</loc>${lm}${alt}</url>`;
       };
       return new Response(
-        `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${entry("/")}${catRows.map((c) => entry("/c/" + encodeURIComponent(c.slug), c.updated_at)).join("")}${rows.map((p) => entry("/" + encodeURIComponent(p.slug), p.updated_at)).join("")}</urlset>`,
+        `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${entry("/")}${entry("/products")}${catRows.map((c) => entry("/c/" + encodeURIComponent(c.slug), c.updated_at)).join("")}${rows.map((p) => entry("/" + encodeURIComponent(p.slug), p.updated_at)).join("")}</urlset>`,
         {
           headers: {
             "content-type": "application/xml; charset=utf-8",
@@ -4853,6 +4853,17 @@ export default {
           if (!shell.ok) return shell;
           const html = await shell.text();
           return new Response(applySeo(html, { lang: pageLang(url), title: "Kardivo", desc: "", head: '<meta name="robots" content="noindex,nofollow">' }), HTML_HEADERS(200, { "cache-control": "no-store" }));
+        }
+        if (pagePath === "/products") {
+          const shell = await shellFetch(env, url, request);
+          if (!shell.ok) return shell;
+          const html = await shell.text(),
+            lang = pageLang(url),
+            ar = lang === "ar",
+            title = ar ? "كل المنتجات | Kardivo" : "All products | Kardivo",
+            desc = ar ? "تصفح كل ألعاب وكروت واشتراكات كارديفو، وابحث وفلتر بسهولة." : "Browse every game, gift card and subscription on Kardivo. Search, filter and sort the full catalog.",
+            head = seoHead({ url, lang, title, desc, type: "website" });
+          return new Response(applySeo(html, { lang, title, desc, head }), HTML_HEADERS());
         }
         if (pagePath.startsWith("/c/")) return await htmlForCategory(env, request, url, decodeURIComponent(pagePath.slice(3)));
         return await htmlForProduct(env, request, url);

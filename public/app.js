@@ -727,15 +727,15 @@ function applyLang() {
   else if (routePath === "/favorites") renderFavoritesPage();
   else if (routePath === "/cart") renderCartPage();
   else if (routePath === "/order-confirmed") renderOrderConfirmed();
+  else if (routePath === "/products") renderProductsPage();
   else if (isProductRoute())
     openProductPage(
       decodeURIComponent(location.pathname.slice(1)).replace(/\/$/, ""),
     );
   else {
-    renderCategories();
     renderCategoryCards();
     renderPopularProducts();
-    renderProducts();
+    renderHomeOpener();
     renderTestimonials();
   }
 }
@@ -1507,7 +1507,8 @@ function renderCategoryCards() {
 function renderPopularProducts() {
   const el = $("#popularProducts");
   if (!el) return;
-  const chosen = state.products.filter((p) => Number(p.featured)).slice(0, 4);
+  let chosen = state.products.filter((p) => Number(p.featured)).slice(0, 8);
+  if (chosen.length < 4) chosen = [...chosen, ...state.products.filter((p) => !Number(p.featured) && productAvailable(p)).slice(0, 4 - chosen.length)];
   el.innerHTML = chosen.map((p) => {
     const variants = (p.variants || []).filter((v) => Number(v.active) !== 0);
     const price = variants.length ? Math.min(...variants.map((v) => Number(v.price))) : Number(p.price || 0);
@@ -5002,7 +5003,7 @@ function renderCategoryPage(slug) {
 }
 function renderHomeRecs() {
   $("#homeRecs")?.remove();
-  const store = $("#store");
+  const store = $("#store") || $("#browseAll");
   if (!store) return;
   const bySlug = new Map(state.products.map((p) => [p.slug, p])),
     recent = recentList().map((x) => bySlug.get(x)).filter(Boolean);
@@ -5019,27 +5020,21 @@ function renderHomeRecs() {
       .slice(0, 4)
       .map((x) => x.p),
     row = (title, list) => (list.length ? `<div class="rec-row"><h3>${title}</h3><div class="rec-grid">${list.map(miniCard).join("")}</div></div>` : "");
-  store.insertAdjacentHTML("beforebegin", `<section id="homeRecs" class="container home-recs">${row(t("Recently viewed"), shown)}${row(t("You may also like"), like)}</section>`);
+  store.insertAdjacentHTML(store.id === "store" ? "beforebegin" : "afterend", `<section id="homeRecs" class="container home-recs">${row(t("Recently viewed"), shown)}${row(t("You may also like"), like)}</section>`);
   bindFavoriteButtons($("#homeRecs"));
 }
 function showHome() {
   document.body.classList.remove("product-route");
   if (state.catSaved) { Object.assign(state, state.catSaved); state.catSaved = null; }
+  state.query = "";
   $("main").innerHTML = homeHTML;
   translateStatic();
   applySettings();
   renderCampaign();
-  renderCategories();
-  renderSmartFilters();
-  renderHeroShowcase();
-  initHeroParticles();
   renderCategoryCards();
   renderPopularProducts();
+  renderHomeOpener();
   renderHomeRecs();
-  renderProducts();
-  $("#sort").value = state.sort;
-  $("#search").value = state.query;
-  renderSearchSuggestions();
   renderTestimonials();
 }
 async function renderAccountPage() {
@@ -5092,7 +5087,7 @@ async function route() {
   });
   $$("[data-tab]").forEach((el) => {
     const tp = el.dataset.tab;
-    const active = tp === "/" ? !["/account", "/cart", "/favorites", "/admin", "/order-confirmed"].includes(path) : path === tp;
+    const active = tp === "/" ? !["/account", "/cart", "/favorites", "/admin", "/order-confirmed", "/products"].includes(path) : path === tp;
     el.classList.toggle("is-active", active);
     if (active) el.setAttribute("aria-current", "page"); else el.removeAttribute("aria-current");
   });
@@ -5101,6 +5096,7 @@ async function route() {
   else if (path === "/favorites") { if (state.user) { document.body.classList.add("account-route"); $("main").innerHTML = skCategoryHTML(true); await syncFavoritesWithAccount(false); } renderFavoritesPage(); }
   else if (path === "/cart") renderCartPage();
   else if (path === "/order-confirmed") renderOrderConfirmed();
+  else if (path === "/products") renderProductsPage();
   else if (path.startsWith("/c/")) renderCategoryPage(decodeURIComponent(path.slice(3)));
   else if (isProductRoute())
     await openProductPage(
@@ -5109,6 +5105,8 @@ async function route() {
   else showHome();
 }
 function navigate(path, scrollTo) {
+  if (path === "/#store") { path = "/products"; scrollTo = null; }
+  if (String(path).split("?")[0] === "/products") state.freshProducts = true;
   const go = () => { history.pushState({}, "", path); return route(); };
   // V61: View Transitions where the browser has them (cross-fade, product picture grows into its page).
   if (kdTransition(path, go, scrollTo)) return;
@@ -5143,12 +5141,18 @@ $("#footerAccount").onclick = (e) => {
   navigate("/account");
 };
 $("#searchFocus").onclick = () => {
-  if (isProductRoute()) {
-    navigate("/#store", "#store");
-    setTimeout(() => $("#search")?.focus(), 200);
-  } else {
-    $("#store")?.scrollIntoView();
+  const here = location.pathname.replace(/\/$/, "") || "/";
+  if (here === "/" || here === "/products") {
+    $("#search")?.scrollIntoView({ block: "center" });
     $("#search")?.focus();
+  } else {
+    navigate("/products");
+    const focusSearch = (n = 0) => {
+      const box = $("#search");
+      if (box && location.pathname.replace(/\/$/, "") === "/products") box.focus();
+      else if (n < 20) setTimeout(() => focusSearch(n + 1), 100);
+    };
+    setTimeout(focusSearch, 150);
   }
 };
 document.addEventListener("input", (e) => {
@@ -5171,7 +5175,7 @@ document.addEventListener("click", (e) => {
   const chipEl = e.target.closest("[data-search-term]");
   if (chipEl) {
     const term = chipEl.dataset.searchTerm, input = $("#search");
-    if (input) { input.value = term; state.query = term; saveRecentSearch(term); renderProducts(); renderSearchSuggestions(); $("#productGrid")?.scrollIntoView({ behavior: "smooth", block: "start" }); const box = $("#searchSuggestions"); if (box) box.hidden = true; }
+    if (input) { input.value = term; state.query = term; saveRecentSearch(term); if (!$("#productGrid")) { navigate("/products?q=" + encodeURIComponent(term)); return; } renderProducts(); renderSearchSuggestions(); $("#productGrid")?.scrollIntoView({ behavior: "smooth", block: "start" }); const box = $("#searchSuggestions"); if (box) box.hidden = true; }
     return;
   }
   if (!e.target.closest(".search-wrap")) { const box = $("#searchSuggestions"); if (box) box.hidden = true; }
@@ -5217,6 +5221,7 @@ document.addEventListener("click", (e) => {
   }
   if (u.pathname === "/" && u.hash) {
     e.preventDefault();
+    if (u.hash === "#store") { closeModal(); navigate("/products"); return; }
     if (isProductRoute()) navigate("/" + u.hash, u.hash);
     else {
       history.replaceState({}, "", "/" + u.hash);
@@ -5227,7 +5232,7 @@ document.addEventListener("click", (e) => {
   if (u.pathname.length > 1 && !/\.[a-z0-9]+$/i.test(u.pathname)) {
     e.preventDefault();
     closeModal();
-    navigate(u.pathname);
+    navigate(u.pathname + (u.pathname === "/products" ? u.search : ""));
   }
 });
 window.addEventListener("popstate", () => route());
@@ -5271,6 +5276,20 @@ const AR_TRUST = {
 };
 Object.assign(AR, AR_TRUST);
 Object.assign(AR, AR_V10);
+Object.assign(AR, {
+  "Products": "المنتجات",
+  "Build a bundle": "كوّن باقتك",
+  "Digital games & cards · Egypt": "ألعاب وكروت ديجيتال · مصر",
+  "Every game. Every card.": "كل الألعاب والكروت.",
+  "One store.": "في مكان واحد.",
+  "Instant codes, Vodafone Cash & InstaPay, and real people on support.": "أكواد فورية، ادفع بفودافون كاش أو إنستاباي، وفيه ناس حقيقيين بيردّوا عليك.",
+  "Search games, gift cards, subscriptions…": "دوّر على لعبة أو كارت أو اشتراك…",
+  "Find": "دوّر",
+  "Trending": "الأكثر طلباً",
+  "Browse all products": "تصفح كل المنتجات",
+  "Browse all {0} products": "تصفح كل الـ {0} منتج",
+  "Search, filter and sort the whole catalog.": "دوّر وفلتر ورتّب الكتالوج كله.",
+});
 Object.assign(ERR_AR, ERR_AR_V10);
 setDir();
 translateStatic();
@@ -6226,3 +6245,68 @@ function skRowsHTML() {
   window.kdTint = { paletteFromPixels, palette, scan, tintCampaign };
   scan(document.body);
 })();
+
+
+// V73: the home page is a short opener, and the whole catalog lives on /products.
+// Both are front-end only. Products, prices, cart, checkout, the API and the D1 database are untouched.
+function renderHomeOpener() {
+  const label = $("#browseAllLabel");
+  if (label && state.products.length) label.textContent = t("Browse all {0} products", state.products.length);
+  const m = $("#openerMarquee");
+  if (m) {
+    const list = [...state.products].filter(productAvailable).sort((x, y) => Number(y.featured || 0) - Number(x.featured || 0)).slice(0, 14);
+    if (list.length < 5) { m.hidden = true; m.innerHTML = ""; }
+    else {
+      const tiles = list.map((p) => `<a class="opener-tile" href="/${encodeURIComponent(p.slug || p.id)}" tabindex="-1"><span class="opener-tile-art">${stockImg(p.image_url, "", stockArtFor(p))}</span><b>${escapeHTML(pName(p))}</b></a>`).join("");
+      m.innerHTML = `<div class="opener-track">${tiles}${tiles}</div>`;
+      m.hidden = false;
+    }
+  }
+  renderOpenerTrending();
+  loadTrending().then(renderOpenerTrending);
+}
+function renderOpenerTrending() {
+  const wrap = $("#openerTrendingWrap"), box = $("#openerTrending");
+  if (!wrap || !box) return;
+  const terms = popularSearchTerms().slice(0, 6);
+  box.innerHTML = terms.map((term) => `<button type="button" class="opener-chip" data-opener-term="${escapeHTML(term)}">${escapeHTML(term)}</button>`).join("");
+  wrap.hidden = terms.length === 0;
+}
+function openerGo() {
+  const q = ($("#search")?.value || "").trim();
+  if (q) saveRecentSearch(q);
+  navigate("/products" + (q ? "?q=" + encodeURIComponent(q) : ""));
+}
+function renderProductsPage() {
+  document.body.classList.remove("product-route", "account-route", "admin-route");
+  if (state.catSaved) { Object.assign(state, state.catSaved); state.catSaved = null; }
+  if (state.freshProducts) { state.category = "all"; state.discovery = "all"; state.query = ""; }
+  state.freshProducts = false;
+  const qs = new URLSearchParams(location.search);
+  if (qs.has("q")) state.query = (qs.get("q") || "").slice(0, 120);
+  $("main").innerHTML = `<section class="products-page container"><nav class="product-breadcrumb" aria-label="Breadcrumb"><a href="/" data-home data-i18n="Home">Home</a><span>/</span><span data-i18n="Products">Products</span></nav><div class="pp-head"><span class="eyebrow">KARDIVO</span><h1 data-i18n="All products">All products</h1><p class="section-subtitle" data-i18n="Search, filter and sort the whole catalog.">Search, filter and sort the whole catalog.</p></div><div class="pp-toolbar"><div class="search-wrap"><label class="search"><span>⌕</span><input id="search" type="search" autocomplete="off" enterkeyhint="search" placeholder="Search..." data-i18n-ph="Search..."></label><div id="searchSuggestions" class="search-suggestions" hidden></div></div><select id="sort" aria-label="Sort"><option value="featured" data-i18n="Featured">Featured</option><option value="newest" data-i18n="Newest">Newest</option><option value="price-low" data-i18n="Price: low to high">Price: low to high</option><option value="price-high" data-i18n="Price: high to low">Price: high to low</option><option value="name" data-i18n="Name">Name</option></select></div><div id="categories" class="chips"></div><div class="discovery-toolbar"><div class="discovery-toolbar-copy"><span class="eyebrow" data-i18n="QUICK FILTERS">QUICK FILTERS</span><span id="discoverySummary" class="discovery-summary"></span></div><div id="smartFilters" class="smart-filters" aria-label="Product filters"></div></div><div id="productGrid" class="product-grid"></div></section>`;
+  translateStatic();
+  renderCategories();
+  renderSmartFilters();
+  renderProducts();
+  $("#sort").value = state.sort;
+  $("#search").value = state.query;
+  document.title = `${t("All products")} | ${state.settings.store_name || "Kardivo"}`;
+}
+document.addEventListener("click", (event) => {
+  if (event.target.closest("#openerSearchBtn")) { openerGo(); return; }
+  const chip = event.target.closest("[data-opener-term]");
+  if (chip) { const term = chip.dataset.openerTerm; saveRecentSearch(term); navigate("/products?q=" + encodeURIComponent(term)); }
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && event.target.id === "search" && !$("#productGrid")) { event.preventDefault(); openerGo(); }
+});
+document.addEventListener("input", (event) => {
+  // keep ?q= in the address bar on /products so a refresh or a shared link keeps the search
+  if (event.target.id !== "search" || !$("#productGrid") || (location.pathname.replace(/\/$/, "") !== "/products")) return;
+  try {
+    const u = new URL(location.href), q = event.target.value.trim();
+    if (q) u.searchParams.set("q", q); else u.searchParams.delete("q");
+    history.replaceState({}, "", u.pathname + u.search + u.hash);
+  } catch {}
+});
