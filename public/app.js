@@ -1654,61 +1654,87 @@ function kdSamplePalette(imageUrl) {
   if (kdAccentCache.has(imageUrl)) return kdAccentCache.get(imageUrl);
   const task = new Promise(resolve => {
     const img = new Image();
-    if (!imageUrl.startsWith("/")) img.crossOrigin = "anonymous";
-    img.decoding = "async";
+    // External images must go through the constrained same-origin proxy. Loading an
+    // arbitrary cross-origin URL directly makes canvas.getImageData taint/fail unless
+    // that host explicitly sends permissive CORS headers.
+    let src = imageUrl;
+    if (/^https?:\/\//i.test(imageUrl)) {
+      try {
+        const parsed = new URL(imageUrl, location.origin);
+        src = parsed.origin === location.origin ? parsed.pathname + parsed.search : "/api/palette-image?url=" + encodeURIComponent(imageUrl);
+      } catch { src = "/api/palette-image?url=" + encodeURIComponent(imageUrl); }
+    }
+    let settled = false;
+    const finish = value => { if (!settled) { settled = true; resolve(value); } };
     img.onload = () => {
       try {
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d", {willReadFrequently:true});
         if (!ctx) throw new Error("Canvas unavailable");
-        canvas.width = canvas.height = 72;
-        ctx.drawImage(img, 0, 0, 72, 72);
-        const px = ctx.getImageData(0, 0, 72, 72).data;
-        const bins = new Map(); let valid = 0, chromaticPixels = 0;
+        canvas.width = canvas.height = 80;
+        ctx.drawImage(img, 0, 0, 80, 80);
+        const px = ctx.getImageData(0, 0, 80, 80).data;
+        const bins = new Map(); let visible = 0, chromatic = 0;
         for (let i=0; i<px.length; i+=4) {
-          if (px[i+3] < 150) continue;
-          const rgb=[px[i],px[i+1],px[i+2]], mx=Math.max(...rgb), mn=Math.min(...rgb);
-          if (mx < 12) continue;
-          const sat = mx ? (mx-mn)/mx : 0;
-          // Ignore near-white background pixels, but keep dark saturated artwork.
-          if (mx > 247 && mn > 226 && sat < .14) continue;
-          valid++;
-          if (sat >= .13 && mx-mn >= 24) chromaticPixels++;
-          // Fine quantization preserves more of the artwork's actual hues.
-          const q=rgb.map(v=>Math.min(255,Math.round(v/12)*12)), key=q.join(",");
-          const b=bins.get(key)||{rgb:q,count:0,satSum:0};
-          b.count++; b.satSum+=sat; bins.set(key,b);
+          const alpha=px[i+3]/255;
+          if (alpha < .18) continue;
+          const rgb=[px[i],px[i+1],px[i+2]];
+          const mx=Math.max(...rgb), mn=Math.min(...rgb), spread=mx-mn;
+          if (mx < 7) continue;
+          // Composite semi-transparent artwork over a dark neutral surface so alpha
+          // does not inflate brightness and transparent pixels never become black.
+          const composited=rgb.map(v=>Math.round(v*alpha+22*(1-alpha)));
+          const hi=Math.max(...composited), lo=Math.min(...composited);
+          const sat=hi ? (hi-lo)/hi : 0;
+          // Exclude near-white paper, but do not exclude dark or muted real hues.
+          if (hi > 242 && lo > 220 && sat < .12) continue;
+          visible++;
+          const isColor=spread >= 16 && sat >= .075;
+          if (isColor) chromatic++;
+          const q=composited.map(v=>Math.min(255,Math.round(v/10)*10));
+          const key=q.join(",");
+          const bin=bins.get(key)||{rgb:q,count:0,colorCount:0,satSum:0};
+          bin.count++; if(isColor) bin.colorCount++; bin.satSum+=sat; bins.set(key,bin);
         }
-        if (!valid || !bins.size) throw new Error("No usable pixels");
+        if (!visible || !bins.size) throw new Error("No usable pixels");
         const all=[...bins.values()].map(b=>({...b,sat:b.satSum/b.count}));
-        // If the image contains real color, rank chromatic bins separately so a gray
-        // background cannot outvote the colored product art. Monochrome art stays neutral.
-        const useColor = chromaticPixels / valid >= .012;
-        const candidates = useColor ? all.filter(b=>b.sat >= .13 && Math.max(...b.rgb)-Math.min(...b.rgb) >= 24) : all;
-        const ranked=candidates.map(b=>({...b,score:b.count*(.45+b.sat*4.2)*(b.sat>=.13?1.35:1)})).sort((a,b)=>b.score-a.score);
+        // A meaningful chromatic minority gets ranked independently of a large
+        // neutral backdrop. Use a low threshold so muted/dark artwork is retained.
+        const useColor = chromatic / visible >= .006;
+        let candidates = useColor
+          ? all.filter(b=>b.colorCount>0 && Math.max(...b.rgb)-Math.min(...b.rgb)>=16)
+          : all;
+        // Count-based scoring rewards recurring colors; saturation is only a gentle
+        // tie-breaker, not a gate that rejects muted artwork.
+        const ranked=candidates.map(b=>({...b,score:(b.count + b.colorCount*1.5)*(0.8+b.sat*1.1)}))
+          .sort((a,b)=>b.score-a.score);
         const chosen=[];
-        for (const c of ranked) {
-          if (!chosen.length || chosen.every(x=>kdRgbDistance(x.rgb,c.rgb)>42)) chosen.push(c);
-          if (chosen.length===3) break;
+        for(const c of ranked){
+          if(!chosen.length || chosen.every(x=>kdRgbDistance(x.rgb,c.rgb)>30)) chosen.push(c);
+          if(chosen.length===3) break;
         }
-        if (!chosen.length) throw new Error("No palette candidates");
-        const a=chosen[0].rgb;
-        const b=chosen[1]?.rgb || (useColor ? a.map(v=>v*.76+Math.max(...a)*.24) : a.map(v=>v*.72+255*.28));
-        const c=chosen[2]?.rgb || (useColor ? a.map(v=>v*.68) : a.map(v=>v*.55));
-        resolve({primary:kdHex(a),secondary:kdHex(b),tertiary:kdHex(c)});
-      } catch { resolve(null); }
+        if(!chosen.length) throw new Error("No palette candidates");
+        // Never synthesize new hues. If the image has fewer than three distinct
+        // colors, repeat its actual extracted colors rather than inventing accents.
+        const colors=[chosen[0].rgb, (chosen[1]||chosen[0]).rgb, (chosen[2]||chosen[1]||chosen[0]).rgb];
+        finish({primary:kdHex(colors[0]),secondary:kdHex(colors[1]),tertiary:kdHex(colors[2])});
+      } catch { finish(null); }
     };
-    img.onerror=()=>resolve(null);
-    img.src=imageUrl;
+    img.onerror=()=>finish(null);
+    img.src=src;
   });
   kdAccentCache.set(imageUrl,task);
+  // A failed read is not a palette. Remove it from cache so transient network/CORS
+  // failures cannot poison this URL for the lifetime of the page.
+  task.then(result=>{ if(!result && kdAccentCache.get(imageUrl)===task) kdAccentCache.delete(imageUrl); });
   return task;
 }
 async function kdAccentPalette(p) {
   const urls=kdAccentImages(p);
   for(const url of urls){ const palette=await kdSamplePalette(url); if(palette) return palette; }
-  // Neutral fallback is deliberate: a blocked external image must not turn every product purple.
-  return KD_ACCENT_NEUTRAL;
+  // null means unreadable/blocked, not monochrome. Callers can retain existing CSS
+  // and retry later; only a successfully sampled grayscale image gets neutral accents.
+  return null;
 }
 async function kdApplyProductAccents(root=document) {
   const nodes=root.querySelectorAll ? root.querySelectorAll("[data-product-accent]") : [];
@@ -1716,9 +1742,10 @@ async function kdApplyProductAccents(root=document) {
     if(el.dataset.accentReady==="1") continue;
     const p=(state.products||[]).find(x=>Number(x.id)===Number(el.dataset.productAccent));
     if(!p) continue;
-    el.dataset.accentReady="1";
     const palette=await kdAccentPalette(p);
     if(!el.isConnected) continue;
+    if(!palette) { el.dataset.accentReady="0"; continue; }
+    el.dataset.accentReady="1";
     el.style.setProperty("--product-accent",palette.primary);
     el.style.setProperty("--product-accent-2",palette.secondary);
     el.style.setProperty("--product-accent-3",palette.tertiary);
