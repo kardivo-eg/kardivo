@@ -254,6 +254,8 @@ const DEFAULTS = {
   instagram: "",
   facebook: "",
   tiktok: "",
+  youtube: "",
+  twitter: "",
   announcement_ar: "",
   meta_title_ar: "متجر ألعاب ومنتجات رقمية",
   meta_description_ar:
@@ -4805,7 +4807,7 @@ export default {
     }
     if (url.pathname === "/robots.txt")
       return new Response(
-        `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /cart\nDisallow: /account\nDisallow: /admin\nDisallow: /favorites\nDisallow: /order-confirmed\nSitemap: ${url.origin}/sitemap.xml\n`,
+        `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /cart\nDisallow: /account\nDisallow: /admin\nDisallow: /favorites\nDisallow: /wallet\nDisallow: /order-confirmed\nSitemap: ${url.origin}/sitemap.xml\n`,
         { headers: { "content-type": "text/plain; charset=utf-8" } },
       );
     if (url.pathname === "/sitemap.xml") {
@@ -4848,7 +4850,7 @@ export default {
           const html = await shell.text();
           return new Response(applySeo(html, { lang: pageLang(url), title: "Your Account | Kardivo", desc: "Access your Kardivo account and order history." }), HTML_HEADERS());
         }
-        if (pagePath === "/cart" || pagePath === "/favorites" || pagePath === "/admin" || pagePath === "/order-confirmed") {
+        if (pagePath === "/cart" || pagePath === "/favorites" || pagePath === "/wallet" || pagePath === "/admin" || pagePath === "/order-confirmed") {
           const shell = await shellFetch(env, url, request);
           if (!shell.ok) return shell;
           const html = await shell.text();

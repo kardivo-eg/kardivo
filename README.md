@@ -1,3 +1,14 @@
+# Kardivo V74 — Social icons + Wallet page
+
+- **Social icons**: the footer links are now round line-icon buttons (hover colours per brand, keyboard focus, opens in a new tab with `noopener`). New admin fields in Settings > Support & footer: **YouTube URL** and **X (Twitter) URL** (next to Instagram, Facebook, TikTok). A WhatsApp icon appears automatically when the "WhatsApp number" setting is filled. Only links that start with `https://` or `http://` are shown, and nothing is drawn for empty fields.
+- **Wallet page `/wallet`**: new **Wallet** button in the header (between Favorites and Account) and a **Wallet** tab in the phone bottom bar (the bar now has 6 tabs; the header button is hidden on phones because the tab replaces it). The page shows store credit, reward points with a progress bar to the next reward, lifetime/redeemed/delivered-order numbers, how the wallet works, the referral code (copy / copy link / WhatsApp) and the balance history. Guests see a sign-in prompt; a failed load shows a Try again button. English and Arabic (RTL), light and dark themes.
+- **No schema, migration or new API changes.** The wallet only reads `GET /api/me/referral` (store credit, loyalty points, last 10 credit entries, referral). `/wallet` is `noindex` and disallowed in `robots.txt`.
+- Files changed: `worker.js` (two new default settings, noindex/robots for /wallet), `public/app.js`, `public/index.html`, `public/styles.css`, `public/sw.js` (cache v41), `app.js?v=74`, `styles.css?v=74`. Root-level copies are legacy and were not touched.
+- Tested in headless Chromium against a mocked API (32 checks: desktop and 375px phone, English and Arabic, logged-in, guest, API failure, loyalty switched off, no social links, a `javascript:` link rejected, no horizontal overflow, no JS errors). Not tested: the real Worker/D1, real Safari/iPhone.
+- Not included: the history shows the last 10 store-credit entries only (that is what the server returns today); individual points redemptions are not itemised because the server only stores a running total.
+
+---
+
 # Kardivo V62 — Per-product accent colours
 
 - **What it does**: every product picture is read once in the browser and three colours are taken from it (the dominant colour plus two others). Black, white, grey and anything close to them are ignored, so a logo on a white or black background still gives its real colours. A picture with only one colour family gets two neighbouring hues so there are always three. A picture with no real colour (pure greyscale) keeps the normal purple look.

@@ -384,7 +384,7 @@ async function toggleFavorite(id) {
     favSaveChain = favSaveChain.then(() => api("/api/me/favorites", { method: "PUT", body: JSON.stringify({ ids: state.favorites }) })).catch(e => { toast(e.message || t("Could not sync favorites.")); });
     await favSaveChain;
   }
-  if (location.pathname.replace(/\/$/, "") === "/favorites") renderFavoritesPage();
+  if (location.pathname.replace(/\/$/, "") === "/favorites") renderFavoritesPage(); else if (location.pathname.replace(/\/$/, "") === "/wallet") renderWalletPage();
   else { renderProducts(); renderPopularProducts(); }
   toast(had ? t("Remove from favorites") : state.user ? t("Saved to your account") : t("Saved"));
 }
@@ -725,6 +725,7 @@ function applyLang() {
   if (routePath === "/account") renderAccountPage();
   else if (routePath === "/admin") renderAdminPage();
   else if (routePath === "/favorites") renderFavoritesPage();
+  else if (routePath === "/wallet") renderWalletPage();
   else if (routePath === "/cart") renderCartPage();
   else if (routePath === "/order-confirmed") renderOrderConfirmed();
   else if (routePath === "/products") renderProductsPage();
@@ -1118,6 +1119,7 @@ function showBootSkeleton() {
   if (path === "/cart") { document.body.classList.add("account-route"); m.innerHTML = skCartHTML(); return; }
   if (path.startsWith("/c/")) { m.innerHTML = skCategoryHTML(); return; }
   if (path === "/favorites") { document.body.classList.add("account-route"); m.innerHTML = skCategoryHTML(true); return; }
+  if (path === "/wallet") { document.body.classList.add("account-route"); m.innerHTML = skCartHTML(); return; }
   if (isProductRoute()) { document.body.classList.add("product-route"); m.innerHTML = skProductHTML(); return; }
   const g = $("#productGrid");
   if (g) g.innerHTML = skGridHTML();
@@ -1234,17 +1236,31 @@ function renderFooter() {
   $("#footerSupport").innerHTML = parts.length
     ? parts.join("<br>")
     : escapeHTML(S("support_text") || "");
+  // V74: social links are round icon buttons (line icons like the rest of the site).
+  const SOC = (p) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${p}</svg>`;
+  const SOC_SVG = {
+    instagram: SOC('<rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r=".9" fill="currentColor" stroke="none"/>'),
+    facebook: SOC('<path d="M14.5 8H17V4.5h-2.5A3.9 3.9 0 0 0 10.6 8.4V11H8v3.5h2.6V21h3.6v-6.5H17l.5-3.5h-3.3V8.7c0-.4.2-.7.3-.7z"/>'),
+    tiktok: SOC('<path d="M14 3.5v11.2a3.7 3.7 0 1 1-3.7-3.7"/><path d="M14 3.5c.3 2.5 1.9 4.3 4.6 4.6"/>'),
+    youtube: SOC('<rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="m10.2 9.5 4.8 2.5-4.8 2.5z" fill="currentColor"/>'),
+    twitter: SOC('<path d="M4.5 4.5 19.5 19.5M19.5 4.5l-15 15"/>'),
+    whatsapp: SOC('<path d="M20.5 12a8.5 8.5 0 0 1-12.4 7.5L3.5 20.5l1.1-4.4A8.5 8.5 0 1 1 20.5 12z"/><path d="M9.2 8.6c.3 2.7 2.5 5 5.2 5.4l1-1.2-1.8-1-.8.6a3.6 3.6 0 0 1-1.7-1.7l.6-.8-1-1.8z" fill="currentColor" stroke="none"/>'),
+  };
+  const waDigits = String(s.whatsapp || "").replace(/\D/g, "");
   const soc = [
-    ["instagram", "Instagram"],
-    ["facebook", "Facebook"],
-    ["tiktok", "TikTok"],
-  ].filter(([k]) => /^https?:\/\//i.test(s[k] || ""));
+    ["instagram", "Instagram", s.instagram],
+    ["facebook", "Facebook", s.facebook],
+    ["tiktok", "TikTok", s.tiktok],
+    ["youtube", "YouTube", s.youtube],
+    ["twitter", "X", s.twitter],
+    ["whatsapp", "WhatsApp", waDigits.length >= 8 ? `https://wa.me/${waDigits}` : ""],
+  ].filter(([, , u]) => /^https?:\/\//i.test(u || ""));
   $("#footerSocial").innerHTML = soc
     .map(
-      ([k, n]) =>
-        `<a href="${escapeHTML(s[k])}" target="_blank" rel="noreferrer">${n}</a>`,
+      ([k, n, u]) =>
+        `<a class="soc-btn" data-soc="${k}" href="${escapeHTML(u)}" target="_blank" rel="noopener noreferrer" aria-label="${n}" title="${n}">${SOC_SVG[k]}</a>`,
     )
-    .join(" · ");
+    .join("");
 }
 function categoryArtworkMap() {
   try {
@@ -2401,7 +2417,7 @@ function showLogin() {
       });
       state.user = r.user;
       await syncFavoritesWithAccount(true);
-      if (location.pathname.replace(/\/$/, "") === "/favorites") renderFavoritesPage();
+      if (location.pathname.replace(/\/$/, "") === "/favorites") renderFavoritesPage(); else if (location.pathname.replace(/\/$/, "") === "/wallet") renderWalletPage();
       toast(t("Welcome back, {0}.", r.user.name));
       closeModal();
       if (state.checkoutAfterAuth) { state.checkoutAfterAuth = false; openCheckout(); }
@@ -2465,7 +2481,7 @@ function showRegister() {
       });
       state.user = r.user;
       await syncFavoritesWithAccount(true);
-      if (location.pathname.replace(/\/$/, "") === "/favorites") renderFavoritesPage();
+      if (location.pathname.replace(/\/$/, "") === "/favorites") renderFavoritesPage(); else if (location.pathname.replace(/\/$/, "") === "/wallet") renderWalletPage();
       toast(t("Account created."));
       closeModal();
       if (state.checkoutAfterAuth) { state.checkoutAfterAuth = false; openCheckout(); }
@@ -4793,6 +4809,8 @@ const SETTINGS_SCHEMA = [
       ["instagram", "Instagram URL"],
       ["facebook", "Facebook URL"],
       ["tiktok", "TikTok URL"],
+      ["youtube", "YouTube URL"],
+      ["twitter", "X (Twitter) URL"],
       ["footer_tagline", "Footer tagline"],
       ["footer_credit", "Footer credit line"],
     ],
@@ -5082,12 +5100,12 @@ function renderAdminPage() {
 async function route() {
   const path = location.pathname.replace(/\/$/, "") || "/";
   { const m = $("main"); if (m) { m.classList.remove("page-enter"); void m.offsetWidth; if (!document.documentElement.classList.contains("vt-active")) m.classList.add("page-enter"); } }
-  [["/account", "#accountBtn"], ["/cart", "#cartBtn"], ["/favorites", "#wishlistBtn"]].forEach(([p, selector]) => {
+  [["/account", "#accountBtn"], ["/cart", "#cartBtn"], ["/favorites", "#wishlistBtn"], ["/wallet", "#walletBtn"]].forEach(([p, selector]) => {
     const el = $(selector); if (el) { const active = path === p; el.classList.toggle("is-active", active); if (active) el.setAttribute("aria-current", "page"); else el.removeAttribute("aria-current"); }
   });
   $$("[data-tab]").forEach((el) => {
     const tp = el.dataset.tab;
-    const active = tp === "/" ? !["/account", "/cart", "/favorites", "/admin", "/order-confirmed", "/products"].includes(path) : path === tp;
+    const active = tp === "/" ? !["/account", "/cart", "/favorites", "/wallet", "/admin", "/order-confirmed", "/products"].includes(path) : path === tp;
     el.classList.toggle("is-active", active);
     if (active) el.setAttribute("aria-current", "page"); else el.removeAttribute("aria-current");
   });
@@ -5095,6 +5113,7 @@ async function route() {
   else if (path === "/admin") renderAdminPage();
   else if (path === "/favorites") { if (state.user) { document.body.classList.add("account-route"); $("main").innerHTML = skCategoryHTML(true); await syncFavoritesWithAccount(false); } renderFavoritesPage(); }
   else if (path === "/cart") renderCartPage();
+  else if (path === "/wallet") renderWalletPage();
   else if (path === "/order-confirmed") renderOrderConfirmed();
   else if (path === "/products") renderProductsPage();
   else if (path.startsWith("/c/")) renderCategoryPage(decodeURIComponent(path.slice(3)));
@@ -5135,6 +5154,7 @@ $("#themeBtn")?.addEventListener("click", (event) => {
   setTheme(currentTheme() === "dark" ? "light" : "dark");
 });
 $("#cartBtn").onclick = () => navigate("/cart");
+$("#walletBtn").onclick = () => navigate("/wallet");
 $("#accountBtn").onclick = () => navigate("/account");
 $("#footerAccount").onclick = (e) => {
   e.preventDefault();
@@ -5277,6 +5297,31 @@ const AR_TRUST = {
 Object.assign(AR, AR_TRUST);
 Object.assign(AR, AR_V10);
 Object.assign(AR, {
+  "Wallet": "المحفظة",
+  "Your wallet": "محفظتك",
+  "Store credit, reward points and your balance history": "رصيد المتجر ونقاط المكافآت وسجل رصيدك",
+  "Sign in to see your wallet.": "سجّل الدخول عشان تشوف محفظتك.",
+  "Your store credit and reward points live in your account.": "رصيد المتجر ونقاطك محفوظين في حسابك.",
+  "Use it at checkout. It is taken off your total.": "استخدمه وقت الدفع، وبيتخصم من إجمالي طلبك.",
+  "Shop now": "تسوّق دلوقتي",
+  "Spend {0} more to unlock the next reward": "اصرف {0} كمان عشان تفتح المكافأة اللي بعدها",
+  "Worth {0} at checkout": "قيمتها {0} وقت الدفع",
+  "Delivered orders": "طلبات اتسلّمت",
+  "How your wallet works": "المحفظة شغالة إزاي",
+  "{0} points = {1} store credit": "{0} نقطة = {1} رصيد في المتجر",
+  "Turn on “Use reward points” or “Use store credit” at checkout.": "فعّل «استخدم نقاط المكافآت» أو «استخدم رصيد المتجر» وقت الدفع.",
+  "Balance history": "سجل الرصيد",
+  "No balance activity yet.": "لسه مفيش حركة على رصيدك.",
+  "Order and earn points to fill your wallet.": "اطلب واكسب نقاط عشان تملّا محفظتك.",
+  "Could not load your wallet.": "مقدرناش نحمّل محفظتك.",
+  "Try again": "جرّب تاني",
+  "Available redemption value": "قيمة النقاط المتاحة للاستبدال",
+  "Lifetime points earned": "إجمالي النقاط المكتسبة",
+  "Points redeemed": "النقاط المستبدلة",
+  "Kardivo Balance · Reward points": "رصيد كاردفو · نقاط المكافآت",
+  "Social links": "روابطنا",
+});
+Object.assign(AR, {
   "Products": "المنتجات",
   "Build a bundle": "كوّن باقتك",
   "Digital games & cards · Egypt": "ألعاب وكروت ديجيتال · مصر",
@@ -5293,6 +5338,82 @@ Object.assign(AR, {
 Object.assign(ERR_AR, ERR_AR_V10);
 setDir();
 translateStatic();
+
+// ================= V74 WALLET PAGE (/wallet) =================
+// Read-only: it only shows what /api/me/referral already returns (store credit, reward points, balance history, referral code).
+function walletSkeletonHTML() {
+  return `<div class="wallet-grid" aria-busy="true"><div class="wallet-card wallet-main sk-wallet"><div class="sk sk-line w40"></div><div class="sk sk-title" style="width:55%;margin:14px 0"></div><div class="sk sk-line w60"></div></div><div class="wallet-card sk-wallet"><div class="sk sk-line w40"></div><div class="sk sk-title" style="width:45%;margin:14px 0"></div><div class="sk sk-line w80"></div></div></div>`;
+}
+async function renderWalletPage() {
+  document.body.classList.remove("product-route");
+  document.body.classList.add("account-route");
+  const main = $("main");
+  const isWallet = () => (location.pathname.replace(/\/$/, "") || "/") === "/wallet";
+  const head = () => `<div class="collection-hero"><div><span class="eyebrow">KARDIVO · ${t("Wallet")}</span><h1>${t("Your wallet")}</h1><p>${t("Store credit, reward points and your balance history")}</p></div><a class="btn ghost" href="/products" data-wallet-shop>${t("Browse products")}</a></div>`;
+  const bindShop = () => $$("[data-wallet-shop]").forEach((el) => el.addEventListener("click", (e) => { e.preventDefault(); navigate("/products"); }));
+
+  if (!state.user) {
+    main.innerHTML = `<section class="collection-page wallet-page container">${head()}<div class="notice favorite-account-note"><b>${t("Sign in to see your wallet.")}</b><p>${t("Your store credit and reward points live in your account.")}</p><button class="btn primary" id="walletLogin" type="button">${t("Log in")}</button></div></section>`;
+    $("#walletLogin")?.addEventListener("click", openAuth);
+    bindShop();
+    return;
+  }
+
+  main.innerHTML = `<section class="collection-page wallet-page container">${head()}${walletSkeletonHTML()}</section>`;
+  bindShop();
+  let ref = null;
+  try { ref = await api("/api/me/referral"); } catch (e) { ref = null; }
+  if (!isWallet() || !state.user) return; // the customer left the page while it loaded
+
+  if (!ref) {
+    main.innerHTML = `<section class="collection-page wallet-page container">${head()}<div class="notice"><b>${t("Could not load your wallet.")}</b><br><button class="btn ghost" id="walletRetry" type="button" style="margin-top:10px">${t("Try again")}</button></div></section>`;
+    $("#walletRetry")?.addEventListener("click", renderWalletPage);
+    bindShop();
+    return;
+  }
+
+  const credit = Number(ref.credit || 0);
+  const L = ref.loyalty || null;
+  const ledger = Array.isArray(ref.ledger) ? ref.ledger : [];
+  const num = (v) => Number(v || 0).toLocaleString();
+
+  const creditCard = `<div class="wallet-card wallet-main"><span class="wallet-label">${t("Store credit")}</span><div class="wallet-amount">${money(credit)}</div><p>${t("Use it at checkout. It is taken off your total.")}</p><button class="btn" type="button" data-wallet-shop2>${t("Shop now")}</button></div>`;
+
+  let pointsCard = "";
+  if (L) {
+    const step = Math.max(1, Number(L.step) || 1);
+    const pct = Math.max(0, Math.min(100, Math.round(((Number(L.points) || 0) % step) / step * 100)));
+    pointsCard = `<div class="wallet-card"><span class="wallet-label">${t("Reward points")}</span><div class="wallet-amount">${num(L.points)}</div><p>${t("Worth {0} at checkout", money(L.redeemable_egp))}</p><div class="wallet-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div><small class="muted-note">${t("Spend {0} more to unlock the next reward", money(L.to_next_egp))}</small></div>`;
+  }
+
+  const stats = L
+    ? `<div class="wallet-stats"><div class="wallet-stat"><b>${num(L.lifetime_earned)}</b><small>${t("Lifetime points earned")}</small></div><div class="wallet-stat"><b>${num(L.points_redeemed)}</b><small>${t("Points redeemed")}</small></div><div class="wallet-stat"><b>${num(L.eligible_orders)}</b><small>${t("Delivered orders")}</small></div></div>`
+    : "";
+
+  const how = L
+    ? `<div class="wallet-card wide"><h3>${t("How your wallet works")}</h3><ol class="wallet-steps"><li><i>1</i><span>${t("Earn {0} point for every 1 EGP on delivered orders.", L.ppe)}</span></li><li><i>2</i><span>${t("{0} points = {1} store credit", num(L.step), money(L.reward))}</span></li><li><i>3</i><span>${t("Turn on “Use reward points” or “Use store credit” at checkout.")}</span></li></ol></div>`
+    : "";
+
+  const link = ref.code ? `${location.origin}/?ref=${ref.code}` : "";
+  const waShare = ref.code ? `https://wa.me/?text=${encodeURIComponent(t("Use my code {0} for {1}% off your first order: {2}", ref.code, ref.discount_percent, link))}` : "";
+  const referral = ref.enabled && ref.code
+    ? `<div class="wallet-card wide"><h3>${t("Invite friends, earn credit")}</h3><p class="muted-note">${t("Friends get {0}% off their first order. You get {1} store credit when their order is delivered.", ref.discount_percent, money(ref.reward))}</p><div class="line"><code>${escapeHTML(ref.code)}</code><span><button class="mini" type="button" data-copy="${escapeHTML(ref.code)}">${t("Copy")}</button> <button class="mini" type="button" data-copy="${escapeHTML(link)}">${t("Copy link")}</button> <a class="mini" href="${escapeHTML(waShare)}" target="_blank" rel="noopener noreferrer">WhatsApp</a></span></div><small class="muted-note">${t("Friends who ordered")}: <b>${Number(ref.invited || 0)}</b></small></div>`
+    : "";
+
+  const history = `<div class="wallet-card wide"><h3>${t("Balance history")}</h3>${
+    ledger.length
+      ? `<div class="wallet-tx">${ledger.map((x) => {
+          const amt = Number(x.amount) || 0;
+          return `<div class="wallet-tx-row"><i class="${amt >= 0 ? "pos" : "neg"}" aria-hidden="true">${amt >= 0 ? "+" : "−"}</i><span><b>${escapeHTML(String(x.reason || "Balance update").replaceAll("_", " "))}</b><small>${escapeHTML(fmtTime(x.created_at))}</small></span><strong class="${amt >= 0 ? "pos" : "neg"}">${amt > 0 ? "+" : ""}${money(amt)}</strong></div>`;
+        }).join("")}</div>`
+      : `<p class="muted-note">${t("No balance activity yet.")} ${L ? t("Order and earn points to fill your wallet.") : ""}</p>`
+  }</div>`;
+
+  main.innerHTML = `<section class="collection-page wallet-page container">${head()}<div class="wallet-grid">${creditCard}${pointsCard}${stats}${how}${referral}${history}</div></section>`;
+  bindShop();
+  $$("[data-wallet-shop2]").forEach((el) => el.addEventListener("click", () => navigate("/products")));
+}
+
 boot();
 
 
