@@ -1,0 +1,12 @@
+{
+  "name": "kardivo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --no-warnings tests/v78-security.test.mjs && node --no-warnings tests/v79-checkout.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

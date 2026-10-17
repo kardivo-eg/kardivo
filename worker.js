@@ -14,7 +14,7 @@ const hex = (b) =>
   [...new Uint8Array(b)].map((n) => n.toString(16).padStart(2, "0")).join("");
 const sha = async (v) =>
   hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)));
-const PBKDF2_ITER = 50000;
+const PBKDF2_ITER = 100000;
 async function pbkdf2(pw, salt, iter) {
   const k = await crypto.subtle.importKey(
     "raw",
@@ -49,6 +49,7 @@ async function verifyPassword(pw, stored) {
   }
   return (await sha(pw)) === stored;
 }
+const DUMMY_HASH = `pbkdf2$${PBKDF2_ITER}$00112233445566778899aabbccddeeff$${"0".repeat(64)}`;
 const readJson = async (req) => {
   try {
     return await req.json();
@@ -121,6 +122,7 @@ async function ensureAdmin(env) {
   adminChecked = true;
 }
 const SECRET_KEYS = ["instapay", "vodafone_cash", "telda"];
+const looksSecretKey = (k) => /(api_?key|secret|token|password|webhook|private)/i.test(k);
 // Discord alert for new orders. Needs the DISCORD_WEBHOOK_URL secret; DISCORD_USER_ID (var) is who gets pinged.
 // Customer-supplied text only goes inside the embed and allowed_mentions is locked to one user id, so a customer can never ping @everyone or anyone else.
 function notifyDiscord(env, ctx, title, fields, label = "New order") {
@@ -549,8 +551,11 @@ async function priceCart(env, items, s) {
   const maxQty = Math.max(1, Number(s.max_qty) || 10);
   if (!Array.isArray(items) || !items.length)
     return { error: "Cart is empty." };
+  if (items.length > 40) return { error: "Too many items in the cart." };
   const q = new Map();
   for (const x of items) {
+    if (!x || typeof x !== "object" || !Number.isInteger(Number(x.product_id)) || Number(x.product_id) < 1)
+      return { error: "One of the products is no longer available." };
     const id = Number(x.product_id);
     const vid = x.variant_id ? Number(x.variant_id) : null;
     const key = `${id}:${vid || 0}`;
@@ -660,7 +665,7 @@ async function expireReservations(env, s) {
   const cut = `-${Math.max(1, Number(s.reserve_hours) || 24)} hours`;
   const expired = (
     await env.DB.prepare(
-      "SELECT id FROM orders WHERE payment_status='awaiting_payment' AND fulfillment_status='pending' AND payment_proof_key IS NULL AND COALESCE(reserve_reset_at,created_at)<datetime('now',?) AND id IN (SELECT order_id FROM order_items WHERE delivery_type='code')",
+      "SELECT id FROM orders WHERE payment_status='awaiting_payment' AND fulfillment_status='pending' AND ((payment_proof_key IS NULL AND COALESCE(reserve_reset_at,created_at)<datetime('now',?)) OR (payment_proof_key IS NOT NULL AND updated_at<datetime('now','-72 hours'))) AND id IN (SELECT order_id FROM order_items WHERE delivery_type='code')",
     )
       .bind(cut)
       .all()
@@ -1771,6 +1776,10 @@ async function grantReferral(env, o, s) {
     .bind(o.id)
     .run();
   if (!(c.meta.changes > 0) || reward <= 0) return;
+  // Anti-farming: the referrer's account must be at least 3 days old and can earn at most 10 rewards in 30 days.
+  const refUser = await env.DB.prepare("SELECT created_at FROM users WHERE id=? AND created_at<datetime('now','-3 days')").bind(o.referrer_id).first();
+  const recent = await env.DB.prepare("SELECT COUNT(*) n FROM kd_credit_ledger WHERE user_id=? AND reason='referral_reward' AND created_at>datetime('now','-30 days')").bind(o.referrer_id).first();
+  if (!refUser || Number(recent?.n || 0) >= 10) return;
   try {
     await env.DB.batch([
       env.DB.prepare(
@@ -1970,8 +1979,18 @@ async function calcDiscount(env, rawCode, cart, who, s) {
     if (r.error) return { error: r.error };
     best = { code: coupon.code, discount: r.discount, source: "coupon", referrer_id: null };
   } else if (referrer) {
-    const mine = [who.email, who.contact].map((x) => clean(x).toLowerCase());
-    if (referrer.id === who.userId || mine.includes(String(referrer.email).toLowerCase()))
+    const norm = (x) => {
+      const v = clean(x).toLowerCase();
+      if (v.includes("@")) {
+        let [l, d] = v.split("@");
+        l = l.split("+")[0];
+        if (d === "gmail.com" || d === "googlemail.com") { l = l.replace(/\./g, ""); d = "gmail.com"; }
+        return `${l}@${d}`;
+      }
+      return v.replace(/\D/g, "") || v;
+    };
+    const mine = [who.email, who.contact].map(norm).filter(Boolean);
+    if (referrer.id === who.userId || mine.includes(norm(referrer.email)))
       return { error: OWN_REFERRAL };
     if (!first) return { error: FIRST_ONLY };
     const pct = Math.min(90, Math.max(0, Number(s.referral_discount_percent) || 0));
@@ -2302,6 +2321,8 @@ function buildTimeline(o, events) {
   return steps;
 }
 // ---- backups: D1 -> gzipped SQL dump in R2 ----
+// Funnel steps, in order: cart_viewed > checkout_started (review) > checkout_payment_step (choosing how to pay) > checkout_completed (order placed) > proof_step_viewed > proof_uploaded / proof_whatsapp_clicked.
+const CHECKOUT_EVENTS = ["checkout_started", "checkout_completed", "product_viewed", "cart_added", "favorites_opened", "bundle_builder_opened", "cart_viewed", "checkout_payment_step", "payment_copied", "proof_step_viewed", "proof_uploaded", "proof_whatsapp_clicked"];
 const BACKUP_TABLES = ["users","categories","products","product_variants","variant_sources","kd_supplier_batches","inventory","discounts","promo_campaigns","orders","order_items","settings","kd_order_events","kd_order_messages","kd_refund_log","kd_stock_subscriptions","kd_credit_ledger","audit_logs","checkout_events","product_reviews","customer_notifications"];
 async function runBackup(env, keep = 14) {
   const bucket = bucketOf(env);
@@ -2401,6 +2422,12 @@ async function applyOrderUpdate(env, ctx, admin, existing, want, origin) {
     return { error: "Fulfilled orders cannot move backwards. Create a support adjustment instead.", status: 409 };
   if (fulfill === "fulfilled" && payment !== "paid" && !(existing.fulfillment_status === "fulfilled" && payment === "refunded"))
     return { error: "An order must be paid before it can be fulfilled.", status: 409 };
+  // A cancelled or failed order has already given back its stock, discount use and store credit. Reopening it would keep all of that, so it needs a new order instead.
+  if (
+    (existing.fulfillment_status === "cancelled" || existing.payment_status === "failed") &&
+    !(fulfill === "cancelled" || payment === "failed" || payment === "refunded")
+  )
+    return { error: "A cancelled or failed order can't be reopened. Ask the customer to place a new order.", status: 409 };
   const newRefund = payment === "refunded" && existing.payment_status !== "refunded";
   if (newRefund && !REFUND_REASONS.includes(want.refund_reason))
     return { error: "Choose a refund reason before marking an order refunded.", status: 400 };
@@ -2609,7 +2636,7 @@ async function api(req, env, url, ctx) {
     const s = await allSettings(env),
       out = {};
     for (const [k, v] of Object.entries(s)) {
-      if (!SECRET_KEYS.includes(k)) out[k] = v;
+      if (!SECRET_KEYS.includes(k) && !looksSecretKey(k)) out[k] = v;
     }
     for (const k of SECRET_KEYS) {
       out[k + "_enabled"] = s[k + "_enabled"] !== "0";
@@ -2639,7 +2666,7 @@ async function api(req, env, url, ctx) {
     const name = clean(b.name),
       email = clean(b.email).toLowerCase(),
       password = String(b.password || "");
-    if (name.length < 2 || !email.includes("@") || password.length < 8)
+    if (name.length < 2 || !looksEmail(email) || password.length < 8)
       return json(
         {
           error:
@@ -2675,7 +2702,11 @@ async function api(req, env, url, ctx) {
       email = clean(b.email).toLowerCase(),
       pw = String(b.password || ""),
       tkey = `login:${ipOf(req)}:${email}`;
-    if (!(await throttle(env, tkey)))
+    if (
+      !(await throttle(env, tkey)) ||
+      !(await throttle(env, `login-ip:${ipOf(req)}`, 40)) ||
+      (email && !(await throttle(env, `login-email:${email}`, 20, 3600000)))
+    )
       return json(
         { error: "Too many login attempts. Try again in 15 minutes." },
         429,
@@ -2685,9 +2716,14 @@ async function api(req, env, url, ctx) {
     )
       .bind(email)
       .first();
-    if (!row || !(await verifyPassword(pw, row.password_hash)))
+    // An unknown email still does one password check, so the reply time doesn't reveal which emails have accounts.
+    if (!row) {
+      await verifyPassword(pw, DUMMY_HASH);
       return json({ error: "Invalid email or password." }, 401);
-    if (!String(row.password_hash).startsWith("pbkdf2$"))
+    }
+    if (!(await verifyPassword(pw, row.password_hash)))
+      return json({ error: "Invalid email or password." }, 401);
+    if (!String(row.password_hash).startsWith(`pbkdf2$${PBKDF2_ITER}$`))
       await env.DB.prepare("UPDATE users SET password_hash=? WHERE id=?")
         .bind(await hashPassword(pw), row.id)
         .run();
@@ -2919,6 +2955,18 @@ async function api(req, env, url, ctx) {
     if (!me && (!clean(b.guest_name) || !clean(b.guest_contact)))
       return json({ error: "Guest name and contact are required." }, 400);
     await expireReservations(env, s);
+    // A shopper can hold at most 3 unpaid orders at once, so unpaid orders can't be used to lock up the stock.
+    const openWho = me ? "user_id=?" : "LOWER(guest_contact)=?",
+      openVal = me ? me.id : clean(b.guest_contact).toLowerCase(),
+      openRow = await env.DB.prepare(
+        `SELECT COUNT(*) n FROM orders WHERE ${openWho} AND payment_status='awaiting_payment' AND fulfillment_status IN ('pending','processing')`,
+      )
+        .bind(openVal)
+        .first();
+    if (Number(openRow?.n || 0) >= 3)
+      return json({ error: "You already have unpaid orders waiting. Pay or cancel them first, or contact support." }, 429);
+    if (!(await throttle(env, `order-day:${ipOf(req)}`, 15, 21600000)))
+      return json({ error: "Too many order attempts. Try again later." }, 429);
     const cart = await priceCart(env, b.items, s);
     if (cart.error) return json({ error: cart.error }, 400);
     const dc = await calcDiscount(
@@ -2988,7 +3036,8 @@ async function api(req, env, url, ctx) {
     }
     const orderId = (await env.DB.batch(stmts))[0].meta.last_row_id;
     let claimed = false,
-      creditClaimed = false;
+      creditClaimed = false,
+      pointsClaimed = false;
     const abort = async (message, status) => {
       await env.DB.prepare(
         "UPDATE inventory SET status='available',order_id=NULL WHERE order_id=? AND status='reserved'",
@@ -3006,6 +3055,12 @@ async function api(req, env, url, ctx) {
         await env.DB.prepare("UPDATE users SET credit=credit+? WHERE id=?")
           .bind(creditUsed, me.id)
           .run();
+      if (pointsClaimed) {
+        await env.DB.prepare("UPDATE users SET points_redeemed=MAX(0,points_redeemed-?),credit=MAX(0,credit-?) WHERE id=?")
+          .bind(pts.pts, pts.egp, me.id)
+          .run();
+        await env.DB.prepare("DELETE FROM kd_credit_ledger WHERE order_id=? AND reason='points_redeem'").bind(orderId).run();
+      }
       return json({ error: message }, status);
     };
     // Claim one use of the discount atomically so max_uses can't be exceeded. Referral codes have no usage row.
@@ -3023,6 +3078,7 @@ async function api(req, env, url, ctx) {
       const cv = await env.DB.prepare("UPDATE users SET points_redeemed=points_redeemed+?,credit=credit+? WHERE id=? AND (SELECT COALESCE(SUM(CAST(total AS INTEGER)),0) FROM orders WHERE user_id=? AND payment_status='paid' AND fulfillment_status='fulfilled')*?-points_redeemed>=?")
         .bind(pts.pts, pts.egp, me.id, me.id, loyaltyCfg(s).ppe, pts.pts).run();
       if (!(cv.meta.changes > 0)) return abort("Your reward points changed. Review the total and try again.", 409);
+      pointsClaimed = true;
       await env.DB.prepare("INSERT INTO kd_credit_ledger(user_id,amount,reason,order_id) VALUES(?,?,'points_redeem',?)").bind(me.id, pts.egp, orderId).run();
     }
     if (creditUsed > 0) {
@@ -3109,6 +3165,9 @@ async function api(req, env, url, ctx) {
         destination: s[pm] || "",
         whatsapp: wa,
         support_text: (ar && clean(s.support_text_ar)) || s.support_text || "",
+        // How long the stock stays reserved while we wait for the payment. Only orders with codes hold stock.
+        hold_hours: !coveredByCredit && cart.normalized.some((it) => cart.map.get(it.product_id).delivery_type === "code") ? Math.max(1, Number(s.reserve_hours) || 24) : 0,
+        expires_at: Date.now() + Math.max(1, Number(s.reserve_hours) || 24) * 3600000,
       },
       201,
     );
@@ -3123,18 +3182,16 @@ async function api(req, env, url, ctx) {
         .first();
     if (!o) return json({ error: "Order not found." }, 404);
     const contact = clean(req.headers.get("X-Order-Contact"));
-    if (
-      !me &&
-      (!contact ||
-        String(o.guest_contact || "").toLowerCase() !== contact.toLowerCase())
-    )
-      return json({ error: "Order verification failed." }, 403);
-    if (
-      me &&
-      o.user_id !== me.id &&
-      String(o.guest_contact || "").toLowerCase() !==
-        String(contact || "").toLowerCase()
-    )
+    // The caller must own the order, or prove it with the contact used at checkout. An empty contact never counts.
+    const proofMine = !!(me && o.user_id === me.id),
+      proofByContact =
+        !!contact &&
+        (contact.toLowerCase() === String(o.guest_contact || "").toLowerCase() ||
+          (!!o.user_id &&
+            !!(await env.DB.prepare("SELECT 1 x FROM users WHERE id=? AND LOWER(email)=?")
+              .bind(o.user_id, contact.toLowerCase())
+              .first())));
+    if (!proofMine && !proofByContact)
       return json({ error: "Order verification failed." }, 403);
     if (o.payment_status !== "awaiting_payment" || o.fulfillment_status === "cancelled")
       return json({ error: "This order doesn't need a payment proof." }, 409);
@@ -3186,7 +3243,7 @@ async function api(req, env, url, ctx) {
   if (path === "/api/checkout-events" && method === "POST") {
     const b = await readJson(req),
       event = clean(b.event);
-    if (!["checkout_started", "checkout_completed", "product_viewed", "cart_added", "favorites_opened", "bundle_builder_opened"].includes(event))
+    if (!CHECKOUT_EVENTS.includes(event))
       return json({ error: "Invalid event." }, 400);
     const key = clean(b.session_key || ipOf(req)).slice(0, 120);
     if (!(await throttle(env, `event:${key}:${event}`, 20, 3600000)))
@@ -4380,6 +4437,7 @@ async function api(req, env, url, ctx) {
       since = `-${days} days`,
       one = (sql, ...b) => env.DB.prepare(sql).bind(...b).first(),
       all = async (sql, ...b) => (await env.DB.prepare(sql).bind(...b).all()).results;
+    const evCount = async (ev) => Number((await one("SELECT COUNT(DISTINCT session_key) n FROM checkout_events WHERE event=? AND created_at>=datetime('now',?)", ev, since))?.n || 0);
     const [started, completed, placed, paid, top, codeCost, prods, daily] = await Promise.all([
       one("SELECT COUNT(DISTINCT session_key) n FROM checkout_events WHERE event='checkout_started' AND created_at>=datetime('now',?)", since),
       one("SELECT COUNT(DISTINCT session_key) n FROM checkout_events WHERE event='checkout_completed' AND created_at>=datetime('now',?)", since),
@@ -4408,8 +4466,12 @@ async function api(req, env, url, ctx) {
       if (cost != null) totalCost += cost;
       return { name: t.name, units: Number(t.units), revenue: money(t.revenue), cost, profit: cost == null ? null : money(t.revenue - cost) };
     });
+    const steps = [["Viewed cart", await evCount("cart_viewed")], ["Started checkout", Number(started.n)], ["Reached payment choice", await evCount("checkout_payment_step")], ["Placed order", Number(completed.n)], ["Reached proof step", await evCount("proof_step_viewed")], ["Sent proof (upload or WhatsApp)", Number((await one("SELECT COUNT(DISTINCT session_key) n FROM checkout_events WHERE event IN ('proof_uploaded','proof_whatsapp_clicked') AND created_at>=datetime('now',?)", since))?.n || 0)]];
+    const proofRow = await one("SELECT COUNT(*) n,SUM(CASE WHEN payment_proof_key IS NOT NULL OR payment_status='paid' THEN 1 ELSE 0 END) withproof FROM orders WHERE payment_method NOT IN ('store_credit','free') AND created_at>=datetime('now',?)", since);
     return json({
       days,
+      funnel_steps: steps.map(([name, n], i) => ({ name, sessions: n, of_previous: i && steps[i - 1][1] ? Math.round((n / steps[i - 1][1]) * 1000) / 10 : null })),
+      proof_rate: { orders: Number(proofRow?.n || 0), with_proof: Number(proofRow?.withproof || 0), pct: proofRow?.n ? Math.round((Number(proofRow.withproof || 0) / Number(proofRow.n)) * 1000) / 10 : 0 },
       funnel: {
         started: Number(started.n),
         completed: Number(completed.n),
@@ -4741,7 +4803,31 @@ async function htmlForHome(env, request, url) {
     type: "website",
     extra: jsonLd({ "@context": "https://schema.org", "@type": "Store", name, url: url.origin, logo }),
   });
-  return new Response(applySeo(await res.text(), { lang, title, desc, head }), HTML_HEADERS());
+  // Put the featured products into the HTML itself, so Google, link previews and slow phones see them before any script runs.
+  // The page script replaces this block with the interactive version as soon as it loads.
+  let page = await res.text(), itemList = "";
+  try {
+    const all = (await productList(env, false)).filter((p) => Number(p.active) !== 0);
+    let pick = all.filter((p) => Number(p.featured)).slice(0, 8);
+    if (pick.length < 4) pick = [...pick, ...all.filter((p) => !Number(p.featured)).slice(0, 4 - pick.length)];
+    const cur = clean(s.store_currency) || "EGP", curLabel = ar && cur === "EGP" ? "ج.م" : cur;
+    const cards = pick.map((p) => {
+      const vs = (p.variants || []).filter((v) => Number(v.active) !== 0),
+        price = vs.length ? Math.min(...vs.map((v) => Number(v.price))) : Number(p.price || 0),
+        old = Number(p.old_price || 0),
+        pname = (ar && clean(p.name_ar)) || p.name,
+        cat = (ar && clean(p.category_name_ar)) || p.category_name || (ar ? "منتج رقمي" : "Digital product"),
+        img = /^(https:\/\/|\/media\/product\/)/.test(String(p.image_url || "")) ? `<img src="${htmlEsc(p.image_url)}" alt="${htmlEsc(pname)}" width="320" height="320" decoding="async"${pick.indexOf(p) < 2 ? ' fetchpriority="high"' : ' loading="lazy"'}>` : "";
+      return `<article class="popular-product-wrap"><a class="popular-product" href="/${encodeURIComponent(p.slug || p.id)}"><div class="popular-product-image">${img}</div><div class="popular-product-copy"><span class="popular-product-category">${htmlEsc(cat)}</span><span class="popular-product-name">${htmlEsc(pname)}</span><span class="popular-product-price">${price.toFixed(2)} ${htmlEsc(curLabel)}${old > price ? `<del>${old.toFixed(2)} ${htmlEsc(curLabel)}</del>` : ""}</span></div></a></article>`;
+    });
+    if (cards.length) {
+      page = page.replace('<div id="popularProducts" class="popular-products"></div>', `<div id="popularProducts" class="popular-products">${cards.join("")}</div>`);
+      itemList = jsonLd({ "@context": "https://schema.org", "@type": "ItemList", itemListElement: pick.map((p, i) => ({ "@type": "ListItem", position: i + 1, url: `${url.origin}/${encodeURIComponent(p.slug || p.id)}`, name: (ar && clean(p.name_ar)) || p.name })) });
+    }
+  } catch (e) {
+    console.error("home ssr", e);
+  }
+  return new Response(applySeo(page, { lang, title, desc, head: head + itemList }), HTML_HEADERS());
 }
 async function htmlForProduct(env, request, url) {
   const res = await shellFetch(env, url, request);
@@ -4893,18 +4979,38 @@ async function serveMedia(env, key, check) {
     },
   });
 }
+// Headers added to every response. frame-ancestors/X-Frame-Options stop other sites from putting checkout or admin in a hidden frame.
+function withSecurity(res) {
+  try {
+    const h = new Headers(res.headers);
+    h.set("X-Content-Type-Options", "nosniff");
+    h.set("X-Frame-Options", "DENY");
+    h.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    h.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+    h.set("Strict-Transport-Security", "max-age=31536000");
+    if ((h.get("content-type") || "").includes("text/html"))
+      h.set("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'");
+    return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h, webSocket: res.webSocket });
+  } catch {
+    return res;
+  }
+}
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(runScheduled(env, ctx, event));
   },
   async fetch(request, env, ctx) {
+    return withSecurity(await handleRequest(request, env, ctx));
+  },
+};
+async function handleRequest(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api/")) {
       try {
         return await api(request, env, url, ctx);
       } catch (error) {
         console.error(error);
-        return json({ error: error?.message || "Server error" }, 500);
+        return json({ error: "Server error. Please try again." }, 500);
       }
     }
     // Only product images are public. Anything else in the bucket (payment proofs, backups) is never served from here.
@@ -4925,7 +5031,7 @@ export default {
     }
     if (url.pathname === "/robots.txt")
       return new Response(
-        `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /cart\nDisallow: /account\nDisallow: /admin\nDisallow: /favorites\nDisallow: /wallet\nDisallow: /order-confirmed\nSitemap: ${url.origin}/sitemap.xml\n`,
+        `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /cart\nDisallow: /account\nDisallow: /admin\nDisallow: /favorites\nDisallow: /wallet\nDisallow: /order-confirmed\nDisallow: /checkout\nSitemap: ${url.origin}/sitemap.xml\n`,
         { headers: { "content-type": "text/plain; charset=utf-8" } },
       );
     if (url.pathname === "/sitemap.xml") {
@@ -4968,7 +5074,7 @@ export default {
           const html = await shell.text();
           return new Response(applySeo(html, { lang: pageLang(url), title: "Your Account | Kardivo", desc: "Access your Kardivo account and order history." }), HTML_HEADERS());
         }
-        if (pagePath === "/cart" || pagePath === "/favorites" || pagePath === "/wallet" || pagePath === "/admin" || pagePath === "/order-confirmed") {
+        if (pagePath === "/cart" || pagePath === "/favorites" || pagePath === "/wallet" || pagePath === "/admin" || pagePath === "/order-confirmed" || pagePath === "/checkout") {
           const shell = await shellFetch(env, url, request);
           if (!shell.ok) return shell;
           const html = await shell.text();
@@ -5010,5 +5116,4 @@ export default {
     )
       res = await shellFetch(env, url, request);
     return res;
-  },
-};
+}

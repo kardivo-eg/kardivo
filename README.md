@@ -1,3 +1,40 @@
+# Kardivo V79 — Trust, multi-step checkout, funnel tracking, faster pages
+
+**Before you deploy (2 commands, once per change to the storefront):** `npm install` then `npm run build`. The readable code now lives in `src/app.js` and `src/styles.css`; the build writes the minified `public/app.js` and `public/styles.css` (that is what the site serves) and puts a fresh `?v=` on them in `public/index.html`. Edit `src/`, never `public/app.js`. Then `wrangler deploy`.
+
+**Not done here, you must run it once:** self-hosting the fonts. My workspace could not reach Google Fonts. On your computer, in this folder, run `node scripts/self-host-fonts.mjs`, then `npm run build`, then deploy. (The script already exists; it downloads Inter, Cairo and Exo 2, writes `public/fonts.css` and swaps the Google tags in `index.html`.)
+
+- **Checkout is now 4 steps, and proof comes AFTER payment.** `/checkout`: 1 Review (items, discount code, credit, points) then 2 Payment method (plus phone, and a "buy with confidence" box). Pressing Place order creates the order. `/order-confirmed`: 3 **Pay** (the exact amount in large type with a Copy amount button, the number or InstaPay address with a Copy number button, how-to steps for that wallet, "your order is held for N hours" with a live countdown, a WhatsApp button) and 4 **Send proof** (upload the screenshot plus an optional transfer reference, or one tap to WhatsApp with the order number and amount already written in). Then a Done screen. The place the customer reached is remembered, so a refresh or a trip to the bank app does not lose it. The old single modal with the "proof before you pay" field is gone.
+- **Hold time.** `POST /api/orders` now also returns `hold_hours` and `expires_at`. It comes from the existing `reserve_hours` setting (default 24). Orders with no stock to hold (manual delivery) show "Your order is saved" instead of a countdown.
+- **Trust.** Homepage: real customer reviews moved to just under the trust strip (still only approved reviews, and the block stays hidden until you have some); a "Refund & replacement policy" section; a six-question FAQ (including "what if the code doesn't work?"). Footer: a WhatsApp button showing the number, plus links to the policy and the FAQ. **The policy wording (24 hours to report a bad code, replace or refund, full refund if undeliverable, no refund after a successful redeem) is a draft. Change it to what you really do** (it is in `public/index.html`, section `#policy`, with Arabic in the V79 block of `src/app.js`). EGP was already the default display currency (the USD button only switches the view); that is unchanged.
+- **Funnel.** New events: `cart_viewed`, `checkout_payment_step`, `payment_copied`, `proof_step_viewed`, `proof_uploaded`, `proof_whatsapp_clicked` (plus the existing `checkout_started` and `checkout_completed`). Admin > Dashboard now shows each step with the share kept from the previous one, flags the biggest drop, and shows the proof rate (orders that got a proof or were paid). Your guess that the proof step is the weak spot can be checked there after a week of traffic: only the first two steps were recorded before this release, so there is no history for the rest.
+- **Search and speed.** The home page HTML now already contains the featured products (name, price in EGP, link, image) and an `ItemList`, so Google and link previews see them without running scripts; the script replaces them with the interactive version. `app.js` is about 10% smaller and `styles.css` about 8% smaller after minifying (the old files were already dense). `/checkout` is noindex and blocked in robots.txt. `sw.js` cache v42.
+- **Tests.** `tests/v79-checkout.test.mjs` (23 checks: order then proof, hold time, events, funnel report, server-rendered home). `npm test` runs it with the V78 tests. The browser walk-through (English and Arabic phone, English desktop: cart, review, payment, pay, copy, reload, proof, done) was run in headless Chromium against the real worker; real Safari, real Vodafone Cash and InstaPay, and real WhatsApp were not tested.
+- **Review queue speed** (your point 3, "answer a proof within minutes"): nothing new built. The admin Queue tab and the Discord/WhatsApp proof alerts already exist; the thing that matters is who is watching them.
+
+---
+
+# Kardivo V78 — Security and bug-fix release
+
+Fixes from the V77 code audit. Only `worker.js`, `public/index.html` and housekeeping changed. `wrangler.toml` is untouched. No schema change, no migration.
+
+- **Payment proof upload:** a logged-in customer could upload (and replace) a payment proof on someone else's member order. Ownership is now checked properly, the same way the order messages route does it.
+- **Stock hoarding:** one shopper can hold at most 3 unpaid orders, order attempts are also limited per IP over 6 hours, and an order with a payment proof now expires after 72 hours if nobody confirms it (before, it never expired).
+- **Cancelled orders:** a cancelled or failed order can no longer be marked paid or delivered again (it had already returned stock, discount use and store credit). Notes can still be edited, and an order can still be refunded or cancelled.
+- **Errors:** a server error now says "Server error. Please try again." instead of showing the raw error text.
+- **Security headers on every response:** X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, HSTS, and `frame-ancestors 'none'` on pages. A full script CSP was not added, because the pages use inline scripts.
+- **Referrals:** the own-code check ignores `+tags`, Gmail dots and phone formatting; a referrer's account must be 3 days old, and at most 10 rewards are paid in 30 days.
+- **Login:** extra limits per IP (40 per 15 minutes) and per email (20 per hour); an unknown email now takes the same time as a wrong password; password hashing is 100,000 rounds (old hashes are upgraded at the next login); registration checks the email format properly.
+- **Public settings:** any setting whose name contains api_key, secret, token, password, webhook or private is never sent to shoppers.
+- **Carts:** empty, null or non-numeric items and carts of more than 40 lines return a normal error instead of crashing.
+- **Points:** if checkout fails after reward points were turned into credit, the points are now put back.
+- **Viewport:** pinch-zoom is allowed again.
+- **Removed:** `public/app.js.bak`, the old root copies of `app.js`, `styles.css`, `index.html`, `sw.js`, `offline.html`, `manifest.webmanifest`, `apple-touch-icon.png` and `generate-vapid.mjs` (the live site only serves `public/`; `scripts/generate-vapid.mjs` stays), and the old palette test, which tested code that no longer exists.
+- **New test:** `tests/v78-security.test.mjs` (20 checks, runs the real worker on an in-memory database).
+- Not changed on purpose: registration still says when an email already has an account (hiding that needs email verification), and `app.js` / `styles.css` are untouched, so no cache-busting numbers moved.
+
+---
+
 # Kardivo V75 — /deals page + multiple promo campaigns
 
 - **New `/deals` page.** The header "Deals" link (and any old `/#deals` link or bookmark) now opens `/deals`. It lists every live promo campaign as a banner card with an optional countdown, an optional copyable promo code, a button, and the products you pick for it. English and Arabic (RTL), light and dark. If you have no campaigns yet it shows your old Settings banner, and a friendly empty state if that is off too.
