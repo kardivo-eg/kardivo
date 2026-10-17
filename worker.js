@@ -313,8 +313,33 @@ const DEFAULTS = {
   auto_bundle_max_percent: "10",
   auto_bundle_max_egp: "100",
   auto_bundle_min_products: "2",
+  // ---- V80: automatic emails (all editable in Admin > Emails) ----
+  email_auto_enabled: "1",
+  email_send_from: "9",
+  email_send_to: "22",
+  email_max_per_run: "25",
+  work_start_hour: "10",
+  work_end_hour: "23",
+  proof_ack_enabled: "1",
+  proof_eta_minutes: "30",
+  proof_ack_ar: "استلمنا إثبات الدفع بتاعك. هنأكد الطلب خلال {eta} دقيقة تقريباً.",
+  proof_ack_en: "We received your payment proof. Expected confirmation: within {eta} minutes.",
+  proof_ack_off_ar: "استلمنا إثبات الدفع بتاعك. إحنا برا مواعيد الشغل دلوقتي وهنأكد طلبك أول حاجة الصبح.",
+  proof_ack_off_en: "We received your payment proof. We are outside working hours right now and will confirm first thing in the morning.",
+  email_unpaid_enabled: "1",
+  email_unpaid_after_hours: "6",
+  email_welcome_enabled: "1",
+  email_welcome_code: "",
+  email_cart_enabled: "1",
+  email_cart_after_hours: "12",
+  email_cart_code: "",
+  email_followup_enabled: "1",
+  email_followup_days: "3",
+  email_winback_enabled: "1",
+  email_winback_days: "45",
+  email_winback_code: "",
 };
-const SCHEMA_VERSION = 19; // 19: promo_campaigns (many promo campaigns for /deals, optionally also on the homepage) // 18: products.gallery (extra product images, JSON list) // 17: products SEO fields + image_original (AI SEO text, AI image cleanup) // 16: users.points_redeemed (V41 added the column but never bumped the version, so existing DBs skipped the migration)
+const SCHEMA_VERSION = 20; // 20: email automations (saved carts, email log, opt-in + reminder flags) // 19: promo_campaigns (many promo campaigns for /deals, optionally also on the homepage) // 18: products.gallery (extra product images, JSON list) // 17: products SEO fields + image_original (AI SEO text, AI image cleanup) // 16: users.points_redeemed (V41 added the column but never bumped the version, so existing DBs skipped the migration)
 // Columns added over time. Each is added only if missing (additive, never destructive).
 const COLUMN_ADDS = [
   ["discounts", "max_uses", "INTEGER"],
@@ -358,6 +383,13 @@ const COLUMN_ADDS = [
   ["order_items", "variant_name", "TEXT DEFAULT ''"],
   ["users", "credit", "REAL NOT NULL DEFAULT 0"],
   ["users", "referral_code", "TEXT"],
+  ["users", "marketing_optin", "INTEGER NOT NULL DEFAULT 0"],
+  ["users", "unsub_token", "TEXT"],
+  ["users", "last_marketing_at", "TEXT"],
+  ["users", "winback_at", "TEXT"],
+  ["orders", "unpaid_reminder_at", "TEXT"],
+  ["orders", "proof_ack_at", "TEXT"],
+  ["orders", "followup_at", "TEXT"],
   ["users", "points_redeemed", "INTEGER NOT NULL DEFAULT 0"],
   ["product_reviews", "photo_key", "TEXT"],
   ["product_reviews", "featured", "INTEGER NOT NULL DEFAULT 0"],
@@ -406,6 +438,10 @@ const SCHEMA_TABLES = [
   // ---- V74: promo campaigns (any number; all live ones show on /deals, the ones flagged show_on_home also show on the homepage) ----
   "CREATE TABLE IF NOT EXISTS promo_campaigns(id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,title_ar TEXT DEFAULT '',eyebrow TEXT DEFAULT '',eyebrow_ar TEXT DEFAULT '',body TEXT DEFAULT '',body_ar TEXT DEFAULT '',cta_text TEXT DEFAULT '',cta_text_ar TEXT DEFAULT '',link TEXT DEFAULT '',image_url TEXT DEFAULT '',discount_code TEXT DEFAULT '',product_ids TEXT DEFAULT '',starts_at TEXT,ends_at TEXT,active INTEGER NOT NULL DEFAULT 1,show_on_home INTEGER NOT NULL DEFAULT 0,sort_order INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
   "CREATE INDEX IF NOT EXISTS idx_promo_campaigns_live ON promo_campaigns(active,sort_order,id)",
+  // ---- V80: saved carts for logged-in customers (abandoned-cart email) and a log of emails sent ----
+  "CREATE TABLE IF NOT EXISTS kd_saved_carts(user_id INTEGER PRIMARY KEY,items TEXT NOT NULL DEFAULT '[]',lang TEXT DEFAULT 'ar',updated_at TEXT NOT NULL,reminded_at TEXT)",
+  "CREATE TABLE IF NOT EXISTS kd_email_log(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,to_email TEXT NOT NULL,subject TEXT DEFAULT '',ok INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+  "CREATE INDEX IF NOT EXISTS idx_email_log_id ON kd_email_log(id)",
 ];
 async function ensureSchema(env) {
   if (schemaReady) return;
@@ -727,6 +763,7 @@ function orderPushText(lang, num, kind, status) {
     "payment:paid": [["Payment confirmed", `Order ${num}: we received your payment and are preparing it.`], ["تم تأكيد الدفع", `طلب ${num}: استلمنا الدفع وبنجهّزه.`]],
     "payment:failed": [["Payment not received", `Order ${num}: we couldn't confirm your payment. Open the order for details.`], ["الدفع ماتأكدش", `طلب ${num}: مقدرناش نتأكد من الدفع. افتح الطلب للتفاصيل.`]],
     "payment:refunded": [["Refund issued", `Order ${num} was refunded.`], ["تم الاسترداد", `طلب ${num} اتعمله استرداد.`]],
+    "payment:proof_ack": [["Payment proof received", `Order ${num}: we received your payment proof.`], ["استلمنا إثبات الدفع", `طلب ${num}: استلمنا إثبات الدفع بتاعك.`]],
     "payment:proof_rejected": [["Payment proof needs to be re-sent", `Order ${num}: please upload a clearer screenshot.`], ["محتاجين إثبات الدفع تاني", `طلب ${num}: ابعت سكرين شوت أوضح لو سمحت.`]],
     "fulfillment:processing": [["Order in progress", `Order ${num} is being prepared.`], ["طلبك قيد التجهيز", `طلب ${num} بيتجهّز دلوقتي.`]],
     "fulfillment:fulfilled": [["Order delivered", `Order ${num} has been delivered. Open it to see the details.`], ["طلبك اتسلّم", `طلب ${num} اتسلّم. افتحه عشان تشوف التفاصيل.`]],
@@ -1556,7 +1593,7 @@ const emailReady = (env) =>
   );
 const pushReady = (env) => !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
 // Sends through Resend (RESEND_API_KEY) or Mailgun (MAILGUN_API_KEY + MAILGUN_DOMAIN). Never throws; a mail outage never blocks an order.
-function sendEmail(env, ctx, { to, subject, html, text }) {
+function sendEmail(env, ctx, { to, subject, html, text, headers }) {
   if (!emailReady(env) || !looksEmail(to)) return Promise.resolve(false);
   const task = (async () => {
     try {
@@ -1568,7 +1605,7 @@ function sendEmail(env, ctx, { to, subject, html, text }) {
             authorization: `Bearer ${env.RESEND_API_KEY}`,
             "content-type": "application/json",
           },
-          body: JSON.stringify({ from: env.EMAIL_FROM, to: [to], subject, html, text }),
+          body: JSON.stringify({ from: env.EMAIL_FROM, to: [to], subject, html, text, ...(headers ? { headers } : {}) }),
         });
       else {
         const host =
@@ -1578,7 +1615,7 @@ function sendEmail(env, ctx, { to, subject, html, text }) {
         r = await fetch(`https://${host}/v3/${env.MAILGUN_DOMAIN}/messages`, {
           method: "POST",
           headers: { authorization: "Basic " + btoa("api:" + env.MAILGUN_API_KEY) },
-          body: new URLSearchParams({ from: env.EMAIL_FROM, to, subject, html, text }),
+          body: new URLSearchParams({ from: env.EMAIL_FROM, to, subject, html, text, ...Object.fromEntries(Object.entries(headers || {}).map(([k, v]) => ["h:" + k, v])) }),
         });
       }
       if (!r.ok) console.error("email", r.status, (await r.text()).slice(0, 200));
@@ -1610,13 +1647,209 @@ function mailTemplate(lang, kind, d, storeName = "Kardivo") {
       ar: [`${d.product || ""} رجع متوفر`, "المنتج اللي كنت مستنيه رجع متوفر. الكمية محدودة.", "شوف المنتج"],
       en: [`${d.product || ""} is back in stock`, "The product you were waiting for is back in stock. Quantities are limited.", "View product"],
     },
+    proof_ack: {
+      ar: [`استلمنا إثبات الدفع لطلبك ${d.order || ""}`, d.intro || "", "تتبّع الطلب"],
+      en: [`We received your payment proof for order ${d.order || ""}`, d.intro || "", "Track order"],
+    },
+    unpaid: {
+      ar: [`طلبك ${d.order || ""} مستنيك`, d.hoursLeft ? `طلبك لسه مستني الدفع، والأكواد محجوزة ليك لمدة ${d.hoursLeft} ساعة تقريباً. ادفع وابعت إثبات الدفع من صفحة الطلب قبل ما الحجز ينتهي.` : "طلبك لسه مستني الدفع. ادفع وابعت إثبات الدفع من صفحة الطلب وإحنا نكمّل على طول.", "ابعت إثبات الدفع"],
+      en: [`Your order ${d.order || ""} is waiting for you`, d.hoursLeft ? `Your order is still waiting for payment and the codes are held for you for about ${d.hoursLeft} more hours. Pay and upload your payment proof from the order page before the hold ends.` : "Your order is still waiting for payment. Pay and upload your payment proof from the order page and we will continue right away.", "Upload payment proof"],
+    },
+    welcome: {
+      ar: [`أهلاً بيك في ${storeName}`, `حسابك اتعمل${d.name ? " يا " + d.name : ""}. شحن ألعاب وكروت هدايا رقمية بتوصلك بسرعة.`, "ابدأ التسوق"],
+      en: [`Welcome to ${storeName}`, `Your account is ready${d.name ? ", " + d.name : ""}. Digital game top-ups and gift cards, delivered fast.`, "Start shopping"],
+    },
+    cart: {
+      ar: ["نسيت حاجة في السلة؟", "سبت الحاجات دي في سلتك. لسه متاحة لحد ما تخلص:", "كمّل الطلب"],
+      en: ["Did you forget something?", "You left these in your cart. They are still available:", "Complete your order"],
+    },
+    followup: {
+      ar: ["شكراً إنك اشتريت من عندنا", `طلبك ${d.order || ""} وصلك. لو محتاج شحن تاني أو كارت جديد، كله موجود في المتجر.`, "افتح المتجر"],
+      en: ["Thanks for your order", `Your order ${d.order || ""} was delivered. If you need another top-up or gift card, everything is in the store.`, "Open the store"],
+    },
+    winback: {
+      ar: ["وحشتنا!", "بقالك فترة ماطلبتش. في عروض ومنتجات جديدة في المتجر.", "شوف الجديد"],
+      en: ["We miss you", "It has been a while since your last order. There are new products and offers in the store.", "See what's new"],
+    },
+    custom: {
+      ar: [d.subject || "", d.intro || "", d.cta || ""],
+      en: [d.subject || "", d.intro || "", d.cta || ""],
+    },
   }[kind][ar ? "ar" : "en"];
   const [subject, intro, cta] = T;
   const extra = d.extra ? `<div style="margin:14px 0;padding:12px;background:#f4f1fb;border-radius:8px;white-space:pre-wrap">${htmlEsc(d.extra)}</div>` : "";
-  const html = `<div dir="${ar ? "rtl" : "ltr"}" style="font-family:Tahoma,Arial,sans-serif;max-width:520px;margin:auto;padding:20px;color:#1c1530"><h2 style="margin:0 0 12px">${htmlEsc(subject)}</h2><p style="line-height:1.7">${htmlEsc(intro)}</p>${extra}${d.url ? `<p style="margin:22px 0"><a href="${htmlEsc(d.url)}" style="background:#7c3aed;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;display:inline-block">${htmlEsc(cta)}</a></p>` : ""}<p style="color:#8a84a0;font-size:12px">${htmlEsc(storeName)}</p></div>`;
-  const text = `${subject}\n\n${intro}${d.extra ? "\n\n" + d.extra : ""}${d.url ? `\n\n${cta}: ${d.url}` : ""}\n\n${storeName}`;
+  const html = `<div dir="${ar ? "rtl" : "ltr"}" style="font-family:Tahoma,Arial,sans-serif;max-width:520px;margin:auto;padding:20px;color:#1c1530"><h2 style="margin:0 0 12px">${htmlEsc(subject)}</h2><p style="line-height:1.7;white-space:pre-wrap">${htmlEsc(intro)}</p>${extra}${d.url ? `<p style="margin:22px 0"><a href="${htmlEsc(d.url)}" style="background:#7c3aed;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;display:inline-block">${htmlEsc(cta)}</a></p>` : ""}<p style="color:#8a84a0;font-size:12px">${htmlEsc(storeName)}</p>${d.unsub ? `<p style="color:#8a84a0;font-size:11px"><a href="${htmlEsc(d.unsub)}" style="color:#8a84a0">${ar ? "إلغاء الاشتراك في رسائل العروض" : "Unsubscribe from offer emails"}</a></p>` : ""}</div>`;
+  const text = `${subject}\n\n${intro}${d.extra ? "\n\n" + d.extra : ""}${d.url ? `\n\n${cta}: ${d.url}` : ""}\n\n${storeName}${d.unsub ? `\n${d.unsub}` : ""}`;
   return { subject: `${subject} — ${storeName}`, html, text };
 }
+// ===================== V80: email automations =====================
+// Everything here is best effort: a mail problem never blocks an order, and every automatic send is logged in kd_email_log.
+const originOfEnv = (env, url) => clean(env.PUBLIC_ORIGIN) || (url ? url.origin : "https://kardivo.store");
+const cairoHour = (d = new Date()) =>
+  Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hour12: false, timeZone: "Africa/Cairo" }).format(d)) % 24;
+const hourIn = (h, a, b) => (a <= b ? h >= a && h < b : h >= a || h < b);
+const nowIso = () => new Date().toISOString();
+const agoIso = (ms) => new Date(Date.now() - ms).toISOString();
+const clampInt = (v, lo, hi, d) => {
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d;
+};
+const sqlTime = (v) => Date.parse(String(v || "").replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(v)) ? "" : "Z"));
+async function mailOut(env, ctx, kind, to, tpl, extra = {}) {
+  if (!emailReady(env)) return false;
+  const ok = await sendEmail(env, ctx, { to, ...tpl, ...extra });
+  try {
+    await env.DB.prepare("INSERT INTO kd_email_log(kind,to_email,subject,ok) VALUES(?,?,?,?)")
+      .bind(kind, to, String(tpl.subject || "").slice(0, 200), ok ? 1 : 0)
+      .run();
+  } catch {}
+  return !!ok;
+}
+async function unsubLink(env, origin, u) {
+  let tok = u.unsub_token;
+  if (!tok) {
+    tok = crypto.randomUUID().replace(/-/g, "");
+    await env.DB.prepare("UPDATE users SET unsub_token=? WHERE id=? AND unsub_token IS NULL").bind(tok, u.id).run();
+    tok = (await env.DB.prepare("SELECT unsub_token FROM users WHERE id=?").bind(u.id).first())?.unsub_token || tok;
+  }
+  const link = `${origin}/api/unsubscribe?u=${u.id}&t=${tok}`;
+  return { link, headers: { "List-Unsubscribe": `<${link}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } };
+}
+// One email to an opted-in customer: carries the unsubscribe link and header, and counts toward the one-offer-email-per-6-days limit.
+async function marketingMail(env, ctx, u, kind, d, lang, s, origin, touch = true) {
+  const un = await unsubLink(env, origin, u);
+  const tpl = mailTemplate(lang, kind, { ...d, unsub: un.link }, s.store_name);
+  const ok = await mailOut(env, ctx, kind, u.email, tpl, { headers: un.headers });
+  if (ok && touch) await env.DB.prepare("UPDATE users SET last_marketing_at=? WHERE id=?").bind(nowIso(), u.id).run();
+  return ok;
+}
+const codeLine = (ar, code) => (code ? (ar ? `كود الخصم: ${code}` : `Discount code: ${code}`) : "");
+async function orderEmailOf(env, o) {
+  const u = o.user_id ? await env.DB.prepare("SELECT email FROM users WHERE id=?").bind(o.user_id).first() : null;
+  return u?.email || (looksEmail(o.guest_contact) ? clean(o.guest_contact) : "");
+}
+// Payment proof just arrived: tell the customer in the order's support thread (Track order), by push, and by email when we have one.
+async function proofAck(env, ctx, o, origin) {
+  try {
+    const s = await allSettings(env);
+    if (s.email_auto_enabled !== "1" || s.proof_ack_enabled !== "1") return;
+    // Claim atomically: a re-upload within 10 minutes gets no second message.
+    const claim = await env.DB.prepare("UPDATE orders SET proof_ack_at=? WHERE id=? AND (proof_ack_at IS NULL OR proof_ack_at<?)")
+      .bind(nowIso(), o.id, agoIso(10 * 60000))
+      .run();
+    if (!claim.meta?.changes) return;
+    const ar = o.lang !== "en",
+      off = !hourIn(cairoHour(), clampInt(s.work_start_hour, 0, 23, 10), clampInt(s.work_end_hour, 0, 23, 23)),
+      key = `proof_ack${off ? "_off" : ""}_${ar ? "ar" : "en"}`,
+      text = String(s[key] || DEFAULTS[key]).replace(/\{eta\}/g, String(clampInt(s.proof_eta_minutes, 1, 1440, 30))).slice(0, 1000);
+    await env.DB.prepare("INSERT INTO kd_order_messages(order_id,sender,body,read_by_admin) VALUES(?,'admin',?,1)").bind(o.id, text).run();
+    await customerNotify(env, o.user_id, o.id, "payment", ar ? "استلمنا إثبات الدفع" : "Payment proof received", text, "proof_ack");
+    const to = await orderEmailOf(env, o);
+    if (to)
+      await mailOut(env, ctx, "proof_ack", to, mailTemplate(o.lang, "proof_ack", { order: o.order_number, intro: text, url: `${origin}/?track=${encodeURIComponent(o.order_number)}` }, s.store_name));
+  } catch (e) {
+    console.error("proofAck", e);
+  }
+}
+async function welcomeEmail(env, ctx, user, origin, lang) {
+  try {
+    const s = await allSettings(env);
+    if (s.email_auto_enabled !== "1" || s.email_welcome_enabled !== "1" || !emailReady(env)) return;
+    const ar = lang !== "en",
+      d = { name: user.name, extra: codeLine(ar, clean(s.email_welcome_code)), url: `${origin}/products` };
+    if (user.marketing_optin) await marketingMail(env, ctx, user, "welcome", d, lang, s, origin, false);
+    else await mailOut(env, ctx, "welcome", user.email, mailTemplate(lang, "welcome", d, s.store_name));
+  } catch (e) {
+    console.error("welcome", e);
+  }
+}
+// Hourly: unpaid-order reminder, abandoned cart, after-delivery follow-up, win-back. Sent only 09:00-22:00 Cairo time (editable), a capped number per run.
+async function emailAutomations(env, ctx, s) {
+  if (s.email_auto_enabled !== "1") return "automatic emails are off";
+  if (!emailReady(env)) return "email is not configured";
+  if (!hourIn(cairoHour(), clampInt(s.email_send_from, 0, 23, 9), clampInt(s.email_send_to, 0, 23, 22))) return "outside the sending window";
+  const origin = clean(env.PUBLIC_ORIGIN) || "https://kardivo.store",
+    left = { n: clampInt(s.email_max_per_run, 1, 40, 25) },
+    sent = { unpaid: 0, cart: 0, followup: 0, winback: 0 },
+    capCut = agoIso(6 * 86400000),
+    canMarket = (u) => !u.last_marketing_at || u.last_marketing_at < capCut,
+    H = 3600000;
+  const holdHours = clampInt(s.reserve_hours, 1, 720, 24);
+  if (s.email_unpaid_enabled === "1" && left.n > 0) {
+    const after = clampInt(s.email_unpaid_after_hours, 1, 168, 6);
+    const rows = (await env.DB.prepare(
+      "SELECT o.id,o.order_number,o.lang,o.user_id,o.guest_contact,COALESCE(o.reserve_reset_at,o.created_at) base,EXISTS(SELECT 1 FROM order_items i WHERE i.order_id=o.id AND i.delivery_type='code') hascode FROM orders o WHERE o.payment_status='awaiting_payment' AND o.fulfillment_status='pending' AND o.payment_proof_key IS NULL AND o.unpaid_reminder_at IS NULL AND COALESCE(o.reserve_reset_at,o.created_at)<datetime('now',?) AND COALESCE(o.reserve_reset_at,o.created_at)>datetime('now','-3 days') ORDER BY o.id LIMIT 40",
+    ).bind(`-${after} hours`).all()).results;
+    for (const o of rows) {
+      if (left.n <= 0) break;
+      const hoursLeft = o.hascode ? Math.round(holdHours - (Date.now() - sqlTime(o.base)) / H) : 0;
+      if (o.hascode && hoursLeft < 1) continue; // the hold is about to end, the reminder would only confuse
+      const claim = await env.DB.prepare("UPDATE orders SET unpaid_reminder_at=? WHERE id=? AND unpaid_reminder_at IS NULL").bind(nowIso(), o.id).run();
+      if (!claim.meta?.changes) continue;
+      const to = await orderEmailOf(env, o);
+      if (!to) continue;
+      left.n--;
+      if (await mailOut(env, ctx, "unpaid", to, mailTemplate(o.lang, "unpaid", { order: o.order_number, hoursLeft: hoursLeft > 0 ? hoursLeft : 0, url: `${origin}/?track=${encodeURIComponent(o.order_number)}` }, s.store_name))) sent.unpaid++;
+    }
+  }
+  if (s.email_cart_enabled === "1" && left.n > 0) {
+    const rows = (await env.DB.prepare(
+      "SELECT c.user_id,c.items,c.lang,c.updated_at,u.id,u.email,u.name,u.unsub_token,u.last_marketing_at FROM kd_saved_carts c JOIN users u ON u.id=c.user_id WHERE c.reminded_at IS NULL AND u.marketing_optin=1 AND c.updated_at<? AND c.updated_at>? ORDER BY c.updated_at LIMIT 40",
+    ).bind(agoIso(clampInt(s.email_cart_after_hours, 1, 168, 12) * H), agoIso(7 * 86400000)).all()).results;
+    for (const c of rows) {
+      if (left.n <= 0) break;
+      if (!canMarket(c)) continue;
+      let items = [];
+      try { items = JSON.parse(c.items) || []; } catch {}
+      items = items.filter((i) => Number(i.product_id) > 0).slice(0, 8);
+      const bought = await env.DB.prepare("SELECT 1 x FROM orders WHERE user_id=? AND created_at>datetime(?)").bind(c.user_id, c.updated_at).first();
+      if (!items.length || bought) {
+        await env.DB.prepare("UPDATE kd_saved_carts SET reminded_at=? WHERE user_id=?").bind(nowIso(), c.user_id).run();
+        continue;
+      }
+      const ids = [...new Set(items.map((i) => Number(i.product_id)))],
+        prods = (await env.DB.prepare(`SELECT id,name,name_ar FROM products WHERE active=1 AND id IN (${ids.map(() => "?").join(",")})`).bind(...ids).all()).results,
+        pm = new Map(prods.map((p) => [p.id, p])),
+        lang = c.lang === "en" ? "en" : "ar",
+        lines = items.filter((i) => pm.has(Number(i.product_id))).map((i) => { const p = pm.get(Number(i.product_id)); return `• ${lang === "ar" && p.name_ar ? p.name_ar : p.name} × ${clampInt(i.quantity, 1, 99, 1)}`; });
+      await env.DB.prepare("UPDATE kd_saved_carts SET reminded_at=? WHERE user_id=?").bind(nowIso(), c.user_id).run();
+      if (!lines.length) continue;
+      left.n--;
+      const code = codeLine(lang !== "en", clean(s.email_cart_code));
+      if (await marketingMail(env, ctx, c, "cart", { extra: lines.join("\n") + (code ? "\n\n" + code : ""), url: `${origin}/cart` }, lang, s, origin)) sent.cart++;
+    }
+  }
+  if (s.email_followup_enabled === "1" && left.n > 0) {
+    const days = clampInt(s.email_followup_days, 1, 60, 3);
+    const rows = (await env.DB.prepare(
+      "SELECT o.id,o.order_number,o.lang,u.id,u.email,u.name,u.unsub_token,u.last_marketing_at FROM orders o JOIN users u ON u.id=o.user_id WHERE o.fulfillment_status='fulfilled' AND o.followup_at IS NULL AND u.marketing_optin=1 AND o.updated_at<datetime('now',?) AND o.updated_at>datetime('now',?) ORDER BY o.id LIMIT 40",
+    ).bind(`-${days} days`, `-${days + 7} days`).all()).results;
+    for (const o of rows) {
+      if (left.n <= 0) break;
+      if (!canMarket(o)) continue;
+      await env.DB.prepare("UPDATE orders SET followup_at=? WHERE id=?").bind(nowIso(), o.id).run();
+      left.n--;
+      if (await marketingMail(env, ctx, o, "followup", { order: o.order_number, url: `${origin}/products` }, o.lang === "en" ? "en" : "ar", s, origin)) sent.followup++;
+    }
+  }
+  if (s.email_winback_enabled === "1" && left.n > 0) {
+    const days = clampInt(s.email_winback_days, 7, 365, 45),
+      lastPaid = "(SELECT MAX(o.created_at) FROM orders o WHERE o.user_id=u.id AND o.payment_status='paid')";
+    const rows = (await env.DB.prepare(
+      `SELECT u.id,u.email,u.name,u.unsub_token,u.last_marketing_at FROM users u WHERE u.role='customer' AND u.marketing_optin=1 AND (u.winback_at IS NULL OR u.winback_at<?) AND ${lastPaid}<datetime('now',?) AND ${lastPaid}>datetime('now',?) ORDER BY u.id LIMIT 40`,
+    ).bind(agoIso(90 * 86400000), `-${days} days`, `-${days + 30} days`).all()).results;
+    for (const u of rows) {
+      if (left.n <= 0) break;
+      if (!canMarket(u)) continue;
+      await env.DB.prepare("UPDATE users SET winback_at=? WHERE id=?").bind(nowIso(), u.id).run();
+      left.n--;
+      const code = codeLine(false, clean(s.email_winback_code));
+      if (await marketingMail(env, ctx, u, "winback", { extra: code ? codeLine(true, clean(s.email_winback_code)) + "\n" + code : "", url: `${origin}/products` }, "ar", s, origin)) sent.winback++;
+    }
+  }
+  return `unpaid ${sent.unpaid}, cart ${sent.cart}, follow-up ${sent.followup}, win-back ${sent.winback}`;
+}
+
 // ---- Web push (no payload: the service worker asks /api/admin/push-latest what to show) ----
 const b64u = (buf) =>
   btoa(String.fromCharCode(...new Uint8Array(buf)))
@@ -2389,6 +2622,7 @@ async function runScheduled(env, ctx, event) {
     }
   };
   await run("release_reservations", async () => `Released ${await expireReservations(env, s)} unpaid orders`);
+  await run("email_automations", () => emailAutomations(env, ctx, s));
   if (hour !== 3 && event?.cron !== "daily") return;
   await run("low_stock_alert", async () => `${await sendLowStockAlert(env, ctx, s)} products low`);
   await run("backup", async () => {
@@ -2402,6 +2636,8 @@ async function runScheduled(env, ctx, event) {
       env.DB.prepare("DELETE FROM login_attempts WHERE reset_at<?").bind(Date.now()),
       env.DB.prepare("DELETE FROM kd_password_resets WHERE expires_at<?").bind(Date.now()),
       env.DB.prepare("DELETE FROM kd_admin_alerts WHERE created_at<datetime('now','-30 days')"),
+      env.DB.prepare("DELETE FROM kd_email_log WHERE created_at<datetime('now','-60 days')"),
+      env.DB.prepare("DELETE FROM kd_saved_carts WHERE updated_at<?").bind(agoIso(30 * 86400000)),
       env.DB.prepare("DELETE FROM kd_stock_subscriptions WHERE status<>'waiting' AND created_at<datetime('now','-60 days')"),
     ]);
     return "ok";
@@ -2681,10 +2917,12 @@ async function api(req, env, url, ctx) {
     )
       return json({ error: "Email already exists." }, 409);
     const r = await env.DB.prepare(
-      "INSERT INTO users(name,email,password_hash,role) VALUES(?,?,?,'customer')",
+      "INSERT INTO users(name,email,password_hash,role,marketing_optin,unsub_token) VALUES(?,?,?,'customer',?,?)",
     )
-      .bind(name, email, await hashPassword(password))
+      .bind(name, email, await hashPassword(password), b.marketing ? 1 : 0, crypto.randomUUID().replace(/-/g, ""))
       .run();
+    const optin = b.marketing ? 1 : 0;
+    ctx?.waitUntil?.(welcomeEmail(env, ctx, { id: r.meta.last_row_id, name, email, marketing_optin: optin }, originOfEnv(env, url), b.lang === "en" ? "en" : "ar"));
     const sid = crypto.randomUUID();
     await env.DB.prepare(
       "INSERT INTO sessions(id,user_id,expires_at) VALUES(?,?,?)",
@@ -3128,6 +3366,7 @@ async function api(req, env, url, ctx) {
       wa = s.whatsapp
         ? `https://wa.me/${s.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(waText)}`
         : "";
+    if (me) try { await env.DB.prepare("DELETE FROM kd_saved_carts WHERE user_id=?").bind(me.id).run(); } catch {}
     const adminLink = `${url.origin}/?admin_order=${orderId}`;
     adminAlert(env, ctx, {
       kind: "order",
@@ -3238,6 +3477,7 @@ async function api(req, env, url, ctx) {
       discord: [["Order", o.order_number, true], ["Total", String(money(o.total)), true], ["Review", `${url.origin}/?admin_tab=queue`]],
       label: "Payment proof",
     });
+    await proofAck(env, ctx, o, originOfEnv(env, url));
     return json({ ok: true });
   }
   if (path === "/api/checkout-events" && method === "POST") {
@@ -3356,6 +3596,39 @@ async function api(req, env, url, ctx) {
       });
       return json({ ok: true }, 201);
     }
+  }
+  // ---- V80: saved cart (for the abandoned-cart email), unsubscribe, offer-email preference ----
+  if (path === "/api/cart-sync" && method === "POST") {
+    if (!me) return json({ ok: true });
+    if (!(await throttle(env, `cartsync:${me.id}`, 60, 3600000))) return json({ ok: true });
+    const b = await readJson(req),
+      items = (Array.isArray(b.items) ? b.items : [])
+        .slice(0, 40)
+        .map((i) => ({ product_id: Number(i.product_id) || 0, variant_id: Number(i.variant_id) || null, quantity: clampInt(i.quantity, 1, 99, 1) }))
+        .filter((i) => i.product_id > 0);
+    if (!items.length) await env.DB.prepare("DELETE FROM kd_saved_carts WHERE user_id=?").bind(me.id).run();
+    else
+      await env.DB.prepare(
+        "INSERT INTO kd_saved_carts(user_id,items,lang,updated_at,reminded_at) VALUES(?,?,?,?,NULL) ON CONFLICT(user_id) DO UPDATE SET items=excluded.items,lang=excluded.lang,updated_at=excluded.updated_at,reminded_at=NULL",
+      ).bind(me.id, JSON.stringify(items), b.lang === "en" ? "en" : "ar", nowIso()).run();
+    return json({ ok: true });
+  }
+  if (path === "/api/unsubscribe" && (method === "GET" || method === "POST")) {
+    const id = Number(url.searchParams.get("u")),
+      t = clean(url.searchParams.get("t"));
+    let ok = false;
+    if (id > 0 && t.length >= 16) ok = !!(await env.DB.prepare("UPDATE users SET marketing_optin=0 WHERE id=? AND unsub_token=?").bind(id, t).run()).meta?.changes;
+    const st = await allSettings(env),
+      page = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${htmlEsc(st.store_name)}</title><body style="font-family:Tahoma,Arial,sans-serif;max-width:480px;margin:12vh auto;padding:20px;text-align:center;color:#1c1530"><h2>${ok ? "تم إلغاء الاشتراك" : "الرابط غير صالح"}</h2><p>${ok ? "مش هنبعتلك رسائل عروض تاني. رسائل طلباتك هتفضل توصلك عادي." : "الرابط منتهي أو غير صحيح."}</p><h3 style="margin-top:28px">${ok ? "Unsubscribed" : "Invalid link"}</h3><p>${ok ? "You will no longer get offer emails. Order emails still arrive as usual." : "This link is expired or incorrect."}</p><p><a href="/">${htmlEsc(st.store_name)}</a></p></body>`;
+    return new Response(page, { status: ok ? 200 : 400, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+  }
+  if (path === "/api/me/marketing" && (method === "GET" || method === "POST")) {
+    if (!me) return json({ error: "Sign in first." }, 401);
+    if (method === "POST") {
+      const b = await readJson(req);
+      await env.DB.prepare("UPDATE users SET marketing_optin=? WHERE id=?").bind(b.optin ? 1 : 0, me.id).run();
+    }
+    return json({ optin: !!(await env.DB.prepare("SELECT marketing_optin x FROM users WHERE id=?").bind(me.id).first())?.x });
   }
   if (path.startsWith("/api/admin/")) {
     const admin = await requireAdmin(req, env);
@@ -4542,6 +4815,53 @@ async function api(req, env, url, ctx) {
       return json({ ok: false, config, error: "Could not reach the email provider: " + String(e && e.message || e) });
     }
   }
+  if (path === "/api/admin/email/overview" && method === "GET") {
+    const q = async (sql) => (await env.DB.prepare(sql).first()) || {};
+    return json({
+      ready: emailReady(env),
+      provider: env.RESEND_API_KEY ? "resend" : env.MAILGUN_API_KEY && env.MAILGUN_DOMAIN ? "mailgun" : "none",
+      from: clean(env.EMAIL_FROM),
+      optin: (await q("SELECT COUNT(*) n FROM users WHERE role='customer' AND marketing_optin=1")).n || 0,
+      customers: (await q("SELECT COUNT(*) n FROM users WHERE role='customer'")).n || 0,
+      saved_carts: (await q("SELECT COUNT(*) n FROM kd_saved_carts")).n || 0,
+      log: (await env.DB.prepare("SELECT kind,to_email,subject,ok,created_at FROM kd_email_log ORDER BY id DESC LIMIT 40").all()).results,
+    });
+  }
+  // Hand-written email from the dashboard. `to` = one or more addresses (any address, one-to-one message, no unsubscribe link needed).
+  // `audience: "optin"` = every customer who opted in to offers, sent 25 per request (the dashboard repeats with the returned `next`).
+  if (path === "/api/admin/email/send" && method === "POST") {
+    if (!emailReady(env)) return json({ error: "Email isn't set up yet (EMAIL_FROM and a Resend or Mailgun key)." }, 503);
+    const b = await readJson(req),
+      subject = clean(b.subject).slice(0, 150),
+      body = clean(b.body).slice(0, 5000),
+      lang = b.lang === "en" ? "en" : "ar",
+      st = await allSettings(env),
+      origin = originOfEnv(env, url);
+    if (!subject || !body) return json({ error: "Write a subject and a message first." }, 400);
+    let ctaUrl = clean(b.cta_url);
+    if (ctaUrl.startsWith("/")) ctaUrl = origin + ctaUrl;
+    if (ctaUrl && !/^https:\/\/[^\s]+$/.test(ctaUrl)) return json({ error: "The button link must start with https:// (or be a path like /products)." }, 400);
+    const cta = ctaUrl ? clean(b.cta_text).slice(0, 60) || (lang === "ar" ? "افتح" : "Open") : "";
+    const d = { subject, intro: body, cta, url: ctaUrl };
+    if (b.audience === "optin") {
+      const offset = clampInt(b.offset, 0, 1e6, 0),
+        total = (await env.DB.prepare("SELECT COUNT(*) n FROM users WHERE role='customer' AND marketing_optin=1").first()).n || 0,
+        users = (await env.DB.prepare("SELECT id,email,name,unsub_token FROM users WHERE role='customer' AND marketing_optin=1 ORDER BY id LIMIT 25 OFFSET ?").bind(offset).all()).results;
+      let sent = 0, failed = 0;
+      for (const u of users) (await marketingMail(env, ctx, u, "custom", d, lang, st, origin)) ? sent++ : failed++;
+      await audit(env, me, "email_send", "email", null, `offer email to ${sent} customers: ${subject}`.slice(0, 300));
+      return json({ ok: true, sent, failed, total, next: offset + users.length, done: offset + users.length >= total });
+    }
+    const list = [...new Set(String(b.to || "").split(/[\s,;]+/).map((x) => clean(x).toLowerCase()).filter(Boolean))];
+    if (!list.length) return json({ error: "Enter at least one email address." }, 400);
+    if (list.length > 20) return json({ error: "Up to 20 addresses at a time. For everyone who opted in, use the offers option." }, 400);
+    const bad = list.filter((x) => !looksEmail(x));
+    if (bad.length) return json({ error: `Not a valid email: ${bad.join(", ")}` }, 400);
+    let sent = 0, failed = 0;
+    for (const to of list) (await mailOut(env, ctx, "admin", to, mailTemplate(lang, "custom", d, st.store_name))) ? sent++ : failed++;
+    await audit(env, me, "email_send", "email", null, `to ${list.join(", ")}: ${subject}`.slice(0, 300));
+    return json({ ok: failed === 0, sent, failed });
+  }
   if (path === "/api/admin/backups" && method === "GET") {
     const bucket = bucketOf(env);
     if (!bucket) return json({ configured: false, backups: [] });
@@ -4695,6 +5015,12 @@ async function api(req, env, url, ctx) {
       if (key === "usd_exchange_rate") v = String(Math.min(1000, Math.max(0.01, Number(v) || Number(DEFAULTS[key]))));
       if (["backup_keep"].includes(key))
         v = String(Math.min(90, Math.max(1, Math.floor(Number(v)) || 14)));
+      if (["email_unpaid_after_hours", "email_cart_after_hours", "email_followup_days", "email_winback_days", "proof_eta_minutes", "email_max_per_run"].includes(key))
+        v = String(clampInt(v, 1, key.endsWith("hours") ? 168 : key === "email_max_per_run" ? 40 : key === "proof_eta_minutes" ? 1440 : 365, Number(DEFAULTS[key])));
+      if (["work_start_hour", "work_end_hour", "email_send_from", "email_send_to"].includes(key)) v = String(clampInt(v, 0, 23, Number(DEFAULTS[key])));
+      if (key.endsWith("_enabled") && key.startsWith("email_") || key === "email_auto_enabled" || key === "proof_ack_enabled") v = v === "1" ? "1" : "0";
+      if (key.endsWith("_code") && key.startsWith("email_")) v = v.toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 40);
+      if (["proof_ack_ar", "proof_ack_en", "proof_ack_off_ar", "proof_ack_off_en"].includes(key)) v = v.slice(0, 500) || DEFAULTS[key];
       if (["max_qty", "reserve_hours", "low_stock_threshold"].includes(key))
         v = String(Math.max(1, Math.floor(Number(v)) || Number(DEFAULTS[key])));
       await env.DB.prepare(

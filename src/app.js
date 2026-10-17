@@ -141,6 +141,7 @@ const AR = {
   optional: "اختياري",
   "Log in": "تسجيل الدخول",
   "Create account": "إنشاء حساب",
+  "Send me offers and new products by email": "ابعتلي العروض والمنتجات الجديدة على الإيميل",
   "Continue as guest": "كمّل كضيف",
   "Checkout and payment remain in EGP.": "إتمام الطلب والدفع بالجنيه المصري.",
   "Switch price display to USD": "عرض الأسعار بالدولار الأمريكي",
@@ -1034,11 +1035,17 @@ function loadCart() {
     return [];
   }
 }
+let cartSyncTimer;
+function syncCart() {
+  if (!state.user) return;
+  api("/api/cart-sync", { method: "POST", body: JSON.stringify({ lang: state.lang, items: state.cart.map((i) => ({ product_id: i.product_id, variant_id: i.variant_id || null, quantity: i.quantity })) }) }).catch(() => {});
+}
 function saveCart() {
   try {
     localStorage.setItem("kardivo_cart", JSON.stringify(state.cart));
   } catch {}
   renderCartCount();
+  if (state.user) { clearTimeout(cartSyncTimer); cartSyncTimer = setTimeout(syncCart, 4000); }
 }
 function checkoutSession() {
   try {
@@ -2649,7 +2656,7 @@ function openReset(token) {
 }
 function showRegister() {
   $("#authForm").innerHTML =
-    `<form id="registerForm"><div class="field"><label>${t("Name")}</label><input id="name" required></div><div class="field"><label>${t("Email")}</label><input id="email" type="email" required></div><div class="field"><label>${t("Password")}</label><input id="password" type="password" minlength="8" required></div><button class="btn primary" type="submit">${t("Create account")}</button></form>`;
+    `<form id="registerForm"><div class="field"><label>${t("Name")}</label><input id="name" required></div><div class="field"><label>${t("Email")}</label><input id="email" type="email" required></div><div class="field"><label>${t("Password")}</label><input id="password" type="password" minlength="8" required></div><label class="field" style="display:flex;gap:8px;align-items:center;flex-direction:row"><input id="regMarketing" type="checkbox" style="width:auto"> <span>${t("Send me offers and new products by email")}</span></label><button class="btn primary" type="submit">${t("Create account")}</button></form>`;
   authTabs("registerTab");
   $("#registerForm").onsubmit = async (e) => {
     e.preventDefault();
@@ -2660,6 +2667,8 @@ function showRegister() {
           name: $("#name").value,
           email: $("#email").value,
           password: $("#password").value,
+          marketing: $("#regMarketing")?.checked || false,
+          lang: state.lang,
         }),
       });
       state.user = r.user;
@@ -2938,6 +2947,7 @@ const ADMIN_TABS = [
   ["inventory", "Digital codes"],
   ["waitlist", "Back-in-stock"],
   ["customers", "Customers"],
+  ["emails", "Emails"],
   ["discounts", "Discounts"],
   ["campaigns", "Campaigns"],
   ["reviews", "Reviews"],
@@ -2983,6 +2993,7 @@ async function renderAdminTab() {
     inventory: adminInventory,
     waitlist: adminWaitlist,
     customers: adminCustomers,
+    emails: adminEmails,
     discounts: adminDiscounts,
     campaigns: adminCampaigns,
     reviews: adminReviews,
@@ -3001,6 +3012,7 @@ const JOB_NAMES = {
   low_stock: "Low-stock alert",
   backup: "Database backup",
   cleanup: "Housekeeping",
+  email_automations: "Automatic emails",
 };
 function fmtBytes(n) {
   n = Number(n) || 0;
@@ -3728,6 +3740,21 @@ async function enablePushPermissionAndSub(register) {
   let sub = await reg.pushManager.getSubscription();
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToU8(state.settings.vapid_public_key) });
   await register(sub.endpoint);
+}
+async function renderOfferEmailBox() {
+  const anchor = $("#orderPushBox");
+  if (!anchor || !state.user) return;
+  let box = $("#offerEmailBox");
+  if (!box) { box = document.createElement("div"); box.id = "offerEmailBox"; anchor.after(box); }
+  let on;
+  try { on = !!(await api("/api/me/marketing")).optin; } catch { return; }
+  const ar = state.lang === "ar";
+  box.innerHTML = `<div class="notice order-push"><div><b>${ar ? "رسائل العروض" : "Offer emails"}</b><br><small>${ar ? "عروض ومنتجات جديدة على الإيميل. رسائل طلباتك بتوصلك في كل الأحوال." : "Offers and new products by email. Your order emails always arrive either way."}</small></div><button type="button" class="btn ${on ? "ghost" : "primary"}" id="offerEmailBtn">${on ? t("Turn off") : t("Turn on")}</button></div>`;
+  $("#offerEmailBtn").onclick = async (ev) => {
+    ev.currentTarget.disabled = true;
+    try { await api("/api/me/marketing", { method: "POST", body: JSON.stringify({ optin: !on }) }); } catch (err) { toast(err.message); }
+    renderOfferEmailBox();
+  };
 }
 async function renderOrderPushBox() {
   const box = $("#orderPushBox");
@@ -5253,6 +5280,7 @@ async function renderAccountPage() {
   }
   $("main").innerHTML = `<section class="account-page container"><div class="account-page-hero"><span class="account-page-mark" aria-hidden="true">◎</span><div><span class="eyebrow">${ar ? "حسابك في كارديفو" : "YOUR KARDIVO ACCOUNT"}</span><h1>${ar ? `أهلاً ${escapeHTML(user.name || "")}` : `Welcome back, ${escapeHTML(user.name || user.email || "Customer")}.`}</h1><p>${ar ? "إدارة حسابك ومتابعة طلباتك من هنا." : "Manage your account and keep track of your orders here."}</p></div></div><section class="account-page-grid"><article class="account-page-card"><span class="eyebrow">${ar ? "بيانات الحساب" : "ACCOUNT DETAILS"}</span><h2>${escapeHTML(user.name || (ar ? "عميل كارديفو" : "Kardivo customer"))}</h2><p>${escapeHTML(user.email || "")}</p><p>${ar ? "نوع الحساب" : "Account type"}: <b>${user.role === "admin" ? (ar ? "مدير" : "Administrator") : (ar ? "عميل" : "Customer")}</b></p><div class="modal-actions"><button class="btn primary" id="accountDetailsBtn">${ar ? "تفاصيل الحساب والطلبات" : "Account details & orders"}</button>${user.role === "admin" ? `<button class="btn ghost" id="accountAdminBtn">${ar ? "لوحة تحكم المدير" : "Admin dashboard"}</button>` : ""}<button class="btn ghost" id="accountLogoutBtn">${ar ? "تسجيل الخروج" : "Log out"}</button></div></article><article class="account-page-card"><span class="eyebrow">${ar ? "استكشف المتجر" : "KEEP EXPLORING"}</span><h2>${ar ? "كل المنتجات الرقمية في مكان واحد." : "Digital goods, minus the nonsense."}</h2><p>${ar ? "اختار اللي محتاجه وضيفه للسلة." : "Browse the catalog and add products to your cart."}</p><a class="btn ghost" href="/#store" data-account-store>${ar ? "ارجع للمتجر ↖" : "Back to the store ↗"}</a></article></section><section class="account-page-card" style="margin-top:16px"><span class="eyebrow">${ar ? "طلباتك" : "YOUR ORDERS"}</span><h2>${ar ? "سجل الطلبات" : "Order history"}</h2><div id="orderPushBox"></div><div id="accountOrders"><div class="empty">${ar ? "جارٍ تحميل الطلبات…" : "Loading orders…"}</div></div></section></section>`;
   renderOrderPushBox();
+  renderOfferEmailBox();
   $("#accountDetailsBtn")?.addEventListener("click", openAccount);
   $("#accountAdminBtn")?.addEventListener("click", openAdmin);
   $("#accountLogoutBtn")?.addEventListener("click", async () => {
@@ -5338,6 +5366,84 @@ function funnelPanelHTML(r) {
   steps.forEach((x, i) => { if (i && x.of_previous != null && steps[i - 1].sessions >= 5 && x.of_previous < worstPct) { worstPct = x.of_previous; worst = i; } });
   const pr = r.proof_rate || { orders: 0, with_proof: 0, pct: 0 };
   return `<div class="admin-panel" style="margin-top:12px"><div class="panel-head"><h3>Checkout funnel · last ${r.days} days</h3></div><div class="modal-body"><div class="table-wrap"><table class="admin-table" style="min-width:420px"><thead><tr><th>Step</th><th>Sessions</th><th>Kept from previous step</th></tr></thead><tbody>${steps.map((x, i) => `<tr${i === worst ? ' style="background:#f8717114"' : ""}><td>${escapeHTML(x.name)}${i === worst ? ' <b class="danger-text">← biggest drop</b>' : ""}</td><td>${x.sessions}</td><td>${x.of_previous == null ? "—" : x.of_previous + "%"}</td></tr>`).join("")}</tbody></table></div><div class="funnel" style="margin-top:12px"><div class="stat"><small>ORDERS PLACED</small><b>${f.orders ?? 0}</b></div><div class="stat"><small>ORDERS WITH PROOF OR PAID</small><b>${pr.with_proof} / ${pr.orders}</b></div><div class="stat"><small>PROOF RATE</small><b>${pr.pct}%</b></div><div class="stat"><small>PAID ORDERS</small><b>${f.paid_orders ?? 0}</b></div></div><small>Unique browsing sessions per step. Steps are tracked from the V79 checkout onward, so the first days after deploy are thin. "Proof rate" counts all orders in the period, not sessions.</small></div></div>`;
+}
+async function adminEmails(main) {
+  const [ov, st, customers] = await Promise.all([
+    api("/api/admin/email/overview"),
+    api("/api/admin/settings"),
+    api("/api/admin/customers").catch(() => []),
+  ]);
+  const e = escapeHTML,
+    tog = (k, label) => `<label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" style="width:auto" data-es="${k}" data-bool ${st[k] === "1" ? "checked" : ""}> <span>${label}</span></label>`,
+    num = (k, label) => `<div class="field"><label>${label}</label><input type="number" min="0" data-es="${k}" value="${e(st[k])}"></div>`,
+    code = (k, label) => `<div class="field"><label>${label}</label><input data-es="${k}" value="${e(st[k])}" placeholder="optional, create the code first in Discounts"></div>`,
+    txt = (k, label, dir) => `<div class="field"><label>${label}</label><textarea rows="2" data-es="${k}" ${dir ? `dir="${dir}"` : ""}>${e(st[k])}</textarea></div>`,
+    when = (v) => new Date(String(v).replace(" ", "T") + "Z").toLocaleString(),
+    logRows = (log) => log.length ? log.map((l) => `<tr><td>${e(l.kind)}</td><td>${e(l.to_email)}</td><td>${e(l.subject)}</td><td>${l.ok ? "Sent" : "Failed"}</td><td><small>${e(when(l.created_at))}</small></td></tr>`).join("") : `<tr><td colspan="5" class="empty">Nothing sent yet.</td></tr>`;
+  main.innerHTML = `<div class="admin-top"><h2>Emails</h2><span class="eyebrow">${ov.ready ? `CONNECTED (${e(ov.provider)})` : "NOT SET UP"}</span></div>
+  ${ov.ready ? "" : `<div class="notice danger-text" style="margin-bottom:12px">Email isn't connected yet. Set <b>EMAIL_FROM</b> in wrangler.toml and the <b>RESEND_API_KEY</b> secret, then redeploy. Nothing below can send until then.</div>`}
+  <div class="admin-panel" style="margin-bottom:12px"><div class="panel-head"><div><h3>Write an email</h3><small>Typed here, sent from ${e(ov.from || "your sender address")}. No need to open Resend.</small></div></div><div class="modal-body">
+    <div class="field"><label>Send to</label><select id="emAudience"><option value="to">Specific email addresses</option><option value="optin">Everyone who opted in to offers (${ov.optin} of ${ov.customers} customers)</option></select></div>
+    <div class="field" id="emToRow"><label>Email address(es), separated by commas</label><div style="display:flex;gap:8px"><input id="emTo" list="emCust" placeholder="name@example.com" autocomplete="off" style="flex:1"><button class="btn ghost" type="button" id="emMe">Me</button></div><datalist id="emCust">${customers.filter((c) => c.email).slice(0, 300).map((c) => `<option value="${e(c.email)}">${e(c.name || "")}</option>`).join("")}</datalist></div>
+    <div class="field"><label>Language of the email layout</label><select id="emLang"><option value="ar">Arabic (right to left)</option><option value="en">English</option></select></div>
+    <div class="field"><label>Subject</label><input id="emSubject" maxlength="150"></div>
+    <div class="field"><label>Message</label><textarea id="emBody" rows="8" maxlength="5000" placeholder="Write your message. Line breaks are kept."></textarea></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="field"><label>Button text (optional)</label><input id="emCtaText" maxlength="60"></div><div class="field"><label>Button link (optional)</label><input id="emCtaUrl" placeholder="/products or https://..."></div></div>
+    <div class="modal-actions"><button class="btn primary" id="emSend" type="button">Send</button></div><pre id="emOut" style="white-space:pre-wrap;margin:8px 0 0"></pre>
+    <small>Offers go only to customers who ticked the box at signup (or switched it on in their account), and every offer email has an unsubscribe link.</small>
+  </div></div>
+  <div class="admin-panel" style="margin-bottom:12px"><div class="panel-head"><div><h3>Automatic emails</h3><small>Run every hour. Sent between the sending hours below (Cairo time), at most ${e(st.email_max_per_run)} per run, and no customer gets more than one offer email every 6 days.</small></div></div><div class="modal-body">
+    ${tog("email_auto_enabled", "<b>Master switch</b>: automatic emails on")}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">${num("email_send_from", "Send from hour (0-23)")}${num("email_send_to", "Send until hour (0-23)")}${num("email_max_per_run", "Max emails per hour")}</div>
+    <hr style="opacity:.2">
+    ${tog("proof_ack_enabled", "<b>Payment proof received</b>: message in the order thread, notification, and email")}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">${num("proof_eta_minutes", "Expected confirmation (minutes)")}${num("work_start_hour", "Working hours start (0-23)")}${num("work_end_hour", "Working hours end (0-23)")}</div>
+    ${txt("proof_ack_ar", "Message in working hours (Arabic). {eta} = the minutes above", "rtl")}${txt("proof_ack_en", "Message in working hours (English)")}${txt("proof_ack_off_ar", "Message outside working hours (Arabic)", "rtl")}${txt("proof_ack_off_en", "Message outside working hours (English)")}
+    <hr style="opacity:.2">
+    ${tog("email_unpaid_enabled", "<b>Unpaid order reminder</b>: order still has no payment proof")}${num("email_unpaid_after_hours", "Remind after (hours)")}
+    ${tog("email_welcome_enabled", "<b>Welcome email</b> on signup")}${code("email_welcome_code", "First-order discount code to include")}
+    ${tog("email_cart_enabled", "<b>Abandoned cart</b> (logged-in customers who opted in; sent once)")}${num("email_cart_after_hours", "Email after (hours)")}${code("email_cart_code", "Discount code to include")}
+    ${tog("email_followup_enabled", "<b>After delivery</b> follow-up (opted in)")}${num("email_followup_days", "Days after delivery")}
+    ${tog("email_winback_enabled", "<b>Win-back</b> (opted in, no order for a while; at most once every 90 days)")}${num("email_winback_days", "Days since last order")}${code("email_winback_code", "Discount code to include")}
+    <div class="modal-actions"><button class="btn primary" id="emSave" type="button">Save settings</button></div>
+  </div></div>
+  <div class="admin-panel"><div class="panel-head"><div><h3>Recent emails</h3><small>${ov.saved_carts} saved cart(s) waiting. Last 40 emails sent by the store.</small></div></div><div class="table-wrap"><table class="admin-table"><thead><tr><th>Type</th><th>To</th><th>Subject</th><th>Result</th><th>When</th></tr></thead><tbody id="emLog">${logRows(ov.log)}</tbody></table></div></div>`;
+  const syncAud = () => ($("#emToRow").hidden = $("#emAudience").value === "optin");
+  $("#emAudience").onchange = syncAud;
+  $("#emMe").onclick = () => ($("#emTo").value = state.user?.email || "");
+  $("#emSave").onclick = async (ev) => {
+    const body = {};
+    $$("[data-es]").forEach((el) => (body[el.dataset.es] = el.hasAttribute("data-bool") ? (el.checked ? "1" : "0") : el.value));
+    ev.currentTarget.disabled = true;
+    try { await api("/api/admin/settings", { method: "PUT", body: JSON.stringify(body) }); toast("Saved."); } catch (err) { toast(err.message); }
+    ev.currentTarget.disabled = false;
+  };
+  $("#emSend").onclick = async (ev) => {
+    const aud = $("#emAudience").value === "optin",
+      base = { subject: $("#emSubject").value, body: $("#emBody").value, lang: $("#emLang").value, cta_text: $("#emCtaText").value, cta_url: $("#emCtaUrl").value },
+      out = $("#emOut"), btn = ev.currentTarget, post = (x) => api("/api/admin/email/send", { method: "POST", body: JSON.stringify({ ...base, ...x }) });
+    if (!base.subject.trim() || !base.body.trim()) return toast("Write a subject and a message first.");
+    if (aud && !confirm(`Send this to ${ov.optin} customer(s) who opted in to offers?`)) return;
+    btn.disabled = true;
+    try {
+      if (!aud) {
+        const r = await post({ to: $("#emTo").value });
+        out.textContent = `Sent ${r.sent}${r.failed ? `, failed ${r.failed}` : ""}.`;
+      } else {
+        let offset = 0, sent = 0, failed = 0;
+        for (;;) {
+          const r = await post({ audience: "optin", offset });
+          sent += r.sent; failed += r.failed; offset = r.next;
+          out.textContent = `Sending... ${Math.min(offset, r.total)} of ${r.total}`;
+          if (r.done || (!r.sent && !r.failed)) break;
+        }
+        out.textContent = `Done. Sent ${sent}${failed ? `, failed ${failed}` : ""}.`;
+      }
+      const fresh = await api("/api/admin/email/overview").catch(() => null);
+      if (fresh) $("#emLog").innerHTML = logRows(fresh.log);
+    } catch (err) { out.textContent = err.message; }
+    btn.disabled = false;
+  };
 }
 async function adminCustomers(main) {
   const rows = await api("/api/admin/customers");
