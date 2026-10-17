@@ -1979,3 +1979,10 @@ html[dir] .footer-social a.soc-btn:hover,html[dir] .footer-social a.soc-btn:focu
 :root[data-theme="light"] .footer-wa{background:#2e7d5b1a}
 [dir="rtl"] .co-num,[dir="rtl"] .co-amount-num{direction:ltr;unicode-bidi:plaintext}
 @media(prefers-reduced-motion:reduce){.co-steps li{transition:none}}
+
+/* V81: real numbers in the deals band, and the product "How to redeem" box */
+.deal-points b.deal-stat{font-size:26px;letter-spacing:-.02em;color:var(--text);line-height:1.1}
+:where(html[data-theme="light"]) .deal-points b.deal-stat{color:#2a1a5e}
+.product-redeem{margin:18px 0;padding:16px 18px;border:1px solid rgba(139,92,246,.3);border-radius:14px;background:rgba(139,92,246,.07)}
+.product-redeem h3{margin:0 0 10px;font-size:16px}
+.product-redeem ol{margin:0;padding-inline-start:22px;display:grid;gap:6px;line-height:1.65}

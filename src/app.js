@@ -837,8 +837,8 @@ function setLang(l) {
 }
 const $ = (s) => document.querySelector(s),
   $$ = (s, root = document) => [...root.querySelectorAll(s)];
-const logo =
-  "https://i.ibb.co/rRqtGKkw/0db84367-e795-4617-835e-5e0a2bf2ff45.jpg";
+const logo = "/icons/icon-512.png";
+const LEGACY_LOGO = "https://i.ibb.co/rRqtGKkw/0db84367-e795-4617-835e-5e0a2bf2ff45.jpg";
 // Stock fallback artwork keeps the storefront visual even when a product has no uploaded image
 // or an older third-party image URL has gone offline. These are generic gaming visuals, not product claims.
 const STOCK_ART = [
@@ -1158,6 +1158,16 @@ function pDesc(p) {
     ? p.description_ar
     : p?.description || "";
 }
+// "How to redeem": one step per line, in the shopper's language (falls back to the other language if only one is written).
+function redeemSteps(p) {
+  const ar = String(p?.redeem_steps_ar || "").trim(), en = String(p?.redeem_steps || "").trim();
+  const raw = state.lang === "ar" ? ar || en : en || ar;
+  return raw.split("\n").map((x) => x.replace(/^\s*(?:\d+|[\u0660-\u0669]+)\s*[.)\-:\u2013\u060c]\s*/, "").trim()).filter(Boolean).slice(0, 10);
+}
+function redeemHTML(p) {
+  const steps = redeemSteps(p);
+  return steps.length ? `<div class="product-redeem"><h3>${t("How to redeem")}</h3><ol>${steps.map((x) => `<li>${escapeHTML(x)}</li>`).join("")}</ol></div>` : "";
+}
 function cName(c) {
   return state.lang === "ar" && String(c?.name_ar || "").trim()
     ? c.name_ar
@@ -1289,6 +1299,7 @@ async function boot() {
     renderCartCount();
     await route();
     state.ready = true;
+    loadStats();
     updateCurrencyButton();
     if (location.hash === "#account") openAccount();
     else if (location.hash.length > 1 && $(location.hash)) setTimeout(() => { try { $(location.hash)?.scrollIntoView(); } catch {} }, 120);
@@ -1843,7 +1854,7 @@ async function openProductPage(slug) {
       .map((x) => `<span>${escapeHTML(x)}</span>`)
       .join(
         "",
-      )}</div><div class="product-facts"><h3>${t("What to know")}</h3><dl>${p.platform ? `<div><dt>${t("Platform")}</dt><dd>${escapeHTML(p.platform)}</dd></div>` : ""}${p.region ? `<div><dt>${t("Region")}</dt><dd>${escapeHTML(p.region)}</dd></div>` : ""}<div><dt>${t("Delivery")}</dt><dd>${escapeHTML(p.delivery_type === "code" ? (state.lang === "ar" ? "كود رقمي" : "Digital code") : t("Manual delivery"))}</dd></div></dl><p>${t("Digital delivery details")}</p></div>${variants.length ? `<div class="field" style="margin:18px 0"><label>${t("Choose option")}</label><select id="productVariant">${variants.map((v, i) => `<option value="${v.id}" ${i === 0 ? "selected" : ""} data-price="${v.price}" data-old="${v.old_price || 0}" data-stock="${v.stock || 0}">${escapeHTML(v.name)}${p.delivery_type === "code" && state.settings.show_stock !== false ? ` — ${v.stock || 0} ${t("left")}` : ""}</option>`).join("")}</select></div>` : ""}<div class="product-description">${desc ? escapeHTML(desc).replace(/\n/g, "<br>") : t("No description has been added for this product yet.")}</div>${(p.reviews || []).length ? `<div class="admin-panel" style="margin-top:20px"><h3>${t("Customer reviews")}</h3>${p.reviews.map((r) => `<div class="line" style="padding:10px 0"><span><b>${starsHTML(r.rating)}</b><br><small>${escapeHTML(r.user_name || "Verified customer")}</small></span><span style="max-width:55%">${escapeHTML(r.body || "")}${r.photo ? `<br><a href="${escapeHTML(r.photo)}" target="_blank" rel="noreferrer"><img class="review-photo" loading="lazy" src="${escapeHTML(r.photo)}" alt=""></a>` : ""}</span></div>`).join("")}</div>` : ""}<div class="notify-box" id="notifyBox" hidden><b>${t("Sold out right now")}</b><br><small>${t("Leave your email or WhatsApp number and we'll tell you when it's back.")}</small><div style="display:flex;gap:8px;margin-top:8px"><input id="notifyContact" placeholder="${t("Email or WhatsApp number")}" style="flex:1"><button class="btn ghost" id="notifyBtn" type="button">${t("Notify me")}</button></div></div><div class="product-detail-actions"><button class="btn primary" id="productAdd" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Add to cart") : t("Add to cart")}</button><button class="btn ghost share-btn" id="productShare" type="button"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.8l7.4-4.3M8.3 13.2l7.4 4.3"/></svg><span>${t("Share")}</span></button><button class="btn ghost share-btn wa-btn" id="productWhatsApp" type="button"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.5A8.4 8.4 0 1 1 21 11.5z"/></svg><span>${t("WhatsApp")}</span></button><a class="btn ghost" href="/" data-home>${t("Back to store")}</a></div><p class="delivery-promise" id="deliveryPromise" ${soldOut ? "hidden" : ""}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>${t("Usually delivered in 5–15 min after payment confirmed.")}</span></p></div></div></section>`;
+      )}</div><div class="product-facts"><h3>${t("What to know")}</h3><dl>${p.platform ? `<div><dt>${t("Platform")}</dt><dd>${escapeHTML(p.platform)}</dd></div>` : ""}${p.region ? `<div><dt>${t("Region")}</dt><dd>${escapeHTML(p.region)}</dd></div>` : ""}<div><dt>${t("Delivery")}</dt><dd>${escapeHTML(p.delivery_type === "code" ? (state.lang === "ar" ? "كود رقمي" : "Digital code") : t("Manual delivery"))}</dd></div></dl><p>${t("Digital delivery details")}</p></div>${variants.length ? `<div class="field" style="margin:18px 0"><label>${t("Choose option")}</label><select id="productVariant">${variants.map((v, i) => `<option value="${v.id}" ${i === 0 ? "selected" : ""} data-price="${v.price}" data-old="${v.old_price || 0}" data-stock="${v.stock || 0}">${escapeHTML(v.name)}${p.delivery_type === "code" && state.settings.show_stock !== false ? ` — ${v.stock || 0} ${t("left")}` : ""}</option>`).join("")}</select></div>` : ""}<div class="product-description">${desc ? escapeHTML(desc).replace(/\n/g, "<br>") : t("No description has been added for this product yet.")}</div>${redeemHTML(p)}${(p.reviews || []).length ? `<div class="admin-panel" style="margin-top:20px"><h3>${t("Customer reviews")}</h3>${p.reviews.map((r) => `<div class="line" style="padding:10px 0"><span><b>${starsHTML(r.rating)}</b><br><small>${escapeHTML(r.user_name || "Verified customer")}</small></span><span style="max-width:55%">${escapeHTML(r.body || "")}${r.photo ? `<br><a href="${escapeHTML(r.photo)}" target="_blank" rel="noreferrer"><img class="review-photo" loading="lazy" src="${escapeHTML(r.photo)}" alt=""></a>` : ""}</span></div>`).join("")}</div>` : ""}<div class="notify-box" id="notifyBox" hidden><b>${t("Sold out right now")}</b><br><small>${t("Leave your email or WhatsApp number and we'll tell you when it's back.")}</small><div style="display:flex;gap:8px;margin-top:8px"><input id="notifyContact" placeholder="${t("Email or WhatsApp number")}" style="flex:1"><button class="btn ghost" id="notifyBtn" type="button">${t("Notify me")}</button></div></div><div class="product-detail-actions"><button class="btn primary" id="productAdd" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Add to cart") : t("Add to cart")}</button><button class="btn ghost share-btn" id="productShare" type="button"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.8l7.4-4.3M8.3 13.2l7.4 4.3"/></svg><span>${t("Share")}</span></button><button class="btn ghost share-btn wa-btn" id="productWhatsApp" type="button"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.5A8.4 8.4 0 1 1 21 11.5z"/></svg><span>${t("WhatsApp")}</span></button><a class="btn ghost" href="/" data-home>${t("Back to store")}</a></div><p class="delivery-promise" id="deliveryPromise" ${soldOut ? "hidden" : ""}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>${t("Usually delivered in 5–15 min after payment confirmed.")}</span></p></div></div></section>`;
     initProductGallery(p);
     const updateVariant = () => {
       const sel = $("#productVariant");
@@ -3872,7 +3883,7 @@ function productForm(p = null) {
   const vars = p?.variants || [];
   openModal(
     p ? "Edit product" : "Add product",
-    `<form id="productForm"><div class="notice" id="aiBox" style="margin-bottom:12px"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><div style="flex:1;min-width:200px"><b>✨ AI auto-fill</b><br><small id="aiStatus">Type the name (add an image if you have one), then Gemini fills the Arabic name, both descriptions, platform, region and category. Review before saving.</small></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><button type="button" class="btn ghost" id="aiFill">Auto-fill with AI</button><label style="font-size:12px"><input type="checkbox" id="aiOverwrite"> Replace existing text</label></div></div></div><div class="form-grid"><div class="field"><label>Name</label><input id="pName" value="${escapeHTML(p?.name || "")}" required></div><div class="field"><label>${t("Name (Arabic)")}</label><input id="pNameAr" dir="rtl" value="${escapeHTML(p?.name_ar || "")}"></div><div class="field"><label>Slug</label><input id="pSlug" value="${escapeHTML(p?.slug || "")}"></div><div class="field"><label>Price (EGP)</label><input id="pPrice" type="number" step="0.01" value="${p?.price ?? ""}" required></div><div class="field"><label>Old price (EGP)</label><input id="pOld" type="number" step="0.01" value="${p?.old_price ?? ""}"></div><div class="field"><label>Category</label><select id="pCategory"><option value="">Uncategorized</option>${state.categories.map((c) => `<option value="${c.id}" ${p?.category_id == c.id ? "selected" : ""}>${escapeHTML(c.name)}</option>`).join("")}</select></div><div class="field"><label>Delivery</label><select id="pDelivery"><option value="manual" ${p?.delivery_type !== "code" ? "selected" : ""}>Manual</option><option value="code" ${p?.delivery_type === "code" ? "selected" : ""}>Digital code</option></select></div><div class="field"><label>Platform</label><input id="pPlatform" value="${escapeHTML(p?.platform || "")}" placeholder="PC, PlayStation..."></div><div class="field"><label>Region</label><input id="pRegion" value="${escapeHTML(p?.region || "")}" placeholder="EG, Global..."></div><div class="field"><label>Low-stock alert at (codes left, empty = default)</label><input id="pLow" type="number" min="0" value="${p?.low_stock_threshold ?? ""}"></div><div class="field"><label>Cost price (manual products, for profit)</label><input id="pCost" type="number" step="0.01" min="0" value="${p?.cost_price ?? ""}"></div></div><div class="field"><label>Image URL</label><input id="pImage" value="${escapeHTML(p?.image_url || "")}" placeholder="https://..."></div><div class="field"><label>${t("Image upload")}</label><input id="pImageFile" type="file" accept="image/*"></div><div class="field" id="galBox"><label>Gallery images <small>(extra photos shown after the cover, up to 8)</small></label><div class="gal-admin" id="galList"></div><div style="display:flex;flex-wrap:wrap;gap:8px"><input id="galUrl" placeholder="https://... image link" style="flex:1;min-width:180px"><button type="button" class="btn ghost" id="galAddUrl">Add link</button><button type="button" class="btn ghost" id="galAddFile">Upload images</button><input id="galFiles" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden></div><small id="galNote" style="display:block;margin-top:6px"></small></div><div class="notice" id="imgAiBox" style="margin-bottom:12px"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><div style="flex:1;min-width:200px"><b>✨ Clean up image</b><br><small id="imgAiStatus">Turns a messy screenshot into a clean cover on your standard background. You see the result first and nothing changes until you press Save product.</small></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><button type="button" class="btn ghost" id="imgAiGo">Clean up with AI</button>${p?.image_original ? `<button type="button" class="btn ghost" id="imgRestore">Restore original image</button>` : ""}</div></div><div id="imgAiPreview" style="margin-top:10px" hidden></div></div><div class="form-grid"><div class="field"><label>Description</label><textarea id="pDescription">${escapeHTML(p?.description || "")}</textarea></div><div class="field"><label>${t("Description (Arabic)")}</label><textarea id="pDescriptionAr" dir="rtl">${escapeHTML(p?.description_ar || "")}</textarea></div></div><details style="margin-top:12px" ${p?.meta_title || p?.meta_description || p?.seo_keywords ? "open" : ""}><summary><b>Search / SEO text</b></summary><div class="notice" style="margin:10px 0"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><div style="flex:1;min-width:200px"><small id="seoStatus">Written for Google: a title (about 60 characters), a description (about 155) and search keywords, in Arabic and English. Empty fields fall back to the product name and description.</small></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><button type="button" class="btn ghost" id="seoGo">✨ Write SEO text</button><label style="font-size:12px"><input type="checkbox" id="seoOver"> Replace existing</label></div></div></div><div class="form-grid"><div class="field"><label>Meta title <small id="cMt"></small></label><input id="pMetaTitle" maxlength="70" value="${escapeHTML(p?.meta_title || "")}"></div><div class="field"><label>Meta title (Arabic) <small id="cMtA"></small></label><input id="pMetaTitleAr" dir="rtl" maxlength="70" value="${escapeHTML(p?.meta_title_ar || "")}"></div><div class="field"><label>Meta description <small id="cMd"></small></label><textarea id="pMetaDesc" maxlength="170">${escapeHTML(p?.meta_description || "")}</textarea></div><div class="field"><label>Meta description (Arabic) <small id="cMdA"></small></label><textarea id="pMetaDescAr" dir="rtl" maxlength="170">${escapeHTML(p?.meta_description_ar || "")}</textarea></div><div class="field"><label>Search keywords</label><input id="pKeywords" maxlength="220" value="${escapeHTML(p?.seo_keywords || "")}" placeholder="comma, separated"></div><div class="field"><label>Search keywords (Arabic)</label><input id="pKeywordsAr" dir="rtl" maxlength="220" value="${escapeHTML(p?.seo_keywords_ar || "")}" placeholder="كلمة، كلمة"></div></div></details><details open style="margin-top:12px"><summary><b>${t("Variants / denominations")}</b></summary><div id="variantRows" style="margin-top:10px">${vars.map((v) => `<div class="form-grid variant-row" data-variant-id="${v.id}"><input class="vName" value="${escapeHTML(v.name)}" placeholder="${t("Option name")}"><input class="vPrice" type="number" step="0.01" value="${v.price}" placeholder="Price"><input class="vOld" type="number" step="0.01" value="${v.old_price ?? ""}" placeholder="Old price"><label><input class="vActive" type="checkbox" ${v.active ? "checked" : ""}> Active</label><button type="button" class="mini danger vRemove">Remove</button></div>`).join("")}</div><button type="button" class="mini" id="addVariantRow" style="margin-top:8px">${t("Add")}</button><small style="display:block;margin-top:6px">For digital products, add codes to each option from Digital codes.</small></details><div class="form-grid" style="margin-top:12px"><label><input id="pActive" type="checkbox" ${p?.active !== 0 ? "checked" : ""}> Active</label><label><input id="pFeatured" type="checkbox" ${p?.featured ? "checked" : ""}> Featured</label></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelP">Cancel</button><button class="btn primary">Save product</button></div></form>`,
+    `<form id="productForm"><div class="notice" id="aiBox" style="margin-bottom:12px"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><div style="flex:1;min-width:200px"><b>✨ AI auto-fill</b><br><small id="aiStatus">Type the name (add an image if you have one), then Gemini fills the Arabic name, both descriptions, platform, region and category. Review before saving.</small></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><button type="button" class="btn ghost" id="aiFill">Auto-fill with AI</button><label style="font-size:12px"><input type="checkbox" id="aiOverwrite"> Replace existing text</label></div></div></div><div class="form-grid"><div class="field"><label>Name</label><input id="pName" value="${escapeHTML(p?.name || "")}" required></div><div class="field"><label>${t("Name (Arabic)")}</label><input id="pNameAr" dir="rtl" value="${escapeHTML(p?.name_ar || "")}"></div><div class="field"><label>Slug</label><input id="pSlug" value="${escapeHTML(p?.slug || "")}"></div><div class="field"><label>Price (EGP)</label><input id="pPrice" type="number" step="0.01" value="${p?.price ?? ""}" required></div><div class="field"><label>Old price (EGP)</label><input id="pOld" type="number" step="0.01" value="${p?.old_price ?? ""}"></div><div class="field"><label>Category</label><select id="pCategory"><option value="">Uncategorized</option>${state.categories.map((c) => `<option value="${c.id}" ${p?.category_id == c.id ? "selected" : ""}>${escapeHTML(c.name)}</option>`).join("")}</select></div><div class="field"><label>Delivery</label><select id="pDelivery"><option value="manual" ${p?.delivery_type !== "code" ? "selected" : ""}>Manual</option><option value="code" ${p?.delivery_type === "code" ? "selected" : ""}>Digital code</option></select></div><div class="field"><label>Platform</label><input id="pPlatform" value="${escapeHTML(p?.platform || "")}" placeholder="PC, PlayStation..."></div><div class="field"><label>Region</label><input id="pRegion" value="${escapeHTML(p?.region || "")}" placeholder="EG, Global..."></div><div class="field"><label>Low-stock alert at (codes left, empty = default)</label><input id="pLow" type="number" min="0" value="${p?.low_stock_threshold ?? ""}"></div><div class="field"><label>Cost price (manual products, for profit)</label><input id="pCost" type="number" step="0.01" min="0" value="${p?.cost_price ?? ""}"></div></div><div class="field"><label>Image URL</label><input id="pImage" value="${escapeHTML(p?.image_url || "")}" placeholder="https://..."></div><div class="field"><label>${t("Image upload")}</label><input id="pImageFile" type="file" accept="image/*"></div><div class="field" id="galBox"><label>Gallery images <small>(extra photos shown after the cover, up to 8)</small></label><div class="gal-admin" id="galList"></div><div style="display:flex;flex-wrap:wrap;gap:8px"><input id="galUrl" placeholder="https://... image link" style="flex:1;min-width:180px"><button type="button" class="btn ghost" id="galAddUrl">Add link</button><button type="button" class="btn ghost" id="galAddFile">Upload images</button><input id="galFiles" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden></div><small id="galNote" style="display:block;margin-top:6px"></small></div><div class="notice" id="imgAiBox" style="margin-bottom:12px"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><div style="flex:1;min-width:200px"><b>✨ Clean up image</b><br><small id="imgAiStatus">Turns a messy screenshot into a clean cover on your standard background. You see the result first and nothing changes until you press Save product.</small></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><button type="button" class="btn ghost" id="imgAiGo">Clean up with AI</button>${p?.image_original ? `<button type="button" class="btn ghost" id="imgRestore">Restore original image</button>` : ""}</div></div><div id="imgAiPreview" style="margin-top:10px" hidden></div></div><div class="form-grid"><div class="field"><label>Description</label><textarea id="pDescription">${escapeHTML(p?.description || "")}</textarea></div><div class="field"><label>${t("Description (Arabic)")}</label><textarea id="pDescriptionAr" dir="rtl">${escapeHTML(p?.description_ar || "")}</textarea></div></div><div class="form-grid"><div class="field"><label>How to redeem <small>(shown on the product page and in the delivered email; one step per line)</small></label><textarea id="pRedeem" rows="4" placeholder="1. Open the store on your device&#10;2. Choose Redeem code&#10;3. Enter the code">${escapeHTML(p?.redeem_steps || "")}</textarea></div><div class="field"><label>How to redeem (Arabic)</label><textarea id="pRedeemAr" dir="rtl" rows="4">${escapeHTML(p?.redeem_steps_ar || "")}</textarea></div></div><details style="margin-top:12px" ${p?.meta_title || p?.meta_description || p?.seo_keywords ? "open" : ""}><summary><b>Search / SEO text</b></summary><div class="notice" style="margin:10px 0"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><div style="flex:1;min-width:200px"><small id="seoStatus">Written for Google: a title (about 60 characters), a description (about 155) and search keywords, in Arabic and English. Empty fields fall back to the product name and description.</small></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><button type="button" class="btn ghost" id="seoGo">✨ Write SEO text</button><label style="font-size:12px"><input type="checkbox" id="seoOver"> Replace existing</label></div></div></div><div class="form-grid"><div class="field"><label>Meta title <small id="cMt"></small></label><input id="pMetaTitle" maxlength="70" value="${escapeHTML(p?.meta_title || "")}"></div><div class="field"><label>Meta title (Arabic) <small id="cMtA"></small></label><input id="pMetaTitleAr" dir="rtl" maxlength="70" value="${escapeHTML(p?.meta_title_ar || "")}"></div><div class="field"><label>Meta description <small id="cMd"></small></label><textarea id="pMetaDesc" maxlength="170">${escapeHTML(p?.meta_description || "")}</textarea></div><div class="field"><label>Meta description (Arabic) <small id="cMdA"></small></label><textarea id="pMetaDescAr" dir="rtl" maxlength="170">${escapeHTML(p?.meta_description_ar || "")}</textarea></div><div class="field"><label>Search keywords</label><input id="pKeywords" maxlength="220" value="${escapeHTML(p?.seo_keywords || "")}" placeholder="comma, separated"></div><div class="field"><label>Search keywords (Arabic)</label><input id="pKeywordsAr" dir="rtl" maxlength="220" value="${escapeHTML(p?.seo_keywords_ar || "")}" placeholder="كلمة، كلمة"></div></div></details><details open style="margin-top:12px"><summary><b>${t("Variants / denominations")}</b></summary><div id="variantRows" style="margin-top:10px">${vars.map((v) => `<div class="form-grid variant-row" data-variant-id="${v.id}"><input class="vName" value="${escapeHTML(v.name)}" placeholder="${t("Option name")}"><input class="vPrice" type="number" step="0.01" value="${v.price}" placeholder="Price"><input class="vOld" type="number" step="0.01" value="${v.old_price ?? ""}" placeholder="Old price"><label><input class="vActive" type="checkbox" ${v.active ? "checked" : ""}> Active</label><button type="button" class="mini danger vRemove">Remove</button></div>`).join("")}</div><button type="button" class="mini" id="addVariantRow" style="margin-top:8px">${t("Add")}</button><small style="display:block;margin-top:6px">For digital products, add codes to each option from Digital codes.</small></details><div class="form-grid" style="margin-top:12px"><label><input id="pActive" type="checkbox" ${p?.active !== 0 ? "checked" : ""}> Active</label><label><input id="pFeatured" type="checkbox" ${p?.featured ? "checked" : ""}> Featured</label></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelP">Cancel</button><button class="btn primary">Save product</button></div></form>`,
   );
   $("#cancelP").onclick = () => { closeModal(); state.adminOpen = true; };
   $("#aiFill").onclick = () => aiFillProductForm();
@@ -3991,6 +4002,8 @@ function productForm(p = null) {
       meta_description_ar: $("#pMetaDescAr").value,
       seo_keywords: $("#pKeywords").value,
       seo_keywords_ar: $("#pKeywordsAr").value,
+      redeem_steps: $("#pRedeem").value,
+      redeem_steps_ar: $("#pRedeemAr").value,
       active: $("#pActive").checked,
       featured: $("#pFeatured").checked,
       gallery: gal.filter((g) => g.url).map((g) => g.url),
@@ -4229,7 +4242,7 @@ function bindBulkEdit(rows) {
   }
 }
 // ---- Bulk AI fill: every product missing its Arabic name or a description ----
-const aiMissing = (p) => !String(p.name_ar || "").trim() || !String(p.description || "").trim() || !String(p.description_ar || "").trim();
+const aiMissing = (p) => !String(p.name_ar || "").trim() || !String(p.description || "").trim() || !String(p.description_ar || "").trim() || !String(p.redeem_steps || "").trim() || !String(p.redeem_steps_ar || "").trim();
 function aiBulkModal(rows) {
   const todo = rows.filter(aiMissing);
   openModal(
@@ -4302,6 +4315,8 @@ function aiBulkModal(rows) {
       fillIf("name_ar", f.name_ar, "Arabic name");
       fillIf("description", f.description, "description");
       fillIf("description_ar", f.description_ar, "Arabic description");
+      fillIf("redeem_steps", f.redeem_steps, "redeem steps");
+      fillIf("redeem_steps_ar", f.redeem_steps_ar, "Arabic redeem steps");
       fillIf("platform", f.platform, "platform");
       fillIf("region", f.region, "region");
       if (f.category && !p.category_id) {
@@ -4385,6 +4400,8 @@ async function aiFillProductForm() {
     put("#pNameAr", f.name_ar, "Arabic name");
     put("#pDescription", f.description, "description");
     put("#pDescriptionAr", f.description_ar, "Arabic description");
+    put("#pRedeem", f.redeem_steps, "redeem steps");
+    put("#pRedeemAr", f.redeem_steps_ar, "Arabic redeem steps");
     put("#pPlatform", f.platform, "platform");
     put("#pRegion", f.region, "region");
     if (f.category && (!catSel.value || over)) {
@@ -4964,6 +4981,8 @@ const SETTINGS_SCHEMA = [
       ["deal_1", "Deal point 1"],
       ["deal_2", "Deal point 2"],
       ["deal_3", "Deal point 3"],
+      ["stats_enabled", "Show real numbers in the deals band (orders delivered, delivery time, average rating) once there is enough data", "toggle"],
+      ["stats_min_orders", "Show them only after this many delivered orders", "number"],
       ["how_eyebrow", "How-it-works small label"],
       ["how_title", "How-it-works heading"],
       ["step1_title", "Step 1 title"],
@@ -5121,6 +5140,53 @@ const isProductRoute = () =>
   location.pathname !== "/" &&
   location.pathname !== "" &&
   location.pathname !== "/index.html";
+// V81: support hours come from the working hours set in Admin > Emails, so the home page never promises "any time".
+function hourLabel(h) {
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return state.lang === "ar" ? `${h12} ${h < 12 ? "ص" : "م"}` : `${h12} ${h < 12 ? "AM" : "PM"}`;
+}
+function supportHoursText() {
+  const s = state.settings || {}, a = Number(s.work_start_hour), b = Number(s.work_end_hour);
+  if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || a > 23 || b < 0 || b > 23 || a === b) return t("Chat with us in Arabic");
+  return state.lang === "ar" ? `كلمنا بالعربي كل يوم من ${hourLabel(a)} لـ ${hourLabel(b)}` : `Chat with us in Arabic, daily ${hourLabel(a)} – ${hourLabel(b)}`;
+}
+// V81: real numbers in the home "deals" band. The server only sends a number once there is enough data behind it;
+// any slot without a real number keeps the plain text point from Admin > Settings.
+function dealStatSlots() {
+  const st = state.stats, ar = state.lang === "ar", n = (v) => Number(v).toLocaleString(ar ? "ar-EG" : "en-US");
+  if (!st || !st.enabled) return [null, null, null];
+  const mins = st.median_minutes;
+  return [
+    st.orders ? { v: n(st.orders), l: t("Orders delivered") } : null,
+    mins ? { v: mins < 60 ? (ar ? `${n(mins)} دقيقة` : `${mins} min`) : (ar ? `${n(Math.round(mins / 6) / 10)} ساعة` : `${Math.round(mins / 6) / 10} h`), l: t("Typical time to deliver after payment") } : null,
+    st.rating ? { v: `${n(st.rating)}/${n(5)}`, l: t("Average customer rating") } : null,
+  ];
+}
+function renderDealStats() {
+  const box = $(".deal-points");
+  if (!box) return;
+  const slots = dealStatSlots();
+  [...box.children].forEach((d, i) => {
+    const b = d.querySelector("b"), sp = d.querySelector("span");
+    if (!b || !sp) return;
+    if (slots[i]) {
+      b.textContent = slots[i].v;
+      b.classList.add("deal-stat");
+      sp.textContent = slots[i].l;
+    } else {
+      b.textContent = "0" + (i + 1);
+      b.classList.remove("deal-stat");
+      const v = S(sp.dataset.s);
+      if (v) sp.textContent = v;
+    }
+  });
+}
+async function loadStats() {
+  try {
+    state.stats = await api("/api/stats/public");
+    renderDealStats();
+  } catch {}
+}
 function applySettings() {
   { const pw = $("#policyWa"), wd = String(state.settings.whatsapp || "").replace(/\D/g, ""); if (pw) { pw.hidden = wd.length < 8; if (wd) pw.href = `https://wa.me/${wd}`; } }
   const s = state.settings;
@@ -5131,12 +5197,14 @@ function applySettings() {
       el.innerHTML = escapeHTML(v).replace(/\n/g, "<br>");
     else el.textContent = v;
   });
+  $$("[data-hours]").forEach((el) => (el.textContent = supportHoursText()));
+  renderDealStats();
   $$("[data-store-name]").forEach(
     (el) => (el.textContent = s.store_name || "Kardivo"),
   );
   // The built-in logo is now HTML/CSS/SVG. Only swap in an image if an admin set a custom logo URL
   // (the API returns the old default JPG when none is set, so that value counts as "not custom").
-  const lu = s.logo_url && s.logo_url !== logo ? s.logo_url : "";
+  const lu = s.logo_url && s.logo_url !== logo && s.logo_url !== LEGACY_LOGO ? s.logo_url : "";
   $$("[data-logo]").forEach((el) => {
     if (lu) {
       if (!el.dataset.cssLogo) el.dataset.cssLogo = el.innerHTML;
@@ -6450,18 +6518,15 @@ window.addEventListener("DOMContentLoaded", () => { renderAbandonedCartNudge(); 
 })();
 
 
-// V60 app mode: stop pinch zoom and double-tap zoom (iOS Safari ignores user-scalable=no) and any sideways page drift.
+// V81: pinch-zoom is allowed (people need it to read payment numbers and details on small phones).
+// Only the sideways-drift guard stays, and it steps aside while the page is zoomed in.
 (() => {
   if (window.__kardivoApp) return;
   window.__kardivoApp = true;
-  const inLightbox = (t) => !!(t && t.closest && t.closest(".zlb"));
-  ["gesturestart", "gesturechange", "gestureend"].forEach((n) =>
-    document.addEventListener(n, (e) => { if (!inLightbox(e.target)) e.preventDefault(); }, { passive: false }));
-  document.addEventListener("touchmove", (e) => {
-    if (e.touches.length > 1 && !inLightbox(e.target)) e.preventDefault();
-  }, { passive: false });
-  // belt and braces: if anything ever pushes the page sideways, snap back
-  addEventListener("scroll", () => { if (scrollX) scrollTo(0, scrollY); }, { passive: true });
+  addEventListener("scroll", () => {
+    if (window.visualViewport && window.visualViewport.scale > 1.01) return;
+    if (scrollX) scrollTo(0, scrollY);
+  }, { passive: true });
 })();
 
 
@@ -6472,6 +6537,11 @@ window.addEventListener("DOMContentLoaded", () => { renderAbandonedCartNudge(); 
 // piece falls back to the previous behaviour when the browser can't do it.
 // ======================================================================
 Object.entries({
+  "Chat with us in Arabic": "\u0643\u0644\u0645\u0646\u0627 \u0628\u0627\u0644\u0639\u0631\u0628\u064a",
+  "How to redeem": "\u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u0627\u0633\u062a\u062e\u062f\u0627\u0645",
+  "Orders delivered": "\u0637\u0644\u0628 \u0627\u062a\u0633\u0644\u0651\u0645",
+  "Typical time to deliver after payment": "\u0648\u0642\u062a \u0627\u0644\u062a\u0633\u0644\u064a\u0645 \u0627\u0644\u0645\u0639\u062a\u0627\u062f \u0628\u0639\u062f \u0627\u0644\u062f\u0641\u0639",
+  "Average customer rating": "\u0645\u062a\u0648\u0633\u0637 \u062a\u0642\u064a\u064a\u0645 \u0627\u0644\u0639\u0645\u0644\u0627\u0621",
   "Undo": "\u062a\u0631\u0627\u062c\u0639",
   "Haptics": "\u0627\u0644\u0627\u0647\u062a\u0632\u0627\u0632",
   "Sound": "\u0627\u0644\u0635\u0648\u062a",

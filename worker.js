@@ -1,5 +1,11 @@
-const LOGO_URL =
-  "https://i.ibb.co/rRqtGKkw/0db84367-e795-4617-835e-5e0a2bf2ff45.jpg";
+// V81: the default logo and the link-preview image live on this site, not on a third-party image host.
+const LEGACY_LOGO_URL = "https://i.ibb.co/rRqtGKkw/0db84367-e795-4617-835e-5e0a2bf2ff45.jpg";
+const LOGO_URL = "/icons/icon-512.png";
+const OG_DEFAULT_IMAGE = "/icons/og-image.png";
+const logoOf = (s) => {
+  const u = String(s?.logo_url ?? "").trim();
+  return !u || u === LEGACY_LOGO_URL ? LOGO_URL : u;
+};
 const PAYMENT_METHODS = ["instapay", "vodafone_cash", "telda"];
 const json = (data, status = 200, headers = {}) =>
   new Response(JSON.stringify(data), {
@@ -227,8 +233,8 @@ const DEFAULTS = {
   deals_text:
     "Use a valid discount code at checkout and the server recalculates the total.",
   deal_1: "Clear pricing",
-  deal_2: "Stock-aware carts",
-  deal_3: "Exact payment total",
+  deal_2: "Only what is in stock",
+  deal_3: "The price you see is what you pay",
   how_eyebrow: "THE PROCESS",
   how_title: "Three steps. No ceremony.",
   step1_title: "Build your cart",
@@ -281,8 +287,8 @@ const DEFAULTS = {
   deals_text_ar:
     "حط كود خصم صالح وانت بتأكد الطلب، والموقع هيحسبلك الإجمالي الجديد أوتوماتيك.",
   deal_1_ar: "أسعار واضحة",
-  deal_2_ar: "السلة بتعرف المتاح",
-  deal_3_ar: "الإجمالي مظبوط للجنيه",
+  deal_2_ar: "اللي تشوفه متاح فعلاً",
+  deal_3_ar: "السعر اللي بتشوفه هو اللي بتدفعه",
   how_eyebrow_ar: "الخطوات",
   how_title_ar: "تلات خطوات من غير تعقيد.",
   step1_title_ar: "جهّز سلتك",
@@ -313,6 +319,9 @@ const DEFAULTS = {
   auto_bundle_max_percent: "10",
   auto_bundle_max_egp: "100",
   auto_bundle_min_products: "2",
+  // ---- V81: real numbers on the home page (shown only once there is enough data to be honest) ----
+  stats_enabled: "1",
+  stats_min_orders: "10",
   // ---- V80: automatic emails (all editable in Admin > Emails) ----
   email_auto_enabled: "1",
   email_send_from: "9",
@@ -339,7 +348,7 @@ const DEFAULTS = {
   email_winback_days: "45",
   email_winback_code: "",
 };
-const SCHEMA_VERSION = 20; // 20: email automations (saved carts, email log, opt-in + reminder flags) // 19: promo_campaigns (many promo campaigns for /deals, optionally also on the homepage) // 18: products.gallery (extra product images, JSON list) // 17: products SEO fields + image_original (AI SEO text, AI image cleanup) // 16: users.points_redeemed (V41 added the column but never bumped the version, so existing DBs skipped the migration)
+const SCHEMA_VERSION = 21; // 21: products.redeem_steps (+_ar) "how to redeem" text // 20: email automations (saved carts, email log, opt-in + reminder flags) // 19: promo_campaigns (many promo campaigns for /deals, optionally also on the homepage) // 18: products.gallery (extra product images, JSON list) // 17: products SEO fields + image_original (AI SEO text, AI image cleanup) // 16: users.points_redeemed (V41 added the column but never bumped the version, so existing DBs skipped the migration)
 // Columns added over time. Each is added only if missing (additive, never destructive).
 const COLUMN_ADDS = [
   ["discounts", "max_uses", "INTEGER"],
@@ -375,6 +384,8 @@ const COLUMN_ADDS = [
   ["products", "seo_keywords_ar", "TEXT DEFAULT ''"],
   ["products", "image_original", "TEXT DEFAULT ''"],
   ["products", "gallery", "TEXT DEFAULT ''"],
+  ["products", "redeem_steps", "TEXT DEFAULT ''"],
+  ["products", "redeem_steps_ar", "TEXT DEFAULT ''"],
   ["categories", "name_ar", "TEXT DEFAULT ''"],
   ["inventory", "variant_id", "INTEGER"],
   ["inventory", "batch_id", "INTEGER"],
@@ -500,8 +511,17 @@ async function ensureSchema(env) {
     .run();
   schemaReady = true;
 }
+// Old developer-style wording that an admin save may have stored: show the new customer wording instead.
+const LEGACY_COPY = {
+  deal_2: ["Stock-aware carts"],
+  deal_3: ["Exact payment total"],
+  deal_2_ar: ["السلة بتعرف المتاح"],
+  deal_3_ar: ["الإجمالي مظبوط للجنيه"],
+};
 async function allSettings(env) {
-  return { ...DEFAULTS, ...(await settings(env)) };
+  const s = { ...DEFAULTS, ...(await settings(env)) };
+  for (const [k, olds] of Object.entries(LEGACY_COPY)) if (olds.includes(String(s[k] ?? "").trim())) s[k] = DEFAULTS[k];
+  return s;
 }
 async function throttle(env, key, max = 8, windowMs = 900000) {
   const now = Date.now(),
@@ -1075,6 +1095,14 @@ function geminiQuotaMsg(msg, model) {
   return `Gemini rate limit: ${m.slice(0, 200) || "wait a minute and try again."}`;
 }
 const aiText = (v, n) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+// "How to redeem" text: keeps line breaks (one step per line), strips the rest.
+const stepsClean = (v) => String(v ?? "").replace(/\r/g, "").replace(/[ \t]+/g, " ").replace(/ ?\n ?/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, 1500);
+// Saves the redeem text after a product is created or updated. A field the client did not send is left alone.
+async function saveRedeem(env, id, b) {
+  const sets = [], binds = [];
+  for (const k of ["redeem_steps", "redeem_steps_ar"]) if (b[k] !== undefined) { sets.push(`${k}=?`); binds.push(stepsClean(b[k])); }
+  if (sets.length) await env.DB.prepare(`UPDATE products SET ${sets.join(",")} WHERE id=?`).bind(...binds, id).run();
+}
 async function geminiProduct(env, req, cfg, b) {
   const cats = (Array.isArray(b.categories) ? b.categories : []).map((c) => aiText(c, 60)).filter(Boolean).slice(0, 40);
   const name = aiText(b.name, 200),
@@ -1104,7 +1132,8 @@ async function geminiProduct(env, req, cfg, b) {
     `Product information given by the store owner:\n${known.map(([k, v]) => `- ${k}: ${v}`).join("\n") || "- (only an image was given)"}\n` +
     (image ? "A product image is attached; use it to identify the product.\n" : "") +
     `Allowed categories: ${cats.length ? cats.join(" | ") : "(none)"}\n\n` +
-    `Return this JSON shape: {"name":"clean official English product name","name_ar":"Arabic product name","description":"English description","description_ar":"Arabic description","platform":"short platform such as PlayStation, Xbox, PC, Steam, Nintendo, Netflix, or empty","region":"such as Global, US, EG, KSA, EU, or empty if unknown","category":"exactly one of the allowed categories, or empty"}`;
+    `Return this JSON shape: {"name":"clean official English product name","name_ar":"Arabic product name","description":"English description","description_ar":"Arabic description","platform":"short platform such as PlayStation, Xbox, PC, Steam, Nintendo, Netflix, or empty","region":"such as Global, US, EG, KSA, EU, or empty if unknown","category":"exactly one of the allowed categories, or empty","redeem_steps":"English redeem steps","redeem_steps_ar":"Arabic redeem steps"}\n` +
+    "redeem_steps / redeem_steps_ar: 3 to 5 short numbered steps, one per line (1. ... 2. ...), telling the buyer how to redeem or use what they receive (for example where to enter the code, or how to apply a top-up). Keep to widely known, generic steps for this kind of product. If you cannot confirm how this product is redeemed, use an empty string. Never include a code, link or price.";
   const parts = [{ text: prompt }];
   if (image) parts.push({ inlineData: { mimeType: image.mime, data: image.data } });
   const call = async (withSearch) => {
@@ -1119,7 +1148,7 @@ async function geminiProduct(env, req, cfg, b) {
           systemInstruction: { parts: [{ text: system }] },
           contents: [{ role: "user", parts }],
           ...(withSearch ? { tools: [{ google_search: {} }] } : {}),
-          generationConfig: { temperature: 0.3, maxOutputTokens: 3000 },
+          generationConfig: { temperature: 0.3, maxOutputTokens: 4000 },
         }),
       });
     } finally {
@@ -1172,6 +1201,8 @@ async function geminiProduct(env, req, cfg, b) {
       platform: aiText(obj.platform, 80),
       region: aiText(obj.region, 80),
       category: cat,
+      redeem_steps: stepsClean(obj.redeem_steps),
+      redeem_steps_ar: stepsClean(obj.redeem_steps_ar),
     },
     searched: searched && !!cand?.groundingMetadata,
     image_used: !!image,
@@ -1678,8 +1709,10 @@ function mailTemplate(lang, kind, d, storeName = "Kardivo") {
   }[kind][ar ? "ar" : "en"];
   const [subject, intro, cta] = T;
   const extra = d.extra ? `<div style="margin:14px 0;padding:12px;background:#f4f1fb;border-radius:8px;white-space:pre-wrap">${htmlEsc(d.extra)}</div>` : "";
-  const html = `<div dir="${ar ? "rtl" : "ltr"}" style="font-family:Tahoma,Arial,sans-serif;max-width:520px;margin:auto;padding:20px;color:#1c1530"><h2 style="margin:0 0 12px">${htmlEsc(subject)}</h2><p style="line-height:1.7;white-space:pre-wrap">${htmlEsc(intro)}</p>${extra}${d.url ? `<p style="margin:22px 0"><a href="${htmlEsc(d.url)}" style="background:#7c3aed;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;display:inline-block">${htmlEsc(cta)}</a></p>` : ""}<p style="color:#8a84a0;font-size:12px">${htmlEsc(storeName)}</p>${d.unsub ? `<p style="color:#8a84a0;font-size:11px"><a href="${htmlEsc(d.unsub)}" style="color:#8a84a0">${ar ? "إلغاء الاشتراك في رسائل العروض" : "Unsubscribe from offer emails"}</a></p>` : ""}</div>`;
-  const text = `${subject}\n\n${intro}${d.extra ? "\n\n" + d.extra : ""}${d.url ? `\n\n${cta}: ${d.url}` : ""}\n\n${storeName}${d.unsub ? `\n${d.unsub}` : ""}`;
+  const redeemHead = ar ? "طريقة الاستخدام" : "How to redeem";
+  const redeem = d.redeem ? `<div style="margin:14px 0;padding:12px;border:1px solid #e0daf0;border-radius:8px"><b>${redeemHead}</b><div style="margin-top:6px;line-height:1.7;white-space:pre-wrap">${htmlEsc(d.redeem)}</div></div>` : "";
+  const html = `<div dir="${ar ? "rtl" : "ltr"}" style="font-family:Tahoma,Arial,sans-serif;max-width:520px;margin:auto;padding:20px;color:#1c1530"><h2 style="margin:0 0 12px">${htmlEsc(subject)}</h2><p style="line-height:1.7;white-space:pre-wrap">${htmlEsc(intro)}</p>${extra}${redeem}${d.url ? `<p style="margin:22px 0"><a href="${htmlEsc(d.url)}" style="background:#7c3aed;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;display:inline-block">${htmlEsc(cta)}</a></p>` : ""}<p style="color:#8a84a0;font-size:12px">${htmlEsc(storeName)}</p>${d.unsub ? `<p style="color:#8a84a0;font-size:11px"><a href="${htmlEsc(d.unsub)}" style="color:#8a84a0">${ar ? "إلغاء الاشتراك في رسائل العروض" : "Unsubscribe from offer emails"}</a></p>` : ""}</div>`;
+  const text = `${subject}\n\n${intro}${d.extra ? "\n\n" + d.extra : ""}${d.redeem ? `\n\n${redeemHead}:\n${d.redeem}` : ""}${d.url ? `\n\n${cta}: ${d.url}` : ""}\n\n${storeName}${d.unsub ? `\n${d.unsub}` : ""}`;
   return { subject: `${subject} — ${storeName}`, html, text };
 }
 // ===================== V80: email automations =====================
@@ -2727,7 +2760,21 @@ async function emailDelivered(env, ctx, order, origin) {
     const codes = (await env.DB.prepare("SELECT code FROM inventory WHERE order_id=? AND status='sold'").bind(order.id).all()).results;
     if (codes.length) extra = (extra ? extra + "\n\n" : "") + codes.map((c) => c.code).join("\n");
   }
-  sendEmail(env, ctx, { to, ...mailTemplate(order.lang, "delivered", { order: order.order_number, extra, url: origin ? `${origin}/?track=${encodeURIComponent(order.order_number)}` : "" }, s.store_name) });
+  let redeem = "";
+  try {
+    const ar = order.lang !== "en",
+      rows = (await env.DB.prepare("SELECT DISTINCT p.id,p.name,p.name_ar,p.redeem_steps,p.redeem_steps_ar FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE oi.order_id=?").bind(order.id).all()).results;
+    redeem = rows
+      .map((p) => {
+        const steps = clean(ar ? p.redeem_steps_ar : p.redeem_steps) || clean(ar ? p.redeem_steps : p.redeem_steps_ar);
+        return steps ? `${(ar && clean(p.name_ar)) || p.name}\n${steps}` : "";
+      })
+      .filter(Boolean)
+      .join("\n\n");
+  } catch (e) {
+    console.error("redeem", e);
+  }
+  sendEmail(env, ctx, { to, ...mailTemplate(order.lang, "delivered", { order: order.order_number, extra, redeem, url: origin ? `${origin}/?track=${encodeURIComponent(order.order_number)}` : "" }, s.store_name) });
 }
 async function api(req, env, url, ctx) {
   if (!env.DB)
@@ -2868,6 +2915,41 @@ async function api(req, env, url, ctx) {
       }),
     });
   }
+  if (path === "/api/stats/public" && method === "GET") {
+    // Real numbers for the home page. A number is only sent once there is enough data behind it, so a new store never shows "3 orders".
+    const cache = { "cache-control": "public, max-age=300" };
+    const s = await allSettings(env);
+    if (s.stats_enabled === "0") return json({ enabled: false }, 200, cache);
+    const min = clampInt(s.stats_min_orders, 1, 100000, 10);
+    const out = { enabled: true, orders: null, median_minutes: null, rating: null, rating_count: 0 };
+    try {
+      const n = Number((await env.DB.prepare("SELECT COUNT(*) n FROM orders WHERE payment_status='paid' AND fulfillment_status='fulfilled'").first())?.n || 0);
+      if (n >= min) {
+        out.orders = n;
+        // Time from the customer's latest payment proof to delivery, over the last 90 days.
+        const rows = (
+          await env.DB.prepare(
+            "SELECT (julianday(d.at)-julianday((SELECT MAX(e.created_at) FROM kd_order_events e WHERE e.order_id=o.id AND e.kind='proof_received' AND e.created_at<=d.at)))*1440 m FROM orders o JOIN (SELECT order_id,MAX(created_at) at FROM kd_order_events WHERE kind='delivered' GROUP BY order_id) d ON d.order_id=o.id WHERE o.payment_status='paid' AND o.fulfillment_status='fulfilled' AND d.at>=datetime('now','-90 days') ORDER BY o.id DESC LIMIT 300",
+          ).all()
+        ).results
+          .map((r) => Number(r.m))
+          .filter((m) => Number.isFinite(m) && m >= 0)
+          .sort((a, b) => a - b);
+        if (rows.length >= 5) {
+          const mid = Math.floor(rows.length / 2);
+          out.median_minutes = Math.max(1, Math.round(rows.length % 2 ? rows[mid] : (rows[mid - 1] + rows[mid]) / 2));
+        }
+      }
+      const rv = await env.DB.prepare("SELECT COUNT(*) n,AVG(rating) a FROM product_reviews WHERE approved=1").first();
+      if (Number(rv?.n) >= 5) {
+        out.rating = Math.round(Number(rv.a) * 10) / 10;
+        out.rating_count = Number(rv.n);
+      }
+    } catch (e) {
+      console.error("stats", e);
+    }
+    return json(out, 200, cache);
+  }
   if (path === "/api/settings/public" && method === "GET") {
     const s = await allSettings(env),
       out = {};
@@ -2880,7 +2962,7 @@ async function api(req, env, url, ctx) {
     }
     out.orders_open = s.orders_open !== "0";
     out.show_stock = s.show_stock !== "0";
-    out.logo_url = clean(s.logo_url) || LOGO_URL;
+    out.logo_url = logoOf(s);
     out.email_ready = emailReady(env);
     out.push_ready = pushReady(env);
     out.vapid_public_key = pushReady(env) ? env.VAPID_PUBLIC_KEY : "";
@@ -3792,6 +3874,7 @@ async function api(req, env, url, ctx) {
       )
       .run();
     if (gal.list?.length) await saveGallery(env, r.meta.last_row_id, gal.list);
+    await saveRedeem(env, r.meta.last_row_id, b);
     return json({ id: r.meta.last_row_id }, 201);
   }
   if (path === "/api/admin/products/import" && method === "POST") {
@@ -3972,6 +4055,7 @@ async function api(req, env, url, ctx) {
         id,
       )
       .run();
+    await saveRedeem(env, id, b);
     // An older admin page that doesn't send a gallery must leave the existing one alone.
     if (!gal.skip) await saveGallery(env, id, gal.list);
     return json({ ok: true });
@@ -5017,6 +5101,8 @@ async function api(req, env, url, ctx) {
         v = String(Math.min(90, Math.max(1, Math.floor(Number(v)) || 14)));
       if (["email_unpaid_after_hours", "email_cart_after_hours", "email_followup_days", "email_winback_days", "proof_eta_minutes", "email_max_per_run"].includes(key))
         v = String(clampInt(v, 1, key.endsWith("hours") ? 168 : key === "email_max_per_run" ? 40 : key === "proof_eta_minutes" ? 1440 : 365, Number(DEFAULTS[key])));
+      if (key === "stats_enabled") v = v === "0" ? "0" : "1";
+      if (key === "stats_min_orders") v = String(clampInt(v, 1, 100000, 10));
       if (["work_start_hour", "work_end_hour", "email_send_from", "email_send_to"].includes(key)) v = String(clampInt(v, 0, 23, Number(DEFAULTS[key])));
       if (key.endsWith("_enabled") && key.startsWith("email_") || key === "email_auto_enabled" || key === "proof_ack_enabled") v = v === "1" ? "1" : "0";
       if (key.endsWith("_code") && key.startsWith("email_")) v = v.toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 40);
@@ -5071,6 +5157,8 @@ const pageLang = (url) => (url.searchParams.get("lang") === "en" ? "en" : "ar");
 const jsonLd = (o) => `<script type="application/ld+json">${JSON.stringify(o).replace(/</g, "\\u003c")}</script>`;
 // Arabic is the default language of every URL; the English version lives at the same path with ?lang=en (that is what hreflang points to).
 function seoHead({ url, lang, title, desc, image, type, extra = "" }) {
+  const isDefaultImg = !image;
+  image = image || OG_DEFAULT_IMAGE;
   const bare = new URL(url.pathname, url.origin).href,
     en = bare + "?lang=en",
     self = lang === "en" ? en : bare;
@@ -5079,8 +5167,9 @@ function seoHead({ url, lang, title, desc, image, type, extra = "" }) {
     `<link rel="alternate" hreflang="ar" href="${htmlEsc(bare)}"><link rel="alternate" hreflang="en" href="${htmlEsc(en)}"><link rel="alternate" hreflang="x-default" href="${htmlEsc(bare)}">` +
     `<meta property="og:title" content="${htmlEsc(title)}"><meta property="og:description" content="${htmlEsc(desc)}"><meta property="og:type" content="${type}"><meta property="og:url" content="${htmlEsc(self)}">` +
     `<meta property="og:locale" content="${lang === "en" ? "en_US" : "ar_AR"}"><meta property="og:locale:alternate" content="${lang === "en" ? "ar_AR" : "en_US"}">` +
-    (image ? `<meta property="og:image" content="${htmlEsc(new URL(image, url).href)}">` : "") +
-    `<meta name="twitter:card" content="${image ? "summary_large_image" : "summary"}">` +
+    `<meta property="og:image" content="${htmlEsc(new URL(image, url).href)}">` +
+    (isDefaultImg ? '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">' : "") +
+    `<meta name="twitter:card" content="summary_large_image">` +
     extra
   );
 }
@@ -5119,15 +5208,15 @@ async function htmlForHome(env, request, url) {
     name = s.store_name || "Kardivo",
     title = `${name} | ${(ar && clean(s.meta_title_ar)) || s.meta_title}`,
     desc = (ar && clean(s.meta_description_ar)) || s.meta_description,
-    logo = clean(s.logo_url) || LOGO_URL;
+    logo = logoOf(s);
   const head = seoHead({
     url,
     lang,
     title,
     desc,
-    image: logo,
+    image: logo === LOGO_URL ? "" : logo,
     type: "website",
-    extra: jsonLd({ "@context": "https://schema.org", "@type": "Store", name, url: url.origin, logo }),
+    extra: jsonLd({ "@context": "https://schema.org", "@type": "Store", name, url: url.origin, logo: new URL(logo, url.origin).href }),
   });
   // Put the featured products into the HTML itself, so Google, link previews and slow phones see them before any script runs.
   // The page script replaces this block with the interactive version as soon as it loads.
