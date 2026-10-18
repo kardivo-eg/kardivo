@@ -425,11 +425,30 @@ function renderAbandonedCartNudge() {
   if (hasItems) el.innerHTML = `<div><b>${t("Resume your cart")}</b><span>${t("You have items waiting in your cart.")}</span></div><button class="btn primary" type="button" id="resumeCartBtn">${t("Your cart")}</button>`;
   $("#resumeCartBtn")?.addEventListener("click", openCart);
 }
+// First visit with no saved choice: follow the device language (Arabic or English, whichever the device lists first).
+// If the device uses some other language (French, Turkish...), fall back by location like the currency does: Egypt gets Arabic,
+// everywhere else gets English. The time zone gives an instant first guess; boot() then confirms it with the real country.
+// Search-engine bots always get Arabic. The visitor's own toggle always wins and is remembered.
+let langIsGuess = false;
+function detectDeviceLang() {
+  if (/bot|crawl|spider|slurp|lighthouse/i.test(navigator.userAgent || "")) return "ar";
+  const list = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+  for (const l of list) {
+    const c = String(l).slice(0, 2).toLowerCase();
+    if (c === "ar" || c === "en") return c;
+  }
+  langIsGuess = true;
+  let tz = "";
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch {}
+  return tz === "Africa/Cairo" ? "ar" : "en";
+}
 state.lang = (() => {
   try {
     const q = new URLSearchParams(location.search).get("lang");
     if (q === "en" || q === "ar") localStorage.setItem("kardivo_lang", q);
-    return localStorage.getItem("kardivo_lang") === "en" ? "en" : "ar";
+    const saved = localStorage.getItem("kardivo_lang");
+    if (saved === "en" || saved === "ar") return saved;
+    return detectDeviceLang();
   } catch {
     return "ar";
   }
@@ -1132,8 +1151,42 @@ function setTheme(mode) {
   m.content = light ? "#f1f0f7" : "#08070d";
   updateThemeButton();
 }
+const CUR_KEY = "kardivo_cur";
+// First visit with no saved choice: Egypt sees EGP, everywhere else sees USD. A manual switch is remembered and always wins.
+let countryPromise = null;
+function getCountry() {
+  if (!countryPromise)
+    countryPromise = Promise.race([api("/api/geo"), new Promise((r) => setTimeout(() => r(null), 1500))])
+      .then((g) => String(g?.country || "").toUpperCase())
+      .catch(() => "");
+  return countryPromise;
+}
+const countryKnown = (c) => !!c && c !== "XX" && c !== "T1";
+async function pickCurrency() {
+  try {
+    const saved = localStorage.getItem(CUR_KEY);
+    if (saved === "EGP" || saved === "USD") return saved;
+  } catch {}
+  if (/bot|crawl|spider|slurp|lighthouse/i.test(navigator.userAgent || "")) return "EGP";
+  const c = await getCountry();
+  return countryKnown(c) && c !== "EG" ? "USD" : "EGP";
+}
+// Language guessed only from the time zone: correct it with the real country (Egypt = Arabic, elsewhere = English).
+async function confirmGuessedLang() {
+  if (!langIsGuess) return;
+  let saved = null;
+  try { saved = localStorage.getItem("kardivo_lang"); } catch {}
+  if (saved === "en" || saved === "ar") return;
+  const c = await getCountry();
+  if (!countryKnown(c)) return;
+  const want = c === "EG" ? "ar" : "en";
+  if (want !== state.lang) { state.lang = want; applyLang(); }
+}
 function toggleCurrency() {
   state.currencyView = state.currencyView === "EGP" ? "USD" : "EGP";
+  try {
+    localStorage.setItem(CUR_KEY, state.currencyView);
+  } catch {}
   updateCurrencyButton();
   // A click before API boot completes is still honored; boot will render using this state.
   if (!state.ready) return;
@@ -1290,6 +1343,7 @@ async function boot() {
     state.categories = categories;
     state.settings = settings;
     state.user = me.user;
+    [state.currencyView] = await Promise.all([pickCurrency(), confirmGuessedLang()]);
     if (state.user) await syncFavoritesWithAccount(true);
     state.cart = state.cart.filter((i) => cartRowValid(i, products));
     saveCart();
@@ -2967,6 +3021,197 @@ const ADMIN_TABS = [
   ["settings", "Settings"],
 ];
 const BADGE_OF = { queue: "review_queue", inbox: "unread_messages", waitlist: "waitlist_ready" };
+// ---- V82 admin: grouped menu, search across everything, a filter box on every list ----
+const ADMIN_GROUPS = [
+  ["Every day", ["dashboard", "queue", "inbox", "orders"]],
+  ["Catalog", ["products", "categories", "inventory", "merge", "waitlist"]],
+  ["Marketing", ["discounts", "campaigns", "emails", "reviews"]],
+  ["People & money", ["customers", "refunds"]],
+  ["System", ["settings", "audit"]],
+];
+const ADMIN_HINTS = {
+  dashboard: "home overview revenue sales stats chart funnel backup quick actions test email whatsapp",
+  queue: "payment proof review pending paid verify screenshot",
+  inbox: "messages chat support threads unread",
+  orders: "orders export csv refund fulfil deliver status paid",
+  products: "items price stock import export csv ai seo hide show edit add variants",
+  merge: "combine merge products options variants",
+  categories: "categories sections",
+  inventory: "digital codes keys stock supplier batches add codes",
+  waitlist: "back in stock notify requests waiting",
+  customers: "customers users accounts people spent",
+  emails: "emails automation newsletter templates working hours campaign send",
+  discounts: "discounts coupons promo codes offers sale",
+  campaigns: "campaigns banners deals homepage schedule",
+  reviews: "reviews ratings testimonials approve feature stars",
+  refunds: "refunds disputes chargeback problems money back",
+  audit: "audit log history actions who changed",
+  settings: "settings store name logo currency payment methods instapay vodafone telda password colors texts footer support",
+};
+const adminTabName = (k) => (ADMIN_TABS.find((t) => t[0] === k) || [k, k])[1];
+const adminData = { at: 0, orders: [], products: [], customers: [], busy: null };
+function loadAdminData(force) {
+  if (adminData.busy) return adminData.busy;
+  if (!force && Date.now() - adminData.at < 60000) return Promise.resolve();
+  adminData.busy = Promise.all([
+    api("/api/admin/orders").catch(() => adminData.orders),
+    api("/api/admin/products").catch(() => adminData.products),
+    api("/api/admin/customers").catch(() => adminData.customers),
+  ])
+    .then(([o, p, c]) => { adminData.orders = o; adminData.products = p; adminData.customers = c; adminData.at = Date.now(); })
+    .finally(() => { adminData.busy = null; });
+  return adminData.busy;
+}
+function settingsIndex() {
+  const out = [];
+  for (const [section, fields] of SETTINGS_SCHEMA) for (const [k, label] of fields) out.push({ sel: "#s_" + k, label: String(label).split(" (")[0], section: String(section).split(" (")[0] });
+  for (const [k, n] of PAY) out.push({ sel: "#s_" + k, label: n + " payment details", section: "Payment methods" });
+  out.push({ sel: "#pwForm", label: "Change admin password", section: "Settings" });
+  return out;
+}
+const matchAll = (text, q) => { const t = String(text || "").toLowerCase(); return q.every((w) => t.includes(w)); };
+function adminSearchResults(raw) {
+  const q = raw.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!q.length) return [];
+  const groups = [];
+  const pageItem = ([k, n]) => ({ title: n, sub: "Page", run: () => adminGo(k) });
+  const byName = ADMIN_TABS.filter(([, n]) => matchAll(n, q)).map(pageItem);
+  const byHint = ADMIN_TABS.filter(([k, n]) => !matchAll(n, q) && matchAll(n + " " + (ADMIN_HINTS[k] || ""), q)).map(pageItem);
+  if (byName.length) groups.push(["Pages", byName.slice(0, 6)]);
+  const sets = settingsIndex().filter((x) => matchAll(x.label + " " + x.section, q)).slice(0, 8).map((x) => ({ title: x.label, sub: "Settings · " + x.section, run: () => adminGoSetting(x.sel) }));
+  if (sets.length) groups.push(["Settings", sets]);
+  const orders = adminData.orders.filter((o) => matchAll(`${o.order_number} ${o.user_name || ""} ${o.guest_name || ""} ${o.user_email || ""} ${o.guest_contact || ""} ${o.item_summary || ""} ${o.payment_ref || ""}`, q)).slice(0, 6).map((o) => ({ title: o.order_number, sub: `${o.user_name || o.guest_name || o.user_email || o.guest_contact || "Guest"} · ${money(o.total || 0)} · ${o.fulfillment_status || o.payment_status || ""}`, run: () => { adminGo("orders").then(() => orderForm(o.id)); } }));
+  if (orders.length) groups.push(["Orders", orders]);
+  const prods = adminData.products.filter((p) => matchAll(`${p.name} ${p.name_ar || ""} ${p.platform || ""} ${p.region || ""} ${p.category_name || ""} ${p.slug || ""}`, q)).slice(0, 6).map((p) => ({ title: p.name, sub: `Product · ${money(p.price)} · ${p.delivery_type === "code" ? p.stock + " in stock" : "manual delivery"}`, run: () => { adminGo("products").then(() => productForm(p)); } }));
+  if (prods.length) groups.push(["Products", prods]);
+  const custs = adminData.customers.filter((u) => matchAll(`${u.name} ${u.email}`, q)).slice(0, 6).map((u) => ({ title: u.name || u.email, sub: `Customer · ${u.email} · ${u.orders} orders`, run: () => adminGo("customers", u.email) }));
+  if (custs.length) groups.push(["Customers", custs]);
+  if (byHint.length) groups.push(["Related pages", byHint.slice(0, 5)]);
+  return groups;
+}
+async function adminGo(tab, filterText) {
+  state.admin.tab = tab;
+  await renderAdminTab();
+  if (filterText) {
+    const f = $("#adminFilter");
+    if (f) { f.value = filterText; f.dispatchEvent(new Event("input")); }
+  }
+  window.scrollTo({ top: 0 });
+}
+async function adminGoSetting(sel) {
+  await adminGo("settings");
+  const el = $(sel);
+  if (!el) return;
+  let d = el.closest("details");
+  while (d) { d.open = true; d = d.parentElement?.closest("details"); }
+  const row = el.closest(".field, .switch-row, form, .admin-panel") || el;
+  row.scrollIntoView({ block: "center", behavior: "smooth" });
+  row.classList.add("admin-flash");
+  setTimeout(() => row.classList.remove("admin-flash"), 2200);
+  if (el.focus) try { el.focus({ preventScroll: true }); } catch {}
+}
+function bindAdminSearch() {
+  const input = $("#adminSearch"), box = $("#adminResults");
+  if (!input || !box) return;
+  let items = [], cur = -1, seq = 0;
+  const close = () => { box.hidden = true; cur = -1; };
+  const mark = () => $$(".admin-result", box).forEach((el, i) => el.classList.toggle("on", i === cur));
+  const draw = async () => {
+    const q = input.value.trim();
+    if (!q) { close(); return; }
+    const my = ++seq;
+    await loadAdminData();
+    if (my !== seq) return;
+    const groups = adminSearchResults(q);
+    items = groups.flatMap(([, list]) => list);
+    let n = 0;
+    box.innerHTML = groups.length
+      ? groups.map(([g, list]) => `<div class="admin-result-group">${g}</div>${list.map((x) => `<button type="button" class="admin-result" data-i="${n++}"><b>${escapeHTML(x.title)}</b><small>${escapeHTML(x.sub)}</small></button>`).join("")}`).join("")
+      : `<div class="admin-result-empty">Nothing found for "${escapeHTML(q)}".</div>`;
+    box.hidden = false; cur = -1;
+  };
+  const pick = (i) => { const it = items[i]; if (!it) return; close(); input.blur(); it.run(); };
+  input.addEventListener("focus", () => { loadAdminData(); if (input.value.trim()) draw(); });
+  input.addEventListener("input", draw);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { input.value = ""; close(); input.blur(); }
+    else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); if (!items.length) return; cur = (cur + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length; mark(); $$(".admin-result", box)[cur]?.scrollIntoView({ block: "nearest" }); }
+    else if (e.key === "Enter") { e.preventDefault(); pick(cur >= 0 ? cur : 0); }
+  });
+  box.addEventListener("mousedown", (e) => { const b = e.target.closest(".admin-result"); if (b) { e.preventDefault(); pick(Number(b.dataset.i)); } });
+  document.addEventListener("mousedown", (e) => { if (!e.target.closest(".admin-searchbar")) close(); });
+}
+document.addEventListener("keydown", (e) => {
+  const input = document.getElementById("adminSearch");
+  if (!input || !state.adminOpen) return;
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "") || document.activeElement?.isContentEditable;
+  if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") || (e.key === "/" && !typing)) { e.preventDefault(); input.focus(); input.select(); }
+});
+// A filter box above every long list (orders and settings have their own).
+function addAdminFilter(main, tab) {
+  if (["orders", "dashboard", "settings", "merge"].includes(tab)) return;
+  const panels = $$(".admin-panel", main).filter((p) => p.querySelector("table.admin-table tbody tr"));
+  const rows = $$("table.admin-table tbody tr", main).filter((tr) => !tr.querySelector("td.empty"));
+  if (!panels.length || rows.length < 5) return;
+  const box = document.createElement("div");
+  box.className = "admin-filter";
+  box.innerHTML = `<input type="search" id="adminFilter" placeholder="Filter this list..." autocomplete="off"><small id="adminFilterCount"></small>`;
+  panels[0].before(box);
+  const input = box.querySelector("input"), count = box.querySelector("small");
+  input.addEventListener("input", () => {
+    const q = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+    let shown = 0;
+    for (const tr of $$("table.admin-table tbody tr", main)) {
+      if (tr.querySelector("td.empty")) continue;
+      const ok = !q.length || q.every((w) => tr.textContent.toLowerCase().includes(w));
+      tr.hidden = !ok;
+      if (ok) shown++;
+    }
+    count.textContent = q.length ? `${shown} of ${rows.length} shown` : "";
+  });
+}
+// Settings: type to find a field; matching sections open, everything else hides.
+function addSettingsFilter(main) {
+  const form = $("#settingsForm", main);
+  if (!form) return;
+  const box = document.createElement("div");
+  box.className = "admin-filter";
+  box.innerHTML = `<input type="search" id="adminFilter" placeholder="Find a setting (logo, payment, hero, footer...)" autocomplete="off"><small id="adminFilterCount"></small>`;
+  form.before(box);
+  const sections = $$("details", form), wasOpen = new Map(sections.map((d) => [d, d.open]));
+  const input = box.querySelector("input"), count = box.querySelector("small");
+  input.addEventListener("input", () => {
+    const q = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+    let shown = 0;
+    for (const d of sections) {
+      const fields = $$(".field, .switch-row", d);
+      let any = 0;
+      for (const f of fields) {
+        const label = (f.querySelector("label, span, b")?.textContent || "") + " " + (f.querySelector("[id^='s_']")?.id || "");
+        const ok = !q.length || matchAll(label + " " + d.querySelector("summary")?.textContent, q);
+        f.hidden = !ok;
+        if (ok) any++;
+      }
+      shown += any;
+      d.hidden = q.length > 0 && !any;
+      d.open = q.length ? any > 0 : wasOpen.get(d);
+    }
+    count.textContent = q.length ? `${shown} setting(s) found` : "";
+  });
+}
+// Dashboard: keep the first screen simple; the rarely used tools sit in one folded section.
+function tidyDashboard(main, tab) {
+  if (tab !== "dashboard" || $(".admin-more", main)) return;
+  const keep = ["Email & WhatsApp", "Checkout funnel", "Database backups"];
+  const extra = $$(".admin-panel", main).filter((p) => keep.some((k) => (p.querySelector(".panel-head h3")?.textContent || "").startsWith(k)));
+  if (!extra.length) return;
+  const d = document.createElement("details");
+  d.className = "admin-more";
+  d.innerHTML = `<summary><b>More tools</b> <small>email test, checkout funnel, backups</small></summary>`;
+  main.appendChild(d);
+  extra.forEach((p) => { p.style.marginTop = "12px"; d.appendChild(p); });
+}
+
 async function openAdmin() {
   closeModal();
   if (!state.user || state.user.role !== "admin") { toast("Administrator access required."); return; }
@@ -3014,6 +3259,9 @@ async function renderAdminTab() {
   };
   try {
     await (pages[tab] || adminDashboard)(main);
+    addAdminFilter(main, tab);
+    if (tab === "settings") addSettingsFilter(main);
+    tidyDashboard(main, tab);
   } catch (e) {
     main.innerHTML = `<div class="notice danger-text">${escapeHTML(e.message)}</div>`;
   }
@@ -5372,8 +5620,10 @@ function renderAdminPage() {
     return;
   }
   state.adminOpen = true;
-  $("main").innerHTML = `<section class="admin-page container"><div class="admin-page-head"><div><span class="eyebrow">KARDIVO MANAGEMENT</span><h1>Admin dashboard</h1></div><div class="modal-actions" style="margin:0"><a class="btn ghost" href="/account" id="adminAccountLink">Account</a><a class="btn ghost" href="/" id="adminStoreLink">Back to store</a></div></div><div class="admin-shell"><aside class="admin-side" id="adminSide">${ADMIN_TABS.map(([k, n]) => `<button data-admin-tab="${k}">${n}<span class="badge red" data-badge="${k}" hidden></span></button>`).join("")}</aside><section class="admin-main" id="adminMain"></section></div></section>`;
+  $("main").innerHTML = `<section class="admin-page container"><div class="admin-page-head"><div><span class="eyebrow">KARDIVO MANAGEMENT</span><h1>Admin dashboard</h1></div><div class="modal-actions" style="margin:0"><a class="btn ghost" href="/account" id="adminAccountLink">Account</a><a class="btn ghost" href="/" id="adminStoreLink">Back to store</a></div></div><div class="admin-searchbar"><input id="adminSearch" type="search" placeholder="Search everything: orders, products, customers, settings, pages...   ( / )" autocomplete="off" aria-label="Search the admin"><div class="admin-results" id="adminResults" hidden></div></div><div class="admin-shell"><aside class="admin-side" id="adminSide">${ADMIN_GROUPS.map(([g, ks]) => `<div class="admin-group">${g}</div>${ks.map((k) => `<button data-admin-tab="${k}">${adminTabName(k)}<span class="badge red" data-badge="${k}" hidden></span></button>`).join("")}`).join("")}</aside><section class="admin-main" id="adminMain"></section></div></section>`;
   $$("#adminSide button").forEach(b => b.onclick = () => { state.admin.tab = b.dataset.adminTab; renderAdminTab(); });
+  bindAdminSearch();
+  adminData.at = 0;
   renderAdminTab().then(() => { if (state.admin.tab !== "dashboard") adminBadges(); });
 }
 async function route() {

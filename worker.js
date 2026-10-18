@@ -2805,6 +2805,9 @@ async function api(req, env, url, ctx) {
   }
   if (path === "/api/health")
     return json({ ok: true, version: "22.0.0", logo: LOGO_URL });
+  // Visitor country from Cloudflare (two letters, or empty). Used once on a first visit to pick the price currency.
+  if (path === "/api/geo" && method === "GET")
+    return json({ country: String(req.cf?.country || req.headers.get("cf-ipcountry") || "").toUpperCase().slice(0, 2) }, 200, { "cache-control": "private, no-store" });
   if (path === "/api/me" && method === "GET") return json({ user: me });
   if (path === "/api/me/favorites" && method === "GET") {
     if (!me) return json({ error: "Login required." }, 401);

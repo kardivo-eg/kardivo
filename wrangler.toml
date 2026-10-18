@@ -42,9 +42,9 @@ crons = ["0 * * * *"]
 
 # Backups and uploads need an R2 bucket. If you already have one bound (R2, MEDIA, PAYMENT_PROOFS
 # or PRODUCT_ASSETS) keep it as it is. Otherwise:
-[[r2_buckets]]
-binding = "R2"
-bucket_name = "kardivo-files"
+# [[r2_buckets]]
+# binding = "R2"
+# bucket_name = "kardivo-files"
 
 # KEEP YOUR EXISTING D1 BINDING. If your current wrangler.toml has a [[d1_databases]]
 # block, copy it here exactly as it is (binding must be "DB"). Example:
