@@ -9,3 +9,6 @@ Changed: public/index.html (the band markup), src/styles.css and the rebuilt pub
 - Works in light mode, Arabic/RTL and on phones; animation stops for reduced-motion and on slow devices.
 
 Deploy: npm install, npm run build (already built in this zip), then deploy as usual.
+
+## Wording of the three points (also in V85)
+The old points (clear pricing / only what is in stock / the price you see is what you pay) did not fit a code store. They now say, in English and Arabic: clear prices with no hidden fees, your code arrives in minutes, and a code that does not work is replaced or refunded. These match your FAQ and refund policy. Text you wrote yourself in Settings is never overwritten; only the old built-in wording is swapped. To change them later: Settings, "Deal point 1/2/3".

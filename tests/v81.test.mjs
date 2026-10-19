@@ -117,7 +117,7 @@ const cat = db.prepare("SELECT id FROM categories LIMIT 1").get();
   ok("the developer-style deal text is gone from the defaults", !/Stock-aware|Exact payment/.test(dflt), dflt);
   setS({ deal_2: "Stock-aware carts", deal_3_ar: "الإجمالي مظبوط للجنيه" });
   const st2 = await call("GET", "/api/settings/public");
-  ok("an old stored 'Stock-aware carts' shows the new wording", st2.json.deal_2 === "Only what is in stock" && st2.json.deal_3_ar === "السعر اللي بتشوفه هو اللي بتدفعه", JSON.stringify([st2.json.deal_2, st2.json.deal_3_ar]));
+  ok("an old stored 'Stock-aware carts' shows the new wording", st2.json.deal_2 === "Your code arrives in minutes" && st2.json.deal_3_ar === "الكود مش شغال؟ بنبدّله أو بنرجّع فلوسك", JSON.stringify([st2.json.deal_2, st2.json.deal_3_ar]));
   setS({ deal_2: "My own text" });
   const st3 = await call("GET", "/api/settings/public");
   ok("text the owner wrote is never overwritten", st3.json.deal_2 === "My own text");

@@ -232,9 +232,9 @@ const DEFAULTS = {
   deals_title: "Deals that actually calculate.",
   deals_text:
     "Use a valid discount code at checkout and the server recalculates the total.",
-  deal_1: "Clear pricing",
-  deal_2: "Only what is in stock",
-  deal_3: "The price you see is what you pay",
+  deal_1: "Clear prices, no hidden fees",
+  deal_2: "Your code arrives in minutes",
+  deal_3: "Code not working? We replace or refund it",
   how_eyebrow: "THE PROCESS",
   how_title: "Three steps. No ceremony.",
   step1_title: "Build your cart",
@@ -286,9 +286,9 @@ const DEFAULTS = {
   deals_title_ar: "خصومات حسابها مظبوط.",
   deals_text_ar:
     "حط كود خصم صالح وانت بتأكد الطلب، والموقع هيحسبلك الإجمالي الجديد أوتوماتيك.",
-  deal_1_ar: "أسعار واضحة",
-  deal_2_ar: "اللي تشوفه متاح فعلاً",
-  deal_3_ar: "السعر اللي بتشوفه هو اللي بتدفعه",
+  deal_1_ar: "أسعار واضحة ومفيش رسوم مخفية",
+  deal_2_ar: "الكود بيوصلك في دقايق",
+  deal_3_ar: "الكود مش شغال؟ بنبدّله أو بنرجّع فلوسك",
   how_eyebrow_ar: "الخطوات",
   how_title_ar: "تلات خطوات من غير تعقيد.",
   step1_title_ar: "جهّز سلتك",
@@ -513,10 +513,12 @@ async function ensureSchema(env) {
 }
 // Old developer-style wording that an admin save may have stored: show the new customer wording instead.
 const LEGACY_COPY = {
-  deal_2: ["Stock-aware carts"],
-  deal_3: ["Exact payment total"],
-  deal_2_ar: ["السلة بتعرف المتاح"],
-  deal_3_ar: ["الإجمالي مظبوط للجنيه"],
+  deal_1: ["Clear pricing"],
+  deal_2: ["Stock-aware carts", "Only what is in stock"],
+  deal_3: ["Exact payment total", "The price you see is what you pay"],
+  deal_1_ar: ["أسعار واضحة"],
+  deal_2_ar: ["السلة بتعرف المتاح", "اللي تشوفه متاح فعلاً"],
+  deal_3_ar: ["الإجمالي مظبوط للجنيه", "السعر اللي بتشوفه هو اللي بتدفعه"],
 };
 async function allSettings(env) {
   const s = { ...DEFAULTS, ...(await settings(env)) };
