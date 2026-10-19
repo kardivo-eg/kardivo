@@ -1,5 +1,5 @@
 // Kardivo service worker: installable shell, offline fallback, and admin push notifications.
-const CACHE = "kardivo-shell-v42";
+const CACHE = "kardivo-shell-v43";
 const SHELL = ["/offline.html", "/icons/icon-192.png"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

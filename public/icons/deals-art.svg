@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 420" width="520" height="420" role="img" aria-label="">
+<defs>
+<linearGradient id="gT" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset=".55" stop-color="#7c3aed"/><stop offset="1" stop-color="#4c1d95"/></linearGradient>
+<linearGradient id="gC" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f0abfc"/><stop offset=".5" stop-color="#d946ef"/><stop offset="1" stop-color="#6366f1"/></linearGradient>
+<linearGradient id="gG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fde68a"/><stop offset="1" stop-color="#f59e0b"/></linearGradient>
+<linearGradient id="gS" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity=".0"/><stop offset=".5" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<radialGradient id="rG" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#8b5cf6" stop-opacity=".75"/><stop offset=".6" stop-color="#d946ef" stop-opacity=".18"/><stop offset="1" stop-color="#6366f1" stop-opacity="0"/></radialGradient>
+<filter id="blur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="14"/></filter>
+<filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3"/></filter>
+<mask id="notch"><rect width="300" height="170" rx="22" fill="#fff"/><circle cx="0" cy="85" r="17" fill="#000"/><circle cx="300" cy="85" r="17" fill="#000"/></mask>
+</defs>
+<circle cx="260" cy="215" r="200" fill="url(#rG)"/>
+<g stroke="#a78bfa" stroke-opacity=".25" fill="none"><circle cx="260" cy="215" r="150"/><circle cx="260" cy="215" r="190" stroke-dasharray="3 9"/></g>
+<!-- gift card, behind -->
+<g transform="translate(250 210) rotate(9)">
+<rect x="-30" y="-10" width="250" height="155" rx="20" fill="#000" opacity=".5" filter="url(#blur)" transform="translate(0 18)"/>
+<rect x="-30" y="-10" width="250" height="155" rx="20" fill="url(#gC)"/>
+<rect x="-30" y="-10" width="250" height="155" rx="20" fill="none" stroke="#fff" stroke-opacity=".35"/>
+<rect x="-6" y="18" width="46" height="34" rx="7" fill="url(#gG)"/>
+<path d="M-6 35h46M17 18v34" stroke="#b45309" stroke-opacity=".5"/>
+<rect x="-6" y="100" width="120" height="9" rx="4.5" fill="#fff" fill-opacity=".55"/>
+<rect x="-6" y="118" width="74" height="9" rx="4.5" fill="#fff" fill-opacity=".3"/>
+<circle cx="178" cy="30" r="15" fill="#fff" fill-opacity=".25"/><circle cx="162" cy="30" r="15" fill="#fff" fill-opacity=".25"/>
+<rect x="-30" y="-10" width="250" height="155" rx="20" fill="url(#gS)" opacity=".5"/>
+</g>
+<!-- coupon ticket, front -->
+<g transform="translate(70 70) rotate(-8)">
+<rect width="300" height="170" rx="22" fill="#000" opacity=".55" filter="url(#blur)" transform="translate(0 20)"/>
+<g mask="url(#notch)">
+<rect width="300" height="170" fill="url(#gT)"/>
+<rect width="300" height="170" fill="url(#gS)" opacity=".55"/>
+<circle cx="250" cy="20" r="90" fill="#fff" opacity=".08"/>
+<path d="M205 0v170" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-dasharray="7 8"/>
+</g>
+<rect width="300" height="170" rx="22" fill="none" stroke="#fff" stroke-opacity=".4"/>
+<text x="102" y="122" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-weight="900" font-size="118" fill="#fff" letter-spacing="-6">%</text>
+<rect x="28" y="28" width="62" height="10" rx="5" fill="#fff" fill-opacity=".7"/>
+<rect x="28" y="46" width="38" height="10" rx="5" fill="#fff" fill-opacity=".35"/>
+<g fill="#fff" fill-opacity=".85"><rect x="226" y="40" width="3" height="90"/><rect x="233" y="40" width="6" height="90"/><rect x="243" y="40" width="2" height="90"/><rect x="249" y="40" width="5" height="90"/><rect x="258" y="40" width="3" height="90"/><rect x="265" y="40" width="7" height="90"/></g>
+</g>
+<!-- price tag -->
+<g transform="translate(372 36) rotate(14)">
+<path d="M0 30L30 0h78a14 14 0 0 1 14 14v52a14 14 0 0 1-14 14H30L0 50z" fill="#000" opacity=".5" filter="url(#soft)" transform="translate(0 8)"/>
+<path d="M0 30L30 0h78a14 14 0 0 1 14 14v52a14 14 0 0 1-14 14H30L0 50z" fill="url(#gG)"/>
+<circle cx="26" cy="25" r="6" fill="#1a1030"/>
+<path d="M50 50h56M50 66h34" stroke="#92400e" stroke-opacity=".6" stroke-width="7" stroke-linecap="round"/>
+</g>
+<!-- check badge -->
+<g transform="translate(96 288)">
+<circle r="40" fill="#10b981" opacity=".4" filter="url(#blur)"/>
+<circle r="30" fill="#34d399"/><circle r="30" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="2"/>
+<path d="M-12 1l8 9 17-19" fill="none" stroke="#052e1f" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<!-- sparkles and coins -->
+<g fill="#fff">
+<path d="M455 190l5 14 14 5-14 5-5 14-5-14-14-5 14-5z" opacity=".95"/>
+<path d="M40 150l3 8 8 3-8 3-3 8-3-8-8-3 8-3z" opacity=".8"/>
+<path d="M330 372l3 8 8 3-8 3-3 8-3-8-8-3 8-3z" opacity=".7"/>
+<circle cx="430" cy="330" r="3"/><circle cx="60" cy="230" r="2.5" opacity=".7"/><circle cx="300" cy="26" r="2.5" opacity=".7"/>
+</g>
+<g transform="translate(420 290)"><circle r="22" fill="url(#gG)"/><circle r="22" fill="none" stroke="#fff" stroke-opacity=".5"/><circle r="14" fill="none" stroke="#b45309" stroke-opacity=".5" stroke-width="3"/></g>
+<g transform="translate(486 262) scale(.6)"><circle r="22" fill="url(#gG)"/><circle r="14" fill="none" stroke="#b45309" stroke-opacity=".5" stroke-width="3"/></g>
+</svg>
