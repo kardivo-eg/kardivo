@@ -5157,6 +5157,33 @@ async function api(req, env, url, ctx) {
   return json({ error: "Not found" }, 404);
 }
 const pageLang = (url) => (url.searchParams.get("lang") === "en" ? "en" : "ar");
+// Google wants its own product taxonomy for "category", not the store's own category names (that is what made it say "invalid value").
+const googleCategory = (...names) => {
+  const t = names.join(" ").toLowerCase();
+  if (/gift\s*card|بطاقة|بطاقات/.test(t)) return "Arts & Entertainment > Party & Celebration > Gift Giving > Gift Cards & Certificates";
+  if (/game|games|steam|playstation|xbox|nintendo|psn|roblox|fortnite|ألعاب|لعبة/.test(t)) return "Software > Video Game Software";
+  return "Software";
+};
+// Digital goods: one-day replacement/refund window (matches the policy text on the site), nothing is shipped, delivery is instant to a few minutes.
+const MARKET_COUNTRY = "EG";
+const returnPolicyLd = () => ({
+  "@type": "MerchantReturnPolicy",
+  applicableCountry: MARKET_COUNTRY,
+  returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
+  merchantReturnDays: 1,
+  returnFees: "https://schema.org/FreeReturn",
+  refundType: "https://schema.org/FullRefund",
+});
+const shippingLd = (currency) => ({
+  "@type": "OfferShippingDetails",
+  shippingRate: { "@type": "MonetaryAmount", value: 0, currency },
+  shippingDestination: { "@type": "DefinedRegion", addressCountry: MARKET_COUNTRY },
+  deliveryTime: {
+    "@type": "ShippingDeliveryTime",
+    handlingTime: { "@type": "QuantitativeValue", minValue: 0, maxValue: 0, unitCode: "DAY" },
+    transitTime: { "@type": "QuantitativeValue", minValue: 0, maxValue: 0, unitCode: "DAY" },
+  },
+});
 const jsonLd = (o) => `<script type="application/ld+json">${JSON.stringify(o).replace(/</g, "\\u003c")}</script>`;
 // Arabic is the default language of every URL; the English version lives at the same path with ?lang=en (that is what hreflang points to).
 function seoHead({ url, lang, title, desc, image, type, extra = "" }) {
@@ -5253,7 +5280,7 @@ async function htmlForProduct(env, request, url) {
   await ensureSchema(env);
   const slug = decodeURIComponent(url.pathname.slice(1)).replace(/\/$/, ""),
     p = await env.DB.prepare(
-      "SELECT p.id,p.name,p.name_ar,p.description,p.description_ar,p.image_url,p.gallery,p.price,p.delivery_type,p.slug,p.meta_title,p.meta_description,p.meta_title_ar,p.meta_description_ar,p.seo_keywords,p.seo_keywords_ar,c.name category_name,c.name_ar category_name_ar,c.slug category_slug FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.slug=? AND p.active=1 LIMIT 1",
+      "SELECT p.id,p.name,p.name_ar,p.description,p.description_ar,p.image_url,p.gallery,p.price,p.delivery_type,p.slug,p.meta_title,p.meta_description,p.meta_title_ar,p.meta_description_ar,p.seo_keywords,p.seo_keywords_ar,p.platform,c.name category_name,c.name_ar category_name_ar,c.slug category_slug FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.slug=? AND p.active=1 LIMIT 1",
     )
       .bind(slug)
       .first();
@@ -5283,20 +5310,31 @@ async function htmlForProduct(env, request, url) {
   if (p.delivery_type === "code")
     inStock = Number((await env.DB.prepare("SELECT COUNT(*) n FROM inventory WHERE product_id=? AND status='available'").bind(p.id).first()).n) > 0;
   // Only real, admin-approved reviews ever reach structured data.
-  let aggregateRating = null;
+  let aggregateRating = null, reviews = [];
   try {
     const rv = await env.DB.prepare("SELECT COUNT(*) n,AVG(rating) a FROM product_reviews WHERE product_id=? AND approved=1").bind(p.id).first();
     if (Number(rv?.n) > 0) aggregateRating = { "@type": "AggregateRating", ratingValue: Number(Number(rv.a).toFixed(1)), reviewCount: Number(rv.n), bestRating: 5, worstRating: 1 };
+    if (aggregateRating) {
+      const rr = await env.DB.prepare("SELECT r.rating,r.body,r.created_at,u.name user_name FROM product_reviews r LEFT JOIN users u ON u.id=r.user_id WHERE r.product_id=? AND r.approved=1 ORDER BY r.id DESC LIMIT 5").bind(p.id).all();
+      reviews = (rr.results || []).map((r) => ({
+        "@type": "Review",
+        reviewRating: { "@type": "Rating", ratingValue: Number(r.rating), bestRating: 5, worstRating: 1 },
+        author: { "@type": "Person", name: clean(r.user_name) || (ar ? "عميل" : "Customer") },
+        ...(clean(r.body) ? { reviewBody: clean(r.body).slice(0, 500) } : {}),
+        ...(r.created_at ? { datePublished: String(r.created_at).slice(0, 10) } : {}),
+      }));
+    }
   } catch {}
   const currency = clean(s.store_currency) || "EGP",
     pageUrl = new URL(url.pathname, url.origin).href,
     availability = inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
     seller = { "@type": "Organization", name: store, url: url.origin },
     low = String(money(vr?.mp ?? p.price)),
+    extraOffer = { hasMerchantReturnPolicy: returnPolicyLd(), shippingDetails: shippingLd(currency) },
     offers =
       Number(vr?.n) > 1 && Number(vr?.xp) > Number(vr?.mp)
-        ? { "@type": "AggregateOffer", url: pageUrl, lowPrice: low, highPrice: String(money(vr.xp)), offerCount: Number(vr.n), priceCurrency: currency, availability, itemCondition: "https://schema.org/NewCondition", seller }
-        : { "@type": "Offer", url: pageUrl, price: low, priceCurrency: currency, availability, itemCondition: "https://schema.org/NewCondition", seller };
+        ? { "@type": "AggregateOffer", url: pageUrl, lowPrice: low, highPrice: String(money(vr.xp)), offerCount: Number(vr.n), priceCurrency: currency, availability, itemCondition: "https://schema.org/NewCondition", seller, ...extraOffer }
+        : { "@type": "Offer", url: pageUrl, price: low, priceCurrency: currency, availability, itemCondition: "https://schema.org/NewCondition", seller, ...extraOffer };
   const catName = p.category_slug ? (ar && clean(p.category_name_ar)) || p.category_name : "";
   const crumbs = [{ name: ar ? "الرئيسية" : "Home", item: url.origin + "/" }];
   if (p.category_slug && catName) crumbs.push({ name: catName, item: `${url.origin}/c/${encodeURIComponent(p.category_slug)}` });
@@ -5317,9 +5355,12 @@ async function htmlForProduct(env, request, url) {
         description: short,
         sku: p.slug,
         ...(imagesOf(p).length ? { image: imagesOf(p).slice(0, 6).map((u) => new URL(u, url).href) } : {}),
-        ...(catName ? { category: catName } : {}),
+        brand: { "@type": "Brand", name: clean(p.platform) || store },
+        mpn: p.slug,
+        category: googleCategory(p.category_slug || "", p.category_name || "", p.name || ""),
         offers,
         ...(aggregateRating ? { aggregateRating } : {}),
+        ...(reviews.length ? { review: reviews } : {}),
       }) +
       jsonLd({
         "@context": "https://schema.org",
