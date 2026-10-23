@@ -1578,6 +1578,35 @@ async function productList(env, includeInactive = false) {
   }
   return rows;
 }
+// V92: the lean catalog sent to the storefront on first load (GET /api/products).
+// Only what product cards, filters, sort and search need. Left out on purpose (the product page loads them from GET /api/products/:slug):
+// the full description (only a short snippet is kept, for search and quick view), gallery / images, redeem steps, SEO fields, timestamps and every admin-only column.
+// Variants keep every field the storefront reads (id, name, price, old_price, active, stock) and, like before, inactive ones are still listed with their active flag.
+// The snippet must stay at least 181 characters: quick view cuts descriptions at 180, so it shows the same text as it did with the full description.
+const LIST_SNIPPET_CHARS = 200;
+async function publicProductList(env) {
+  const rows = (
+    await env.DB.prepare(
+      `SELECT p.id,p.name,p.name_ar,p.slug,SUBSTR(COALESCE(p.description,''),1,${LIST_SNIPPET_CHARS}) description,SUBSTR(COALESCE(p.description_ar,''),1,${LIST_SNIPPET_CHARS}) description_ar,p.price,p.old_price,p.image_url,p.category_id,c.name category_name,c.name_ar category_name_ar,p.platform,p.region,p.delivery_type,p.active,p.featured,p.gift_type,p.gift_label,p.gift_label_ar,(SELECT COUNT(*) FROM inventory i WHERE i.product_id=p.id AND i.status='available') stock FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.active=1 ORDER BY p.featured DESC,p.id DESC`,
+    ).all()
+  ).results;
+  // Same rule as productList (V91): variants come from one subquery on the product filter, never from `IN (?,?,...)` with one parameter per product (D1 allows 100 bound parameters).
+  const vs = rows.length
+    ? (
+        await env.DB.prepare(
+          `SELECT v.id,v.product_id,v.name,v.price,v.old_price,v.active,v.sort_order,(SELECT COUNT(*) FROM inventory i WHERE i.product_id=v.product_id AND i.variant_id=v.id AND i.status='available')+(SELECT COUNT(*) FROM inventory i JOIN variant_sources vs ON vs.source_product_id=i.product_id WHERE vs.variant_id=v.id AND i.variant_id IS NULL AND i.status='available') stock FROM product_variants v WHERE v.product_id IN (SELECT p.id FROM products p WHERE p.active=1) ORDER BY v.sort_order,v.id`,
+        ).all()
+      ).results
+    : [];
+  const byProduct = new Map();
+  for (const v of vs) {
+    const list = byProduct.get(v.product_id);
+    if (list) list.push(v);
+    else byProduct.set(v.product_id, [v]);
+  }
+  for (const p of rows) p.variants = byProduct.get(p.id) || [];
+  return rows;
+}
 // ---- Product image gallery ----
 // Extra images live in products.gallery as a JSON list of URLs. products.image_url stays the cover (shown first, used for cards and link previews).
 const GALLERY_MAX = 8;
@@ -3035,8 +3064,9 @@ async function api(req, env, url, ctx) {
       return json({ error: "Could not fetch the image." }, 502);
     }
   }
+  // V92: lean by default. ?full=1 returns the complete public records (the pre-V92 response) for any outside script that still reads descriptions or galleries from the list.
   if (path === "/api/products" && method === "GET")
-    return json(await productList(env, false));
+    return json(url.searchParams.get("full") === "1" ? await productList(env, false) : await publicProductList(env));
   const productSlugMatch = path.match(/^\/api\/products\/([^/]+)$/);
   if (productSlugMatch && method === "GET") {
     const slug = decodeURIComponent(productSlugMatch[1]);
@@ -5494,7 +5524,7 @@ async function htmlForHome(env, request, url) {
   // The page script replaces this block with the interactive version as soon as it loads.
   let page = await res.text(), itemList = "";
   try {
-    const all = (await productList(env, false)).filter((p) => Number(p.active) !== 0);
+    const all = (await publicProductList(env)).filter((p) => Number(p.active) !== 0);
     let pick = all.filter((p) => Number(p.featured)).slice(0, 8);
     if (pick.length < 4) pick = [...pick, ...all.filter((p) => !Number(p.featured)).slice(0, 4 - pick.length)];
     const cur = clean(s.store_currency) || "EGP", curLabel = ar && cur === "EGP" ? "ج.م" : cur;
