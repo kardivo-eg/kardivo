@@ -171,6 +171,12 @@ const DEFAULTS = {
   logo_url: LOGO_URL,
   store_currency: "EGP",
   usd_exchange_rate: "50",
+  steam_private_markup: "100", // old flat markup (EGP): no longer used for pricing
+  steam_private_pct: "10", // V90: normal profit over the Steam price (%)
+  steam_private_cashback: "5", // V90: cashback paid to the buyer, as % of the selling price, built into the price
+  steam_private_min: "0", // V90: smallest profit per game before cashback (EGP)
+  steam_private_auto: "1",
+  steam_private_cc: "eg",
   accent_color: "#8b5cf6",
   announcement: "",
   meta_title: "Digital gaming marketplace",
@@ -348,7 +354,7 @@ const DEFAULTS = {
   email_winback_days: "45",
   email_winback_code: "",
 };
-const SCHEMA_VERSION = 21; // 21: products.redeem_steps (+_ar) "how to redeem" text // 20: email automations (saved carts, email log, opt-in + reminder flags) // 19: promo_campaigns (many promo campaigns for /deals, optionally also on the homepage) // 18: products.gallery (extra product images, JSON list) // 17: products SEO fields + image_original (AI SEO text, AI image cleanup) // 16: users.points_redeemed (V41 added the column but never bumped the version, so existing DBs skipped the migration)
+const SCHEMA_VERSION = 23; // 23 (V88): products.steam_app_id/steam_auto/steam_price_at (Steam import + automatic prices) // 22: products.gift_type/gift_label(+_ar) and order_items.gift_target (Steam gift products: the buyer gives a friend code or invite link, you send the gift by hand) // 21: products.redeem_steps (+_ar) "how to redeem" text // 20: email automations (saved carts, email log, opt-in + reminder flags) // 19: promo_campaigns (many promo campaigns for /deals, optionally also on the homepage) // 18: products.gallery (extra product images, JSON list) // 17: products SEO fields + image_original (AI SEO text, AI image cleanup) // 16: users.points_redeemed (V41 added the column but never bumped the version, so existing DBs skipped the migration)
 // Columns added over time. Each is added only if missing (additive, never destructive).
 const COLUMN_ADDS = [
   ["discounts", "max_uses", "INTEGER"],
@@ -392,6 +398,13 @@ const COLUMN_ADDS = [
   ["checkout_events", "product_id", "INTEGER"],
   ["order_items", "variant_id", "INTEGER"],
   ["order_items", "variant_name", "TEXT DEFAULT ''"],
+  ["order_items", "gift_target", "TEXT DEFAULT ''"],
+  ["products", "gift_type", "TEXT DEFAULT ''"],
+  ["products", "steam_app_id", "INTEGER"],
+  ["products", "steam_auto", "INTEGER NOT NULL DEFAULT 1"],
+  ["products", "steam_price_at", "TEXT"],
+  ["products", "gift_label", "TEXT DEFAULT ''"],
+  ["products", "gift_label_ar", "TEXT DEFAULT ''"],
   ["users", "credit", "REAL NOT NULL DEFAULT 0"],
   ["users", "referral_code", "TEXT"],
   ["users", "marketing_optin", "INTEGER NOT NULL DEFAULT 0"],
@@ -605,7 +618,20 @@ async function orderHolds(env, orderId, productId, variantId) {
     ).n || 0,
   );
 }
-async function priceCart(env, items, s) {
+// Gift products (V86): the buyer gives where the gift must be sent and the owner sends it by hand.
+// "steam" takes a Steam friend code or a Steam quick-invite / profile link. "custom" takes any short text.
+function giftCheck(type, raw) {
+  const v = String(raw ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim();
+  if (type === "steam") {
+    if (/^\d{6,12}$/.test(v)) return { ok: true, value: v };
+    const m = v.match(/^https:\/\/(?:s\.team\/p\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)?|steamcommunity\.com\/(?:user|profiles|id)\/[A-Za-z0-9_-]+)\/?(?:\?[^\s]*)?$/i);
+    if (m && v.length <= 200) return { ok: true, value: v };
+    return { ok: false, error: "Enter your Steam friend code (numbers only) or your Steam quick-invite link." };
+  }
+  if (v.length < 3 || v.length > 200) return { ok: false, error: "Enter the details we need to deliver your gift." };
+  return { ok: true, value: v };
+}
+async function priceCart(env, items, s, opts = {}) {
   const maxQty = Math.max(1, Number(s.max_qty) || 10);
   if (!Array.isArray(items) || !items.length)
     return { error: "Cart is empty." };
@@ -621,6 +647,7 @@ async function priceCart(env, items, s) {
     q.set(key, {
       product_id: id,
       variant_id: vid,
+      gift_target: prev?.gift_target || String(x.gift_target ?? "").slice(0, 300),
       quantity: Math.min(
         maxQty,
         (prev?.quantity || 0) +
@@ -661,6 +688,15 @@ async function priceCart(env, items, s) {
         .first()
     )
       return { error: `Choose an option for ${p.name}.` };
+    if (p.gift_type) {
+      // One gift per line: Steam will not gift the same game twice to one account.
+      it.quantity = 1;
+      if (opts.requireGift) {
+        const g = giftCheck(p.gift_type, it.gift_target);
+        if (!g.ok) return { error: `${p.name}: ${g.error}` };
+        it.gift_target = g.value;
+      } else it.gift_target = "";
+    }
     if (p.delivery_type === "code") {
       const stock = await availableCount(env, p.id, it.variant_id);
       if (stock < it.quantity)
@@ -875,7 +911,7 @@ async function ordersWithCodes(env, where, ...binds) {
   const its = orders.length
     ? (
         await env.DB.prepare(
-          `SELECT order_id,product_id,variant_id,variant_name,product_name,quantity FROM order_items WHERE order_id IN (${orders.map(() => "?").join(",")}) ORDER BY id`,
+          `SELECT order_id,product_id,variant_id,variant_name,product_name,quantity,gift_target FROM order_items WHERE order_id IN (${orders.map(() => "?").join(",")}) ORDER BY id`,
         )
           .bind(...orders.map((o) => o.id))
           .all()
@@ -1104,6 +1140,151 @@ async function saveRedeem(env, id, b) {
   const sets = [], binds = [];
   for (const k of ["redeem_steps", "redeem_steps_ar"]) if (b[k] !== undefined) { sets.push(`${k}=?`); binds.push(stepsClean(b[k])); }
   if (sets.length) await env.DB.prepare(`UPDATE products SET ${sets.join(",")} WHERE id=?`).bind(...binds, id).run();
+}
+async function saveGift(env, id, b) {
+  if (b.steam_auto !== undefined) await env.DB.prepare("UPDATE products SET steam_auto=? WHERE id=?").bind(b.steam_auto && b.steam_auto !== "0" ? 1 : 0, id).run();
+  if (b.gift_type === undefined) return;
+  const type = b.gift_type === "steam" ? "steam" : b.gift_type === "custom" ? "custom" : "";
+  const lab = (v) => String(v ?? "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 80);
+  // A gift product is always delivered by hand, so it can never be a stock-code product.
+  await env.DB.prepare("UPDATE products SET gift_type=?,gift_label=?,gift_label_ar=?,delivery_type=CASE WHEN ?<>'' THEN 'manual' ELSE delivery_type END WHERE id=?")
+    .bind(type, lab(b.gift_label), lab(b.gift_label_ar), type, id).run();
+}
+// V88: Steam games. The game's name, cover, screenshots and price come from Steam's own public store data.
+// cost = the Steam price (in EGP), sell price = cost + 10% profit, grossed up for the 5% cashback (V90). Prices re-check by themselves.
+function steamIds(text) {
+  const out = [];
+  for (const tok of String(text || "").split(/[\s,;]+/)) {
+    const m = tok.match(/store\.steampowered\.com\/app\/(\d{1,9})/i) || tok.match(/^(\d{1,9})$/);
+    if (m && !out.includes(Number(m[1]))) out.push(Number(m[1]));
+  }
+  return out;
+}
+const steamText = (h) => clean(String(h ?? "").replace(/<[^>]*>/g, " ").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/\s+/g, " "));
+// V90: price = cost + normal profit (%, with an optional EGP minimum), grossed up so the cashback credit (a % of the PRICE) is paid out of the markup, not out of your profit.
+// Example: cost 1000, 10% profit, 5% cashback -> 1100 / 0.95 = 1158. After 5% cashback (58) you keep 1100 - 1000 = 100 = exactly 10%.
+const steamNum = (v, d, max) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? Math.min(max, n) : d; };
+const steamPct = (s) => steamNum(s.steam_private_pct, 10, 1000);
+const steamCashback = (s) => steamNum(s.steam_private_cashback, 5, 50);
+const steamMin = (s) => steamNum(s.steam_private_min, 0, 100000);
+const steamSell = (cost, s) => Math.ceil((Math.max(cost * (1 + steamPct(s) / 100), cost + steamMin(s))) / (1 - steamCashback(s) / 100) - 1e-9);
+const steamCfg = (s) => ({ pct: steamPct(s), cashback: steamCashback(s), min: steamMin(s) });
+async function steamFetch(appId, s) {
+  const cc = /^[a-z]{2}$/i.test(clean(s.steam_private_cc)) ? clean(s.steam_private_cc).toLowerCase() : "eg";
+  try {
+    const r = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}&cc=${cc}&l=english`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; KardivoStore/1.0)" } });
+    if (!r.ok) return { error: `Steam answered ${r.status}`, limited: r.status === 429 };
+    const e = (await r.json())?.[appId];
+    if (!e?.success || !e.data) return { error: "Steam has no store page for this ID in this region" };
+    return { data: e.data };
+  } catch (e) {
+    return { error: "Could not reach Steam" };
+  }
+}
+function steamCost(data, s) {
+  if (data.is_free) return { free: true, error: "Free game, nothing to gift" };
+  const po = data.price_overview;
+  if (!po || !Number.isFinite(Number(po.final))) return { error: "No price on Steam right now" };
+  const amount = Number(po.final) / 100, cur = String(po.currency || "").toUpperCase();
+  if (cur === "EGP") return { cost: money(amount) };
+  if (cur === "USD") return { cost: money(amount * (Number(s.usd_exchange_rate) || 50)) };
+  return { error: `Steam price is in ${cur}, which cannot be converted` };
+}
+// V89 anti-dupe: two games are "the same" when their names match once edition / platform words, punctuation, accents, "the" and roman numerals are ignored.
+// So "Fallout 4", "Fallout 4 - Steam Gift (PC)" and "Fallout 4: Game of the Year Edition" are one game, but "Fallout", "Fallout 76" and "Fallout: New Vegas" are all different games.
+const STEAM_ROMAN = { ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, xi: 11, xii: 12, xiii: 13, xiv: 14, xv: 15, xvi: 16, xvii: 17, xviii: 18, xix: 19, xx: 20 };
+const STEAM_NOISE = new Set(["the", "edition", "deluxe", "standard", "ultimate", "gold", "goty", "complete", "premium", "digital", "steam", "gift", "key", "pc", "global", "egypt", "mena", "worldwide", "account", "card", "code"]);
+function steamCore(name) {
+  const t = String(name ?? "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[™®©]/g, "").replace(/&/g, " and ").replace(/['’`]/g, "").replace(/(\d),(?=\d)/g, "$1").replace(/game of the year/g, " goty ").replace(/region free/g, " ");
+  const all = t.split(/[^a-z0-9]+/).filter(Boolean).map((w) => (STEAM_ROMAN[w] ? String(STEAM_ROMAN[w]) : w));
+  const kept = all.filter((w) => !STEAM_NOISE.has(w));
+  return (kept.length ? kept : all).join(" ");
+}
+// withSub: a Steam title such as "The Elder Scrolls V: Skyrim Special Edition" also counts as "Skyrim Special Edition" (what a hand-made product is usually called).
+function steamKeys(name, withSub = false) {
+  const keys = new Set(), full = steamCore(name);
+  if (full) keys.add(full);
+  if (withSub) {
+    const seg = String(name ?? "").split(/\s[-–—]\s|:/);
+    if (seg.length > 1) { const sub = steamCore(seg[seg.length - 1]); if (sub.length >= 6 && !/^[\d ]+$/.test(sub)) keys.add(sub); }
+  }
+  return keys;
+}
+// Everything already in the store (active or hidden, Steam-linked or made by hand): the Steam app numbers and the name keys.
+async function steamHave(env) {
+  const apps = new Set(), keys = new Map();
+  for (const r of (await env.DB.prepare("SELECT name,steam_app_id FROM products").all()).results) {
+    if (r.steam_app_id) apps.add(Number(r.steam_app_id));
+    for (const k of steamKeys(r.name)) if (!keys.has(k)) keys.set(k, r.name);
+  }
+  return { apps, keys };
+}
+const steamClash = (have, name) => { for (const k of steamKeys(name, true)) if (have.keys.has(k)) return have.keys.get(k); return null; };
+// One page of Steam's best-selling games (games only, no DLC, bundles or software), in rank order.
+async function steamTop(start, count, s) {
+  const cc = /^[a-z]{2}$/i.test(clean(s.steam_private_cc)) ? clean(s.steam_private_cc).toLowerCase() : "eg";
+  try {
+    const r = await fetch(`https://store.steampowered.com/search/results/?query=&start=${start}&count=${count}&filter=topsellers&category1=998&cc=${cc}&l=english&infinite=1&ignore_preferences=1`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; KardivoStore/1.0)", Accept: "application/json" } });
+    if (!r.ok) return { error: `Steam answered ${r.status}` };
+    const j = await r.json(), html = String(j?.results_html || ""), items = [];
+    for (const m of html.matchAll(/(<a\b[^>]*search_result_row[^>]*>)([\s\S]*?)<\/a>/g)) {
+      if (/data-ds-bundleid/.test(m[1])) continue;
+      const id = m[1].match(/data-ds-appid="(\d{1,9})"/), t = m[2].match(/<span class="title">([\s\S]*?)<\/span>/);
+      if (id && !items.some((x) => x.app === Number(id[1]))) items.push({ app: Number(id[1]), name: t ? steamText(t[1]).slice(0, 200) : "" });
+    }
+    if (!items.length && Number(j?.total_count) !== 0 && start === 0) return { error: "Steam's top list came back in a format this store does not recognise" };
+    return { items, total: Number(j?.total_count) || 0 };
+  } catch (e) {
+    return { error: "Could not reach Steam" };
+  }
+}
+// opts.dedupe (the "fill with top games" button): also skip a game when the store already has a product (even one made by hand, with no Steam link) with the same name.
+// opts.names: app number -> the title seen in Steam's list, so a game you already have is skipped without asking Steam about it.
+async function steamImport(env, ids, s, opts = {}) {
+  const out = [], cat = await env.DB.prepare("SELECT id FROM categories WHERE slug='games'").first();
+  const have = opts.dedupe ? await steamHave(env) : null, names = opts.names || {};
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i];
+    if (have ? have.apps.has(id) : await env.DB.prepare("SELECT id FROM products WHERE steam_app_id=?").bind(id).first()) { out.push({ app: id, name: names[id], status: "exists", note: "Already in your store" }); continue; }
+    if (have && names[id]) { const m = steamClash(have, names[id]); if (m) { out.push({ app: id, name: names[id], status: "exists", note: `You already have "${m}"` }); continue; } }
+    const f = await steamFetch(id, s);
+    if (f.limited && have) { for (const r of ids.slice(i)) out.push({ app: r, name: names[r], status: "retry", note: "Steam asked us to slow down" }); break; }
+    if (f.error) { out.push({ app: id, name: names[id], status: "error", note: f.error }); continue; }
+    const c = steamCost(f.data, s), d = f.data, name = clean(d.name).slice(0, 200);
+    if (have && d.type && d.type !== "game") { out.push({ app: id, name, status: "skipped", note: `Not a game (${d.type})` }); continue; }
+    if (c.error || !name) { out.push({ app: id, name, status: "skipped", note: c.error || "No name" }); continue; }
+    if (have) { const m = steamClash(have, name); if (m) { out.push({ app: id, name, status: "exists", note: `You already have "${m}"` }); continue; } }
+    let base = slugify(name);
+    if (/^item-\d+$/.test(base)) base = `steam-${id}`;
+    let slug = base, n = 2;
+    while (await env.DB.prepare("SELECT id FROM products WHERE slug=?").bind(slug).first()) slug = `${base}-${n++}`;
+    const r = await env.DB.prepare("INSERT INTO products(name,slug,description,price,image_url,category_id,platform,region,delivery_type,active,featured,cost_price,gift_type,steam_app_id,steam_auto,steam_price_at) VALUES(?,?,?,?,?,?,?,?,'manual',1,0,?,'steam',?,1,CURRENT_TIMESTAMP)")
+      .bind(name, slug, steamText(d.short_description).slice(0, 1500), steamSell(c.cost, s), galleryUrlOk(d.header_image) ? clean(d.header_image) : "", cat?.id ?? null, "PC (Steam)", "", c.cost, id).run();
+    const shots = (d.screenshots || []).map((x) => clean(x.path_full)).filter(galleryUrlOk).slice(0, GALLERY_MAX);
+    if (shots.length) await saveGallery(env, r.meta.last_row_id, shots);
+    if (have) { have.apps.add(id); for (const k of steamKeys(name)) if (!have.keys.has(k)) have.keys.set(k, name); }
+    out.push({ app: id, name, status: "added", cost: c.cost, price: steamSell(c.cost, s) });
+  }
+  return out;
+}
+// Re-check the Steam price of the games that were checked longest ago. Games the owner turned off (steam_auto=0) or that use variants are left alone.
+async function refreshSteamPrices(env, s, limit = 20) {
+  if (s.steam_private_auto === "0") return { checked: 0, changed: 0, failed: 0, off: true };
+  const rows = (await env.DB.prepare("SELECT id,steam_app_id,price,cost_price,EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=products.id) hasv FROM products WHERE steam_app_id IS NOT NULL AND steam_auto=1 AND gift_type='steam' ORDER BY COALESCE(steam_price_at,'') ASC,id LIMIT ?").bind(limit).all()).results;
+  const stmts = []; let changed = 0, failed = 0;
+  for (const p of rows) {
+    const touch = env.DB.prepare("UPDATE products SET steam_price_at=CURRENT_TIMESTAMP WHERE id=?").bind(p.id);
+    if (p.hasv) { stmts.push(touch); continue; }
+    const f = await steamFetch(p.steam_app_id, s), c = f.data ? steamCost(f.data, s) : null;
+    if (!c?.cost) { failed++; stmts.push(touch); continue; }
+    const price = steamSell(c.cost, s);
+    if (price !== Number(p.price) || c.cost !== Number(p.cost_price)) {
+      changed++;
+      stmts.push(env.DB.prepare("UPDATE products SET cost_price=?,price=?,steam_price_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(c.cost, price, p.id));
+    } else stmts.push(touch);
+  }
+  if (stmts.length) await env.DB.batch(stmts);
+  return { checked: rows.length, changed, failed };
 }
 async function geminiProduct(env, req, cfg, b) {
   const cats = (Array.isArray(b.categories) ? b.categories : []).map((c) => aiText(c, 60)).filter(Boolean).slice(0, 40);
@@ -1377,14 +1558,13 @@ async function productList(env, includeInactive = false) {
       `SELECT p.*,c.name category_name,c.name_ar category_name_ar,(SELECT COUNT(*) FROM inventory i WHERE i.product_id=p.id AND i.status='available') stock FROM products p LEFT JOIN categories c ON c.id=p.category_id ${where} ORDER BY p.featured DESC,p.id DESC`,
     ).all()
   ).results;
-  const ids = rows.map((x) => x.id);
-  const vs = ids.length
+  // V91: the variants are selected with a subquery on the same product filter, NOT with `IN (?,?,...)` and one bound parameter per product:
+  // Cloudflare D1 allows at most 100 bound parameters per query, so that list made /api/products fail once the store had more than 100 products.
+  const vs = rows.length
     ? (
         await env.DB.prepare(
-          `SELECT v.*,(SELECT COUNT(*) FROM inventory i WHERE i.product_id=v.product_id AND i.variant_id=v.id AND i.status='available')+(SELECT COUNT(*) FROM inventory i JOIN variant_sources vs ON vs.source_product_id=i.product_id WHERE vs.variant_id=v.id AND i.variant_id IS NULL AND i.status='available') stock FROM product_variants v WHERE v.product_id IN (${ids.map(() => "?").join(",")}) ORDER BY v.sort_order,v.id`,
-        )
-          .bind(...ids)
-          .all()
+          `SELECT v.*,(SELECT COUNT(*) FROM inventory i WHERE i.product_id=v.product_id AND i.variant_id=v.id AND i.status='available')+(SELECT COUNT(*) FROM inventory i JOIN variant_sources vs ON vs.source_product_id=i.product_id WHERE vs.variant_id=v.id AND i.variant_id IS NULL AND i.status='available') stock FROM product_variants v WHERE v.product_id IN (SELECT p.id FROM products p ${where}) ORDER BY v.sort_order,v.id`,
+        ).all()
       ).results
     : [];
   for (const p of rows) {
@@ -2658,6 +2838,7 @@ async function runScheduled(env, ctx, event) {
   };
   await run("release_reservations", async () => `Released ${await expireReservations(env, s)} unpaid orders`);
   await run("email_automations", () => emailAutomations(env, ctx, s));
+  await run("steam_prices", async () => { const r = await refreshSteamPrices(env, s, 20); return r.off ? "Automatic Steam prices are off" : `${r.checked} checked, ${r.changed} changed, ${r.failed} failed`; });
   if (hour !== 3 && event?.cron !== "daily") return;
   await run("low_stock_alert", async () => `${await sendLowStockAlert(env, ctx, s)} products low`);
   await run("backup", async () => {
@@ -3292,7 +3473,7 @@ async function api(req, env, url, ctx) {
       return json({ error: "You already have unpaid orders waiting. Pay or cancel them first, or contact support." }, 429);
     if (!(await throttle(env, `order-day:${ipOf(req)}`, 15, 21600000)))
       return json({ error: "Too many order attempts. Try again later." }, 429);
-    const cart = await priceCart(env, b.items, s);
+    const cart = await priceCart(env, b.items, s, { requireGift: true });
     if (cart.error) return json({ error: cart.error }, 400);
     const dc = await calcDiscount(
       env,
@@ -3346,7 +3527,7 @@ async function api(req, env, url, ctx) {
       const p = cart.map.get(item.product_id);
       stmts.push(
         env.DB.prepare(
-          "INSERT INTO order_items(order_id,product_id,product_name,quantity,unit_price,delivery_type,variant_id,variant_name) SELECT id,?,?,?,?,?,?,? FROM orders WHERE order_number=?",
+          "INSERT INTO order_items(order_id,product_id,product_name,quantity,unit_price,delivery_type,variant_id,variant_name,gift_target) SELECT id,?,?,?,?,?,?,?,? FROM orders WHERE order_number=?",
         ).bind(
           p.id,
           p.name,
@@ -3355,6 +3536,7 @@ async function api(req, env, url, ctx) {
           p.delivery_type,
           item.variant_id,
           item.variant_name || "",
+          item.gift_target || "",
           orderNumber,
         ),
       );
@@ -3464,6 +3646,9 @@ async function api(req, env, url, ctx) {
         ["Total", `${total.toFixed(2)} ${cur}`, true],
         ["Payment", pm, true],
         ["Customer", `${me ? me.name : guestName} - ${me ? me.email : guestContact}`],
+        ...(cart.normalized.some((it) => it.gift_target)
+          ? [["Send gift to", cart.normalized.filter((it) => it.gift_target).map((it) => `${cart.map.get(it.product_id).name}: ${it.gift_target}`).join("\n")]]
+          : []),
         [
           "Items",
           cart.normalized
@@ -3880,6 +4065,7 @@ async function api(req, env, url, ctx) {
       .run();
     if (gal.list?.length) await saveGallery(env, r.meta.last_row_id, gal.list);
     await saveRedeem(env, r.meta.last_row_id, b);
+    await saveGift(env, r.meta.last_row_id, b);
     return json({ id: r.meta.last_row_id }, 201);
   }
   if (path === "/api/admin/products/import" && method === "POST") {
@@ -4061,6 +4247,7 @@ async function api(req, env, url, ctx) {
       )
       .run();
     await saveRedeem(env, id, b);
+    await saveGift(env, id, b);
     // An older admin page that doesn't send a gallery must leave the existing one alone.
     if (!gal.skip) await saveGallery(env, id, gal.list);
     return json({ ok: true });
@@ -4602,6 +4789,59 @@ async function api(req, env, url, ctx) {
         ).all()
       ).results,
     );
+  }
+  if (path === "/api/admin/steam/settings" && ["GET", "POST"].includes(method)) {
+    const me = await requireAdmin(req, env);
+    if (!me) return json({ error: "Admin access required." }, 403);
+    const put = (k, v) => env.DB.prepare("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(k, String(v)).run();
+    if (method === "POST") {
+      const b = await readJson(req);
+      if (b.pct !== undefined) await put("steam_private_pct", Math.min(1000, Math.max(0, Number(b.pct) || 0)));
+      if (b.cashback !== undefined) await put("steam_private_cashback", Math.min(50, Math.max(0, Number(b.cashback) || 0)));
+      if (b.min !== undefined) await put("steam_private_min", Math.min(100000, Math.max(0, Number(b.min) || 0)));
+      if (b.auto !== undefined) await put("steam_private_auto", b.auto && b.auto !== "0" ? "1" : "0");
+    }
+    const s = await allSettings(env);
+    return json({ ...steamCfg(s), auto: s.steam_private_auto !== "0", rate: Number(s.usd_exchange_rate) || 50, count: (await env.DB.prepare("SELECT COUNT(*) n FROM products WHERE steam_app_id IS NOT NULL").first()).n });
+  }
+  if (path === "/api/admin/steam/import" && method === "POST") {
+    const me = await requireAdmin(req, env);
+    if (!me) return json({ error: "Admin access required." }, 403);
+    const b = await readJson(req), s = await allSettings(env), all = steamIds(b.items);
+    if (!all.length) return json({ error: "Paste Steam store links or app IDs (numbers)." }, 400);
+    const ids = all.slice(0, 15), results = await steamImport(env, ids, s);
+    await audit(env, me, "steam_import", "products", 0, `${results.filter((r) => r.status === "added").length} added of ${ids.length}`);
+    return json({ results, left: all.slice(15).length, ...steamCfg(s) });
+  }
+  // V89: "Fill with top Steam games". The page asks for Steam's best-selling list 50 at a time, then sends the games 10 at a time to /fill, which never adds a game the store already has.
+  if (path === "/api/admin/steam/top" && method === "POST") {
+    const me = await requireAdmin(req, env);
+    if (!me) return json({ error: "Admin access required." }, 403);
+    const b = await readJson(req), s = await allSettings(env);
+    const start = Math.min(5000, Math.max(0, Math.floor(Number(b.start)) || 0)), count = Math.min(50, Math.max(1, Math.floor(Number(b.count)) || 50));
+    const r = await steamTop(start, count, s);
+    return r.error ? json({ error: r.error }, 502) : json(r);
+  }
+  if (path === "/api/admin/steam/fill" && method === "POST") {
+    const me = await requireAdmin(req, env);
+    if (!me) return json({ error: "Admin access required." }, 403);
+    const b = await readJson(req), s = await allSettings(env), names = {}, ids = [];
+    for (const it of (Array.isArray(b.items) ? b.items : []).slice(0, 10)) {
+      const id = Math.floor(Number(it?.app));
+      if (Number.isInteger(id) && id > 0 && id < 1e9 && !ids.includes(id)) { ids.push(id); names[id] = clean(it?.name).slice(0, 200); }
+    }
+    if (!ids.length) return json({ error: "No games to add." }, 400);
+    const results = await steamImport(env, ids, s, { dedupe: true, names });
+    const added = results.filter((r) => r.status === "added").length;
+    if (added) await audit(env, me, "steam_fill", "products", 0, `${added} added of ${ids.length}`);
+    return json({ results });
+  }
+  if (path === "/api/admin/steam/refresh" && method === "POST") {
+    const me = await requireAdmin(req, env);
+    if (!me) return json({ error: "Admin access required." }, 403);
+    const s = await allSettings(env), r = await refreshSteamPrices(env, s, 20);
+    await audit(env, me, "steam_refresh", "products", 0, `${r.checked} checked, ${r.changed} changed`);
+    return json(r);
   }
   if (path === "/api/admin/product-merger/preview" && method === "POST") {
     const plan = await planMerge(env, await readJson(req));

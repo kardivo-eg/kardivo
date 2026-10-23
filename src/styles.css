@@ -2052,3 +2052,18 @@ html[dir="rtl"] .deal-v84 .deal-points b{letter-spacing:0}
 :root[data-theme="light"] .deal-v84 .deal-points b{color:#5b4b85}
 html.fest-lite .deal-v84 .deal-art:before,html.fest-lite .deal-v84 .deal-art img{animation:none}
 @media(prefers-reduced-motion:reduce){.deal-v84 .deal-art:before,.deal-v84 .deal-art img{animation:none}.deal-v84 .deal-points>div{transition:none}}
+
+/* V86 gift products */
+.product-gift{margin:18px 0;padding:16px 18px;border:1px solid rgba(139,92,246,.3);border-radius:14px;background:rgba(139,92,246,.07)}
+.product-gift h3{margin:0 0 10px;font-size:16px}
+.product-gift ol{margin:0 0 8px;padding-inline-start:22px;display:grid;gap:6px;line-height:1.65}
+.product-gift p{margin:0}
+.co-gift{display:grid;gap:6px;padding:12px;border:1px dashed var(--line);border-radius:14px;margin-top:-4px}
+.co-gift label{font-weight:700}
+.co-gift input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:inherit;font:inherit}
+.co-gift input.bad{border-color:#ef4444}
+.co-gift small{opacity:.75;line-height:1.5}
+.gift-tag{color:#a78bfa}
+.gift-admin{display:grid;gap:8px}
+.gift-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.gift-row code{flex:1;min-width:140px;word-break:break-all;padding:6px 8px;border-radius:8px;background:rgba(139,92,246,.12)}
