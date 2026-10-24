@@ -354,7 +354,7 @@ const DEFAULTS = {
   email_winback_days: "45",
   email_winback_code: "",
 };
-const SCHEMA_VERSION = 23; // 23 (V88): products.steam_app_id/steam_auto/steam_price_at (Steam import + automatic prices) // 22: products.gift_type/gift_label(+_ar) and order_items.gift_target (Steam gift products: the buyer gives a friend code or invite link, you send the gift by hand) // 21: products.redeem_steps (+_ar) "how to redeem" text // 20: email automations (saved carts, email log, opt-in + reminder flags) // 19: promo_campaigns (many promo campaigns for /deals, optionally also on the homepage) // 18: products.gallery (extra product images, JSON list) // 17: products SEO fields + image_original (AI SEO text, AI image cleanup) // 16: users.points_redeemed (V41 added the column but never bumped the version, so existing DBs skipped the migration)
+const SCHEMA_VERSION = 24; // 24 (V94): products.genres (Steam genres, comma separated, for the genre mini-categories in Games) // 23 (V88): products.steam_app_id/steam_auto/steam_price_at (Steam import + automatic prices) // 22: products.gift_type/gift_label(+_ar) and order_items.gift_target (Steam gift products: the buyer gives a friend code or invite link, you send the gift by hand) // 21: products.redeem_steps (+_ar) "how to redeem" text // 20: email automations (saved carts, email log, opt-in + reminder flags) // 19: promo_campaigns (many promo campaigns for /deals, optionally also on the homepage) // 18: products.gallery (extra product images, JSON list) // 17: products SEO fields + image_original (AI SEO text, AI image cleanup) // 16: users.points_redeemed (V41 added the column but never bumped the version, so existing DBs skipped the migration)
 // Columns added over time. Each is added only if missing (additive, never destructive).
 const COLUMN_ADDS = [
   ["discounts", "max_uses", "INTEGER"],
@@ -401,6 +401,7 @@ const COLUMN_ADDS = [
   ["order_items", "gift_target", "TEXT DEFAULT ''"],
   ["products", "gift_type", "TEXT DEFAULT ''"],
   ["products", "steam_app_id", "INTEGER"],
+  ["products", "genres", "TEXT DEFAULT ''"],
   ["products", "steam_auto", "INTEGER NOT NULL DEFAULT 1"],
   ["products", "steam_price_at", "TEXT"],
   ["products", "gift_label", "TEXT DEFAULT ''"],
@@ -1142,6 +1143,7 @@ async function saveRedeem(env, id, b) {
   if (sets.length) await env.DB.prepare(`UPDATE products SET ${sets.join(",")} WHERE id=?`).bind(...binds, id).run();
 }
 async function saveGift(env, id, b) {
+  if (b.genres !== undefined) await env.DB.prepare("UPDATE products SET genres=? WHERE id=?").bind(String(b.genres ?? "").replace(/[\u0000-\u001f]/g, " ").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 6).join(", ").slice(0, 120), id).run();
   if (b.steam_auto !== undefined) await env.DB.prepare("UPDATE products SET steam_auto=? WHERE id=?").bind(b.steam_auto && b.steam_auto !== "0" ? 1 : 0, id).run();
   if (b.gift_type === undefined) return;
   const type = b.gift_type === "steam" ? "steam" : b.gift_type === "custom" ? "custom" : "";
@@ -1180,6 +1182,11 @@ async function steamFetch(appId, s) {
   } catch (e) {
     return { error: "Could not reach Steam" };
   }
+}
+// Steam's own genre names for a game ("Action, RPG"), at most 4; "Other" when Steam lists none so the game is not asked about again every hour.
+function steamGenres(d) {
+  const g = (Array.isArray(d?.genres) ? d.genres : []).map((x) => steamText(x?.description).replace(/,/g, " ").replace(/\s+/g, " ").trim()).filter(Boolean);
+  return ([...new Set(g)].slice(0, 4).join(", ") || "Other").slice(0, 120);
 }
 function steamCost(data, s) {
   if (data.is_free) return { free: true, error: "Free game, nothing to gift" };
@@ -1258,8 +1265,8 @@ async function steamImport(env, ids, s, opts = {}) {
     if (/^item-\d+$/.test(base)) base = `steam-${id}`;
     let slug = base, n = 2;
     while (await env.DB.prepare("SELECT id FROM products WHERE slug=?").bind(slug).first()) slug = `${base}-${n++}`;
-    const r = await env.DB.prepare("INSERT INTO products(name,slug,description,price,image_url,category_id,platform,region,delivery_type,active,featured,cost_price,gift_type,steam_app_id,steam_auto,steam_price_at) VALUES(?,?,?,?,?,?,?,?,'manual',1,0,?,'steam',?,1,CURRENT_TIMESTAMP)")
-      .bind(name, slug, steamText(d.short_description).slice(0, 1500), steamSell(c.cost, s), galleryUrlOk(d.header_image) ? clean(d.header_image) : "", cat?.id ?? null, "PC (Steam)", "", c.cost, id).run();
+    const r = await env.DB.prepare("INSERT INTO products(name,slug,description,price,image_url,category_id,platform,region,delivery_type,active,featured,cost_price,gift_type,steam_app_id,steam_auto,steam_price_at,genres) VALUES(?,?,?,?,?,?,?,?,'manual',1,0,?,'steam',?,1,CURRENT_TIMESTAMP,?)")
+      .bind(name, slug, steamText(d.short_description).slice(0, 1500), steamSell(c.cost, s), galleryUrlOk(d.header_image) ? clean(d.header_image) : "", cat?.id ?? null, "PC (Steam)", "", c.cost, id, steamGenres(d)).run();
     const shots = (d.screenshots || []).map((x) => clean(x.path_full)).filter(galleryUrlOk).slice(0, GALLERY_MAX);
     if (shots.length) await saveGallery(env, r.meta.last_row_id, shots);
     if (have) { have.apps.add(id); for (const k of steamKeys(name)) if (!have.keys.has(k)) have.keys.set(k, name); }
@@ -1270,12 +1277,15 @@ async function steamImport(env, ids, s, opts = {}) {
 // Re-check the Steam price of the games that were checked longest ago. Games the owner turned off (steam_auto=0) or that use variants are left alone.
 async function refreshSteamPrices(env, s, limit = 20) {
   if (s.steam_private_auto === "0") return { checked: 0, changed: 0, failed: 0, off: true };
-  const rows = (await env.DB.prepare("SELECT id,steam_app_id,price,cost_price,EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=products.id) hasv FROM products WHERE steam_app_id IS NOT NULL AND steam_auto=1 AND gift_type='steam' ORDER BY COALESCE(steam_price_at,'') ASC,id LIMIT ?").bind(limit).all()).results;
+  const rows = (await env.DB.prepare("SELECT id,steam_app_id,price,cost_price,COALESCE(genres,'') genres,EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=products.id) hasv FROM products WHERE steam_app_id IS NOT NULL AND steam_auto=1 AND gift_type='steam' ORDER BY CASE WHEN COALESCE(genres,'')='' THEN 0 ELSE 1 END,COALESCE(steam_price_at,'') ASC,id LIMIT ?").bind(limit).all()).results;
   const stmts = []; let changed = 0, failed = 0;
   for (const p of rows) {
     const touch = env.DB.prepare("UPDATE products SET steam_price_at=CURRENT_TIMESTAMP WHERE id=?").bind(p.id);
-    if (p.hasv) { stmts.push(touch); continue; }
+    // V94: games that have no genres yet get them from the same Steam call (this fills the genre mini-categories for games added before V94).
+    if (p.hasv && p.genres) { stmts.push(touch); continue; }
     const f = await steamFetch(p.steam_app_id, s), c = f.data ? steamCost(f.data, s) : null;
+    if (f.data && !p.genres) stmts.push(env.DB.prepare("UPDATE products SET genres=? WHERE id=?").bind(steamGenres(f.data), p.id));
+    if (p.hasv) { stmts.push(touch); continue; }
     if (!c?.cost) { failed++; stmts.push(touch); continue; }
     const price = steamSell(c.cost, s);
     if (price !== Number(p.price) || c.cost !== Number(p.cost_price)) {
@@ -1578,34 +1588,47 @@ async function productList(env, includeInactive = false) {
   }
   return rows;
 }
-// V92: the lean catalog sent to the storefront on first load (GET /api/products).
-// Only what product cards, filters, sort and search need. Left out on purpose (the product page loads them from GET /api/products/:slug):
-// the full description (only a short snippet is kept, for search and quick view), gallery / images, redeem steps, SEO fields, timestamps and every admin-only column.
-// Variants keep every field the storefront reads (id, name, price, old_price, active, stock) and, like before, inactive ones are still listed with their active flag.
-// The snippet must stay at least 181 characters: quick view cuts descriptions at 180, so it shows the same text as it did with the full description.
-const LIST_SNIPPET_CHARS = 200;
-async function publicProductList(env) {
+// V92: one page of the admin product list, so the Products tab no longer downloads and draws every product at once.
+// Same row shape as productList(env, true); search (name, Arabic name, slug, platform, region, category) and a status filter run in SQL.
+async function adminProductPage(env, { q = "", status = "all", page = 1, limit = 50 } = {}) {
+  limit = Math.min(100, Math.max(1, Math.floor(Number(limit)) || 50));
+  page = Math.max(1, Math.floor(Number(page)) || 1);
+  const conds = [], binds = [];
+  const term = String(q || "").trim().slice(0, 80);
+  if (term) {
+    const like = "%" + term.replace(/[\\%_]/g, (c) => "\\" + c) + "%";
+    conds.push(`(p.name LIKE ? ESCAPE '\\' OR p.name_ar LIKE ? ESCAPE '\\' OR p.slug LIKE ? ESCAPE '\\' OR p.platform LIKE ? ESCAPE '\\' OR p.region LIKE ? ESCAPE '\\' OR c.name LIKE ? ESCAPE '\\')`);
+    binds.push(like, like, like, like, like, like);
+  }
+  if (status === "active") conds.push("p.active=1");
+  else if (status === "hidden") conds.push("p.active=0");
+  else if (status === "featured") conds.push("p.featured=1");
+  else if (status === "code") conds.push("p.delivery_type='code'");
+  else if (status === "manual") conds.push("p.delivery_type<>'code'");
+  else if (status === "out") conds.push("p.delivery_type='code' AND (SELECT COUNT(*) FROM inventory i WHERE i.product_id=p.id AND i.status='available')=0");
+  const where = conds.length ? "WHERE " + conds.join(" AND ") : "";
+  const from = `FROM products p LEFT JOIN categories c ON c.id=p.category_id ${where}`;
+  const total = Number((await env.DB.prepare(`SELECT COUNT(*) n ${from}`).bind(...binds).first())?.n || 0);
+  const pages = Math.max(1, Math.ceil(total / limit));
+  if (page > pages) page = pages;
   const rows = (
     await env.DB.prepare(
-      `SELECT p.id,p.name,p.name_ar,p.slug,SUBSTR(COALESCE(p.description,''),1,${LIST_SNIPPET_CHARS}) description,SUBSTR(COALESCE(p.description_ar,''),1,${LIST_SNIPPET_CHARS}) description_ar,p.price,p.old_price,p.image_url,p.category_id,c.name category_name,c.name_ar category_name_ar,p.platform,p.region,p.delivery_type,p.active,p.featured,p.gift_type,p.gift_label,p.gift_label_ar,(SELECT COUNT(*) FROM inventory i WHERE i.product_id=p.id AND i.status='available') stock FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.active=1 ORDER BY p.featured DESC,p.id DESC`,
-    ).all()
+      `SELECT p.*,c.name category_name,c.name_ar category_name_ar,(SELECT COUNT(*) FROM inventory i WHERE i.product_id=p.id AND i.status='available') stock ${from} ORDER BY p.featured DESC,p.id DESC LIMIT ? OFFSET ?`,
+    ).bind(...binds, limit, (page - 1) * limit).all()
   ).results;
-  // Same rule as productList (V91): variants come from one subquery on the product filter, never from `IN (?,?,...)` with one parameter per product (D1 allows 100 bound parameters).
+  // The variants are picked with a subquery on the same page filter (no IN list of ids), so D1's 100-parameter limit is never an issue.
   const vs = rows.length
     ? (
         await env.DB.prepare(
-          `SELECT v.id,v.product_id,v.name,v.price,v.old_price,v.active,v.sort_order,(SELECT COUNT(*) FROM inventory i WHERE i.product_id=v.product_id AND i.variant_id=v.id AND i.status='available')+(SELECT COUNT(*) FROM inventory i JOIN variant_sources vs ON vs.source_product_id=i.product_id WHERE vs.variant_id=v.id AND i.variant_id IS NULL AND i.status='available') stock FROM product_variants v WHERE v.product_id IN (SELECT p.id FROM products p WHERE p.active=1) ORDER BY v.sort_order,v.id`,
-        ).all()
+          `SELECT v.*,(SELECT COUNT(*) FROM inventory i WHERE i.product_id=v.product_id AND i.variant_id=v.id AND i.status='available')+(SELECT COUNT(*) FROM inventory i JOIN variant_sources vs ON vs.source_product_id=i.product_id WHERE vs.variant_id=v.id AND i.variant_id IS NULL AND i.status='available') stock FROM product_variants v WHERE v.product_id IN (SELECT p.id ${from} ORDER BY p.featured DESC,p.id DESC LIMIT ? OFFSET ?) ORDER BY v.sort_order,v.id`,
+        ).bind(...binds, limit, (page - 1) * limit).all()
       ).results
     : [];
-  const byProduct = new Map();
-  for (const v of vs) {
-    const list = byProduct.get(v.product_id);
-    if (list) list.push(v);
-    else byProduct.set(v.product_id, [v]);
+  for (const p of rows) {
+    p.variants = vs.filter((v) => v.product_id === p.id);
+    withGallery(p);
   }
-  for (const p of rows) p.variants = byProduct.get(p.id) || [];
-  return rows;
+  return { items: rows, total, page, pages, limit };
 }
 // ---- Product image gallery ----
 // Extra images live in products.gallery as a JSON list of URLs. products.image_url stays the cover (shown first, used for cards and link previews).
@@ -3064,9 +3087,8 @@ async function api(req, env, url, ctx) {
       return json({ error: "Could not fetch the image." }, 502);
     }
   }
-  // V92: lean by default. ?full=1 returns the complete public records (the pre-V92 response) for any outside script that still reads descriptions or galleries from the list.
   if (path === "/api/products" && method === "GET")
-    return json(url.searchParams.get("full") === "1" ? await productList(env, false) : await publicProductList(env));
+    return json(await productList(env, false));
   const productSlugMatch = path.match(/^\/api\/products\/([^/]+)$/);
   if (productSlugMatch && method === "GET") {
     const slug = decodeURIComponent(productSlugMatch[1]);
@@ -4053,8 +4075,12 @@ async function api(req, env, url, ctx) {
       cron_note: "Scheduled jobs run from the Cloudflare cron trigger in wrangler.toml.",
     });
   }
-  if (path === "/api/admin/products" && method === "GET")
+  if (path === "/api/admin/products" && method === "GET") {
+    // V92: with ?limit= the list comes back one page at a time ({items,total,page,pages}); without it the whole list, as before (CSV export, merge tool, search).
+    if (url.searchParams.has("limit"))
+      return json(await adminProductPage(env, { q: url.searchParams.get("q"), status: url.searchParams.get("status") || "all", page: url.searchParams.get("page"), limit: url.searchParams.get("limit") }));
     return json(await productList(env, true));
+  }
   if (path === "/api/admin/products" && method === "POST") {
     const b = await readJson(req),
       err = validateProduct(b),
@@ -5524,7 +5550,7 @@ async function htmlForHome(env, request, url) {
   // The page script replaces this block with the interactive version as soon as it loads.
   let page = await res.text(), itemList = "";
   try {
-    const all = (await publicProductList(env)).filter((p) => Number(p.active) !== 0);
+    const all = (await productList(env, false)).filter((p) => Number(p.active) !== 0);
     let pick = all.filter((p) => Number(p.featured)).slice(0, 8);
     if (pick.length < 4) pick = [...pick, ...all.filter((p) => !Number(p.featured)).slice(0, 4 - pick.length)];
     const cur = clean(s.store_currency) || "EGP", curLabel = ar && cur === "EGP" ? "ج.م" : cur;

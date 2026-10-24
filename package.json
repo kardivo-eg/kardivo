@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --no-warnings tests/v78-security.test.mjs && node --no-warnings tests/v79-checkout.test.mjs && node --no-warnings tests/v80-email.test.mjs && node --no-warnings tests/v81.test.mjs && node --no-warnings tests/v86-gift.test.mjs && node --no-warnings tests/v88-steam.test.mjs && node --no-warnings tests/v89-top.test.mjs && node --no-warnings tests/v91-products-params.test.mjs"
+    "test": "node --no-warnings tests/v78-security.test.mjs && node --no-warnings tests/v79-checkout.test.mjs && node --no-warnings tests/v80-email.test.mjs && node --no-warnings tests/v81.test.mjs && node --no-warnings tests/v86-gift.test.mjs && node --no-warnings tests/v88-steam.test.mjs && node --no-warnings tests/v89-top.test.mjs && node --no-warnings tests/v91-products-params.test.mjs && node --no-warnings tests/v94-genres.test.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"

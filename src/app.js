@@ -78,6 +78,35 @@ const AR = {
   "No description has been added for this product yet.":
     "لسه مفيش وصف للمنتج ده.",
   "Add to cart": "ضيف للسلة",
+  "Show more": "عرض المزيد",
+  "Pick your game": "اختار لعبتك",
+  "Search any title, or choose a genre to narrow it down.": "دوّر على أي لعبة، أو اختار النوع عشان تضيّق الاختيارات.",
+  "Send your Steam friend code and pay": "ابعت كود صداقة ستيم وادفع",
+  "Your Steam friend code or invite link is where the gift goes. Pay with any method the store offers.": "كود الصداقة أو رابط الدعوة بتاعك هو اللي هتتبعتله الهدية. ادفع بأي طريقة متاحة في المتجر.",
+  "Receive your gift": "استلم هديتك",
+  "The game is sent to your Steam account as a gift. Accept it from the Steam notification.": "اللعبة بتتبعت على حساب ستيم بتاعك كهدية. اقبلها من إشعار ستيم.",
+  "All genres": "كل الأنواع",
+  "Action": "أكشن",
+  "Adventure": "مغامرات",
+  "Casual": "كاجوال",
+  "Indie": "إندي",
+  "Massively Multiplayer": "متعدد اللاعبين",
+  "Racing": "سباقات",
+  "RPG": "آر بي جي",
+  "Simulation": "محاكاة",
+  "Sports": "رياضة",
+  "Strategy": "استراتيجية",
+  "Free To Play": "مجاني",
+  "Early Access": "وصول مبكر",
+  "Other": "أخرى",
+  "Instant delivery ⚡": "تسليم فوري ⚡",
+  "Verified service": "خدمة موثقة",
+  "Pick your product": "اختار المنتج",
+  "Search the catalog and choose the option you want.": "دوّر في الكتالوج واختار اللي عاوزه.",
+  "Order and pay": "اطلب وادفع",
+  "Pay with any method the store offers.": "ادفع بأي طريقة متاحة في المتجر.",
+  "Receive your order": "استلم طلبك",
+  "Codes arrive after payment is confirmed; gifts are sent to your account.": "الأكواد بتوصلك بعد تأكيد الدفع، والهدايا بتتبعت على حسابك.",
   "Back to store": "ارجع للمتجر",
   "Usually delivered in 5–15 min after payment confirmed.": "بيوصلك عادةً في 5–15 دقيقة بعد ما الدفع يتأكد.",
   "Share": "شارك",
@@ -1719,6 +1748,31 @@ function renderPopularProducts() {
   const section = $("#popularSection");
   if (section) section.hidden = chosen.length === 0;
 }
+// V94: the Games category (slug "games") has its own extras on the Products tab: the "how it works" strip and Steam genres as mini categories.
+function isGamesCat() {
+  const c = state.categories.find((x) => x.slug === "games");
+  return !!c && String(state.category) === String(c.id);
+}
+function productGenres(p) {
+  return String(p.genres || "").split(",").map((x) => x.trim()).filter(Boolean);
+}
+function renderGamesExtras() {
+  const box = $("#ppGames"), gen = $("#ppGenres");
+  if (!box || !gen) return;
+  if (!isGamesCat()) { state.genre = "all"; box.innerHTML = ""; gen.innerHTML = ""; return; }
+  box.innerHTML = `<div class="pp-badges"><span>${t("Instant delivery ⚡")}</span><span>${t("Verified service")}</span></div><div class="pp-how" aria-label="${escapeHTML(t("How it works"))}"><div><i>1</i><b>${t("Pick your game")}</b><small>${t("Search any title, or choose a genre to narrow it down.")}</small></div><div><i>2</i><b>${t("Send your Steam friend code and pay")}</b><small>${t("Your Steam friend code or invite link is where the gift goes. Pay with any method the store offers.")}</small></div><div><i>3</i><b>${t("Receive your gift")}</b><small>${t("The game is sent to your Steam account as a gift. Accept it from the Steam notification.")}</small></div></div>`;
+  const gid = state.categories.find((x) => x.slug === "games")?.id, count = new Map();
+  for (const p of state.products) if (String(p.category_id) === String(gid)) for (const g of productGenres(p)) count.set(g, (count.get(g) || 0) + 1);
+  const list = [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  if (state.genre !== "all" && !count.has(state.genre)) state.genre = "all";
+  gen.innerHTML = list.length ? `<button type="button" class="pp-genre ${state.genre === "all" ? "active" : ""}" data-genre="all">${t("All genres")}</button>` + list.map(([g, n]) => `<button type="button" class="pp-genre ${state.genre === g ? "active" : ""}" data-genre="${escapeHTML(g)}">${escapeHTML(t(g))} <small>${n}</small></button>`).join("") : "";
+  gen.onclick = (e) => {
+    const b = e.target.closest("[data-genre]"); if (!b) return;
+    state.genre = b.dataset.genre;
+    $$(".pp-genre", gen).forEach((x) => x.classList.toggle("active", x === b));
+    renderProducts();
+  };
+}
 function renderCategories() {
   const el = $("#categories");
   if (!el) return;
@@ -1737,7 +1791,9 @@ function renderCategories() {
     (b) =>
       (b.onclick = () => {
         state.category = b.dataset.cat;
+        state.genre = "all";
         $$(".chip").forEach((x) => x.classList.toggle("active", x === b));
+        renderGamesExtras();
         renderProducts();
       }),
   );
@@ -1751,6 +1807,7 @@ function filtered() {
     arr = arr.filter((p) => Number(p.featured));
   else if (state.category !== "all")
     arr = arr.filter((p) => String(p.category_id) === String(state.category));
+  if (state.genre && state.genre !== "all" && isGamesCat()) arr = arr.filter((p) => productGenres(p).includes(state.genre));
   const q = state.query.toLowerCase();
   if (q)
     arr = arr.map(p => ({ p, score: searchScore(p, q) })).filter(x => x.score >= 0).sort((a, b) => b.score - a.score).map(x => x.p);
@@ -1834,6 +1891,8 @@ function rewardPreview(price) {
   return `<small class="reward-preview">${t("Earn {0} points", pts.toLocaleString())}${egp > 0 ? ` · ${t("worth {0}", moneyEGP(egp))}` : ""}</small>`;
 }
 
+const GRID_STEP = 48;
+let gridLimit = GRID_STEP, gridKey = "";
 function renderProducts() {
   const el = $("#productGrid");
   if (!el) return;
@@ -1845,7 +1904,12 @@ function renderProducts() {
     return;
   }
   const showStock = state.settings.show_stock !== false;
+  // V92: draw 48 cards at a time ("Show more" adds 48), so a catalogue of 1000 products does not build 1000 cards at once.
+  const compact = el.classList.contains("pp-list"); // the Products tab shows small rows instead of big cards
+  const gk = [state.query, state.category, state.genre, state.discovery, state.sort].join("|");
+  if (gk !== gridKey) { gridKey = gk; gridLimit = compact ? 40 : GRID_STEP; }
   el.innerHTML = arr
+    .slice(0, gridLimit)
     .map((p) => {
       const variants = (p.variants || []).filter((v) => Number(v.active) !== 0),
         cheapest = variants.length
@@ -1870,9 +1934,18 @@ function renderProducts() {
         href = "/" + encodeURIComponent(p.slug),
         name = pName(p),
         cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
+      if (compact) {
+        const low = !soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5;
+        return `<article class="pp-row${soldOut ? " is-out" : ""}"><a class="pp-thumb" href="${href}" tabindex="-1" aria-hidden="true">${stockImg(p.image_url, name, stockArtFor(p))}</a><a class="pp-info" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><span class="pp-name">${escapeHTML(name)}</span><span class="pp-sub">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}${low ? ` · <b class="pp-low">${escapeHTML(t("Only {0} left", totalStock))}</b>` : ""}</span></a><div class="pp-price"><b>${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}</b>${sale ? `<s>${money(displayOld)}</s>` : ""}</div><button type="button" class="add-btn pp-add" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></article>`;
+      }
       return `<article class="product-card product-card-link"><div class="product-image">${stockImg(p.image_url, name, stockArtFor(p))}<a class="product-image-link" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"></a>${favoriteButton(p)}${quickViewButton(p)}${sale ? `<span class="sale">${escapeHTML(saveBadgeText(displayPrice, displayOld))}</span>` : ""}<span class="stock${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? " low" : ""}">${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? t("Only {0} left", totalStock) : badge}</span></div><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span><small class="save-line">${escapeHTML(t("You save {0}", moneyShort(displayOld - displayPrice)))}</small>` : ""}${rewardPreview(displayPrice)}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
     })
     .join("");
+  $("#gridMore")?.remove();
+  if (arr.length > gridLimit) {
+    el.insertAdjacentHTML("afterend", `<div id="gridMore" style="text-align:center;margin:18px 0"><button type="button" class="btn ghost" id="gridMoreBtn">${t("Show more")} (${arr.length - gridLimit})</button></div>`);
+    $("#gridMoreBtn").onclick = () => { gridLimit += compact ? 40 : GRID_STEP; renderProducts(); };
+  }
   bindFavoriteButtons(el);
   $$("[data-quick]", el).forEach((b) => (b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); openQuickView(b.dataset.quick); }));
   $$ ("[data-add]").forEach(
@@ -3052,6 +3125,26 @@ const ADMIN_TABS = [
   ["audit", "Audit log"],
   ["settings", "Settings"],
 ];
+// Small line icons for the admin menu (24px grid, drawn with strokes).
+const ADMIN_ICONS = {
+  dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  queue: '<circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/>',
+  inbox: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+  orders: '<path d="M6 3h12l2 4v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7z"/><path d="M4 7h16M9 11a3 3 0 0 0 6 0"/>',
+  products: '<path d="M12 2 3 7v10l9 5 9-5V7z"/><path d="m3 7 9 5 9-5M12 12v10"/>',
+  categories: '<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="8" cy="8" r="1.3"/>',
+  inventory: '<rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V8a5 5 0 0 1 10 0v3"/>',
+  merge: '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8.5 6H11a3 3 0 0 1 3 3v0M8.5 18H11a3 3 0 0 0 3-3v0"/>',
+  waitlist: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  customers: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/>',
+  emails: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  discounts: '<path d="M19 5 5 19"/><circle cx="7" cy="7" r="2.5"/><circle cx="17" cy="17" r="2.5"/>',
+  campaigns: '<path d="M3 11v2a1 1 0 0 0 1 1h3l8 5V5L7 10H4a1 1 0 0 0-1 1z"/><path d="M19 9a4 4 0 0 1 0 6"/>',
+  reviews: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
+  refunds: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
+  audit: '<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+};
 const BADGE_OF = { queue: "review_queue", inbox: "unread_messages", waitlist: "waitlist_ready" };
 // ---- V82 admin: grouped menu, search across everything, a filter box on every list ----
 const ADMIN_GROUPS = [
@@ -3181,7 +3274,7 @@ document.addEventListener("keydown", (e) => {
 });
 // A filter box above every long list (orders and settings have their own).
 function addAdminFilter(main, tab) {
-  if (["orders", "dashboard", "settings", "merge"].includes(tab)) return;
+  if (["orders", "dashboard", "settings", "merge", "products"].includes(tab)) return;
   const panels = $$(".admin-panel", main).filter((p) => p.querySelector("table.admin-table tbody tr"));
   const rows = $$("table.admin-table tbody tr", main).filter((tr) => !tr.querySelector("td.empty"));
   if (!panels.length || rows.length < 5) return;
@@ -4097,85 +4190,232 @@ async function bindOps() {
 function adminHeader(title, buttonText, id) {
   return `<div class="admin-top"><h2>${title}</h2><button class="btn primary" id="${id}">${buttonText}</button></div>`;
 }
+// V95: the Products tab is a spreadsheet-style list. Price, category, visibility and "featured" are edited right in the row,
+// rows can be ticked (shift-click for a range, or "select all matching"), and one bar at the bottom applies a change to all of them.
+// It loads one page (50) at a time from the server, with search and a status filter.
+const adminProdView = { q: "", status: "all", page: 1, limit: 50 };
 async function adminProducts(main) {
-  const rows = await api("/api/admin/products");
-  main.innerHTML =
-    adminHeader("Products", "Add product", "addProduct") +
-    `<div class="prod-tools" style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px"><button class="btn ghost" id="pExport" type="button">Export CSV</button><button class="btn ghost" id="pImport" type="button">Import CSV</button><button class="btn ghost" id="pTemplate" type="button">Download template</button><button class="btn primary" id="pSteamTop" type="button">🔥 Fill with top Steam games</button><button class="btn ghost" id="pSteam" type="button">Import Steam games</button><button class="btn ghost" id="pAiBulk" type="button">✨ AI fill missing</button><button class="btn ghost" id="pAiSeo" type="button">✨ AI SEO text</button></div><div id="bulkBar" class="notice" hidden style="position:sticky;top:8px;z-index:5;margin-bottom:10px;display:none;flex-wrap:wrap;gap:8px;align-items:center"></div><div class="admin-panel"><div class="table-wrap"><table class="admin-table"><thead><tr><th style="width:28px"><input type="checkbox" id="bulkAll" aria-label="Select all"></th><th>Product</th><th>Price (editable)</th><th>Category</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows.map((p) => `<tr><td><input type="checkbox" class="bulkSel" value="${p.id}" aria-label="Select ${escapeHTML(p.name)}"></td><td><b>${escapeHTML(p.name)}</b><br><small>${escapeHTML(p.platform || "")} ${escapeHTML(p.region || "")}</small></td><td><input type="number" step="0.01" min="0" value="${p.price}" data-qprice="${p.id}" style="width:96px"></td><td>${escapeHTML(p.category_name || "Uncategorized")}</td><td>${p.delivery_type === "code" ? p.stock : "Manual"}</td><td>${p.active ? "Active" : "Hidden"}${p.featured ? " · Featured" : ""}</td><td><div class="table-actions"><button class="mini" data-edit-product="${p.id}">Edit</button><button class="mini" data-toggle-product="${p.id}" data-active="${p.active ? 0 : 1}">${p.active ? "Hide" : "Show"}</button><button class="mini danger" data-delete-product="${p.id}">Delete</button></div></td></tr>`).join("") || `<tr><td colspan="7" class="empty">No products.</td></tr>`}</tbody></table></div></div>`;
+  const rows = []; // products on the page that is showing
+  const known = new Map(); // every product we have loaded (this page, plus any pulled in by "select all matching")
+  const picked = new Set(); // ticked product ids
+  let seq = 0, total = 0, pages = 1, lastTick = -1, allMode = false;
+  const allRows = () => api("/api/admin/products"); // CSV export, import and the AI tools need the whole catalogue, so they fetch it only when pressed
+  const cur = escapeHTML(state.settings.store_currency || "EGP");
+  const opt = (v, label) => `<option value="${v}" ${adminProdView.status === v ? "selected" : ""}>${label}</option>`;
+  const catOpts = (id) => `<option value="">No category</option>${state.categories.map((c) => `<option value="${c.id}" ${String(c.id) === String(id) ? "selected" : ""}>${escapeHTML(c.name)}</option>`).join("")}`;
+  main.innerHTML = `<div class="admin-top"><div><h2>Products</h2><p class="admin-sub" id="pCount" aria-live="polite">Loading…</p></div><div class="admin-top-actions"><details class="adm-menu" id="pMenu"><summary class="btn ghost">Import &amp; tools <span aria-hidden="true">▾</span></summary><div class="adm-menu-pop">
+      <div class="adm-menu-h">Spreadsheet</div><button type="button" id="pExport">Export CSV</button><button type="button" id="pImport">Import CSV</button><button type="button" id="pTemplate">Download template</button>
+      <div class="adm-menu-h">Steam</div><button type="button" id="pSteamTop">Fill with top Steam games</button><button type="button" id="pSteam">Import Steam games</button>
+      <div class="adm-menu-h">AI</div><button type="button" id="pAiBulk">Fill missing text</button><button type="button" id="pAiSeo">Write SEO text</button></div></details><button class="btn primary" id="addProduct" type="button">Add product</button></div></div>
+    <div class="adm-toolbar"><input id="pSearch" type="search" placeholder="Search by name, platform, category…" value="${escapeHTML(adminProdView.q)}" aria-label="Search products"><select id="pStatus" aria-label="Filter products">${opt("all", "All products")}${opt("active", "Visible")}${opt("hidden", "Hidden")}${opt("featured", "Featured")}${opt("code", "Digital codes")}${opt("manual", "Manual delivery")}${opt("out", "Out of stock")}</select></div>
+    <div class="adm-selnote" id="pSelNote" hidden></div>
+    <div class="admin-panel adm-table-panel"><div class="table-wrap"><table class="admin-table adm-products"><thead><tr><th class="c-sel"><input type="checkbox" id="bulkAll" aria-label="Select all on this page"></th><th>Product</th><th class="c-cat">Category</th><th class="c-price">Price</th><th class="c-stock">Stock</th><th class="c-vis">Visible</th><th class="c-feat">Featured</th><th class="c-act"></th></tr></thead><tbody id="pBody"><tr><td colspan="8" class="empty">Loading products…</td></tr></tbody></table></div></div>
+    <div id="pPager" class="prod-pager"></div>
+    <div class="adm-bulk" id="bulkBar" hidden></div>`;
+  const rowHTML = (p) => {
+    const stock = p.delivery_type === "code" ? Number(p.stock) || 0 : null;
+    return `<tr data-id="${p.id}" class="${p.active ? "" : "is-off"}"><td class="c-sel"><input type="checkbox" class="bulkSel" value="${p.id}" ${picked.has(p.id) ? "checked" : ""} aria-label="Select ${escapeHTML(p.name)}"></td>
+    <td><button type="button" class="p-name" data-edit-product="${p.id}"><span class="p-thumb">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : ""}</span><span class="p-text"><b>${escapeHTML(p.name)}</b><small>${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || (p.delivery_type === "code" ? "Digital code" : "Manual delivery"))}</small></span></button></td>
+    <td class="c-cat"><select class="cell-in" data-qcat="${p.id}" aria-label="Category">${catOpts(p.category_id)}</select></td>
+    <td class="c-price"><span class="money-in"><input class="cell-in" type="number" step="0.01" min="0" value="${p.price}" data-qprice="${p.id}" aria-label="Price"><i>${cur}</i></span></td>
+    <td class="c-stock">${stock === null ? `<span class="pill">Manual</span>` : `<span class="pill ${stock === 0 ? "pill-bad" : stock <= (Number(p.low_stock_threshold) || 3) ? "pill-warn" : "pill-ok"}">${stock} left</span>`}</td>
+    <td class="c-vis"><label class="sw" title="${p.active ? "Visible in the store" : "Hidden from the store"}"><input type="checkbox" data-qactive="${p.id}" ${p.active ? "checked" : ""} aria-label="Visible in the store"><span></span></label></td>
+    <td class="c-feat"><button type="button" class="star ${p.featured ? "on" : ""}" data-qfeat="${p.id}" aria-pressed="${p.featured ? "true" : "false"}" aria-label="Featured" title="Featured">★</button></td>
+    <td class="c-act"><button type="button" class="mini" data-edit-product="${p.id}">Edit</button><button type="button" class="mini danger" data-delete-product="${p.id}" aria-label="Delete ${escapeHTML(p.name)}" title="Delete">✕</button></td></tr>`;
+  };
+  const boxes = () => $$(".bulkSel", main);
+  // ---- selection and the bulk bar ----
+  const drawSel = () => {
+    const bx = boxes(), onPage = bx.filter((b) => b.checked).length;
+    $("#bulkAll").checked = bx.length > 0 && onPage === bx.length;
+    $("#bulkAll").indeterminate = onPage > 0 && onPage < bx.length;
+    const note = $("#pSelNote");
+    if (allMode) { note.hidden = false; note.innerHTML = `All <b>${picked.size}</b> matching products are selected. <button type="button" class="linklike" data-sel="clear">Clear selection</button>`; }
+    else if (bx.length && onPage === bx.length && total > bx.length) { note.hidden = false; note.innerHTML = `${onPage} products on this page are selected. <button type="button" class="linklike" data-sel="all">Select all ${total} matching products</button>`; }
+    else note.hidden = true;
+    const bar = $("#bulkBar"), n = picked.size;
+    bar.hidden = !n;
+    if (!n) return;
+    if (!bar.dataset.built) {
+      bar.dataset.built = "1";
+      bar.innerHTML = `<b id="bkN"></b><span class="sep"></span><button type="button" class="mini" data-bk="show">Show</button><button type="button" class="mini" data-bk="hide">Hide</button><button type="button" class="mini" data-bk="feature">Feature</button><button type="button" class="mini" data-bk="unfeature">Unfeature</button><span class="sep"></span><select id="bkCat" aria-label="Set category"><option value="">Set category…</option>${state.categories.map((c) => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join("")}</select><span class="sep"></span><span class="bk-price"><select id="bkMode" aria-label="Price change"><option value="pct">Change price %</option><option value="set">Set price to</option></select><input id="bkPct" type="number" step="0.1" placeholder="10" aria-label="Amount"><button type="button" class="mini primary" data-bk="price">Apply</button></span><span class="sep"></span><button type="button" class="mini" data-bk="aiimg">✨ Clean images</button><button type="button" class="mini danger" data-bk="delete">Delete</button><button type="button" class="mini" data-bk="clear" aria-label="Clear selection">✕</button>`;
+    }
+    $("#bkN").textContent = `${n} selected`;
+    $("#bkPct").placeholder = $("#bkMode").value === "set" ? "0.00" : "10";
+  };
+  const setPicked = (id, on) => { on ? picked.add(id) : picked.delete(id); };
+  const clearSel = () => { picked.clear(); allMode = false; boxes().forEach((b) => (b.checked = false)); drawSel(); };
+  async function pullAllMatching() {
+    const note = $("#pSelNote"); note.textContent = "Selecting…";
+    const v = adminProdView, qs = (pg) => { const q = new URLSearchParams({ limit: 100, page: pg, status: v.status }); if (v.q.trim()) q.set("q", v.q.trim()); return q; };
+    try {
+      for (let pg = 1; ; pg++) {
+        const r = await api("/api/admin/products?" + qs(pg));
+        r.items.forEach((p) => { known.set(p.id, p); picked.add(p.id); });
+        if (pg >= r.pages) break;
+      }
+      allMode = true;
+    } catch (e) { toast(e.message); }
+    drawSel();
+  }
+  async function runBulk(kind, val) {
+    const ids = [...picked];
+    if (!ids.length) return;
+    if (kind === "clear") return clearSel();
+    if (kind === "aiimg") return aiImageBulk(ids, ids.map((id) => known.get(id)).filter(Boolean));
+    const n = ids.length, plural = `${n} product${n === 1 ? "" : "s"}`;
+    let amount = 0, mode = "pct";
+    if (kind === "price") {
+      mode = $("#bkMode").value; amount = Number($("#bkPct").value);
+      if (mode === "pct") {
+        if (!amount || amount < -90 || amount > 500) return toast("Enter a percentage between -90 and 500.");
+        if (!confirm(`Change the price of ${plural} by ${amount > 0 ? "+" : ""}${amount}%? Options (variants) are not changed.`)) return;
+      } else {
+        if (!(amount >= 0) || $("#bkPct").value === "") return toast("Enter the new price.");
+        if (!confirm(`Set the price of ${plural} to ${amount}? Old (crossed-out) prices are cleared. Options (variants) are not changed.`)) return;
+      }
+    } else if (kind === "delete") {
+      if (!confirm(`Permanently delete ${plural} and their unsold codes? Products that already have orders can't be deleted, they are skipped (hide them instead).`)) return;
+    } else if (!confirm(`Apply to ${plural}?`)) return;
+    let ok = 0, bad = 0, done = 0, next = 0;
+    const one = async (id) => {
+      const p = known.get(id); if (!p) { bad++; return; }
+      try {
+        if (kind === "delete") { await api(`/api/admin/products/${id}?hard=1`, { method: "DELETE" }); ok++; return; }
+        const body = { ...p };
+        if (kind === "show") body.active = true;
+        else if (kind === "hide") body.active = false;
+        else if (kind === "feature") body.featured = true;
+        else if (kind === "unfeature") body.featured = false;
+        else if (kind === "cat") body.category_id = Number(val);
+        else if (kind === "price" && mode === "pct") {
+          body.price = Math.max(0, Math.round(p.price * (1 + amount / 100) * 100) / 100);
+          if (p.old_price != null && p.old_price !== "") body.old_price = Math.max(0, Math.round(p.old_price * (1 + amount / 100) * 100) / 100);
+        } else if (kind === "price") { body.price = amount; body.old_price = null; }
+        await api("/api/admin/products/" + id, { method: "PUT", body: JSON.stringify(body) });
+        ok++;
+      } catch { bad++; }
+    };
+    const worker = async () => { while (next < ids.length) { await one(ids[next++]); if (++done % 10 === 0 && done < ids.length) toast(`Working… ${done} of ${ids.length}`); } };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    toast(`${ok} product${ok === 1 ? "" : "s"} ${kind === "delete" ? "deleted" : "updated"}${bad ? `, ${bad} skipped` : ""}.`);
+    clearSel();
+    await load();
+    refreshStore();
+  }
+  // ---- loading a page ----
+  async function load() {
+    const my = ++seq, v = adminProdView;
+    const qs = new URLSearchParams({ limit: v.limit, page: v.page, status: v.status });
+    if (v.q.trim()) qs.set("q", v.q.trim());
+    let r;
+    try { r = await api("/api/admin/products?" + qs); } catch (e) { if (my === seq) toast(e.message); return; }
+    if (my !== seq || !$("#pBody")) return; // a newer search is already on its way, or the tab was closed
+    rows.length = 0; rows.push(...r.items);
+    rows.forEach((p) => known.set(p.id, p));
+    total = r.total; pages = r.pages; v.page = r.page; lastTick = -1;
+    if (!allMode) picked.clear(); // a new page starts with nothing ticked, unless "select all matching" is on
+    $("#pBody").innerHTML = rows.map(rowHTML).join("") || `<tr><td colspan="8" class="empty">${v.q.trim() || v.status !== "all" ? "No products match." : "No products yet. Add your first one."}</td></tr>`;
+    const from = total ? (r.page - 1) * v.limit + 1 : 0, to = Math.min(total, r.page * v.limit);
+    $("#pCount").textContent = !total ? "No products" : total <= v.limit ? `${total} product${total === 1 ? "" : "s"}` : `Showing ${from}–${to} of ${total}`;
+    $("#pPager").innerHTML = pages > 1 ? `<button class="mini" type="button" data-pp="first" ${r.page <= 1 ? "disabled" : ""}>«</button><button class="mini" type="button" data-pp="prev" ${r.page <= 1 ? "disabled" : ""}>‹ Previous</button><span>Page ${r.page} of ${pages}</span><button class="mini" type="button" data-pp="next" ${r.page >= pages ? "disabled" : ""}>Next ›</button><button class="mini" type="button" data-pp="last" ${r.page >= pages ? "disabled" : ""}>»</button>` : "";
+    drawSel();
+  }
+  // ---- inline saves (the row updates at once; a failed save puts the old value back) ----
+  async function saveField(p, change, msg, undo) {
+    try {
+      await api("/api/admin/products/" + p.id, { method: "PUT", body: JSON.stringify({ ...p, ...change }) });
+      Object.assign(p, change);
+      toast(msg);
+      refreshStore();
+    } catch (er) { toast(er.message); undo && undo(); }
+  }
   $("#addProduct").onclick = () => productForm();
-  $("#pExport").onclick = () => exportProductsCSV(rows);
+  const menu = $("#pMenu");
+  menu.onclick = (e) => { if (e.target.closest(".adm-menu-pop button")) menu.open = false; };
+  const away = (e) => { if (!menu.isConnected) return document.removeEventListener("mousedown", away); if (!e.target.closest("#pMenu")) menu.open = false; };
+  document.addEventListener("mousedown", away);
+  $("#pExport").onclick = async () => exportProductsCSV(await allRows());
   $("#pTemplate").onclick = downloadProductTemplate;
-  $("#pImport").onclick = () => productImportModal(rows);
-  $("#pAiBulk").onclick = () => aiBulkModal(rows);
+  $("#pImport").onclick = async () => productImportModal(await allRows());
+  $("#pAiBulk").onclick = async () => aiBulkModal(await allRows());
   $("#pSteam").onclick = () => steamImportModal();
   $("#pSteamTop").onclick = () => steamTopModal();
-  $("#pAiSeo").onclick = () => aiSeoBulk(rows);
-  bindBulkEdit(rows);
-  $$("[data-edit-product]").forEach(
-    (b) =>
-      (b.onclick = () =>
-        productForm(rows.find((x) => x.id == b.dataset.editProduct))),
-  );
-  $$("[data-qprice]").forEach(
-    (i) =>
-      (i.onchange = async () => {
-        const p = rows.find((x) => x.id == i.dataset.qprice);
-        try {
-          await api("/api/admin/products/" + p.id, {
-            method: "PUT",
-            body: JSON.stringify({ ...p, price: i.value }),
-          });
-          p.price = Number(i.value);
-          toast("Price updated.");
-          refreshStore();
-        } catch (e) {
-          toast(e.message);
-          i.value = p.price;
-        }
-      }),
-  );
-  $$("[data-toggle-product]").forEach(
-    (b) =>
-      (b.onclick = async () => {
-        try {
-          await api(`/api/admin/products/${b.dataset.toggleProduct}/active`, {
-            method: "POST",
-            body: JSON.stringify({ active: b.dataset.active === "1" }),
-          });
-          adminRerender();
-          refreshStore();
-        } catch (e) {
-          toast(e.message);
-        }
-      }),
-  );
-  $$("[data-delete-product]").forEach(
-    (b) =>
-      (b.onclick = async () => {
-        if (
-          !confirm(
-            "Permanently delete this product and its unsold codes? (Products with past orders can only be hidden.)",
-          )
-        )
-          return;
-        try {
-          await api(`/api/admin/products/${b.dataset.deleteProduct}?hard=1`, {
-            method: "DELETE",
-          });
-          toast("Product deleted.");
-          adminRerender();
-          refreshStore();
-        } catch (e) {
-          toast(e.message);
-        }
-      }),
-  );
+  $("#pAiSeo").onclick = async () => aiSeoBulk(await allRows());
+  let timer;
+  $("#pSearch").oninput = (e) => { clearTimeout(timer); timer = setTimeout(() => { adminProdView.q = e.target.value; adminProdView.page = 1; allMode = false; load(); }, 250); };
+  $("#pStatus").onchange = (e) => { adminProdView.status = e.target.value; adminProdView.page = 1; allMode = false; load(); };
+  $("#pPager").onclick = (e) => {
+    const b = e.target.closest("[data-pp]"); if (!b || b.disabled) return;
+    const k = b.dataset.pp, v = adminProdView;
+    v.page = k === "first" ? 1 : k === "last" ? pages : k === "next" ? v.page + 1 : v.page - 1;
+    load().then(() => $("#pSearch")?.scrollIntoView({ block: "start" }));
+  };
+  $("#bulkAll").onchange = (e) => { boxes().forEach((b) => { b.checked = e.target.checked; setPicked(Number(b.value), e.target.checked); }); if (!e.target.checked) allMode = false; drawSel(); };
+  $("#pSelNote").onclick = (e) => { const b = e.target.closest("[data-sel]"); if (!b) return; b.dataset.sel === "all" ? pullAllMatching() : clearSel(); };
+  const bar = $("#bulkBar");
+  bar.onclick = (e) => { const b = e.target.closest("[data-bk]"); if (b) runBulk(b.dataset.bk); };
+  bar.onchange = (e) => { if (e.target.id === "bkCat" && e.target.value) { const v = e.target.value; e.target.value = ""; runBulk("cat", v); } if (e.target.id === "bkMode") drawSel(); };
+  bar.onkeydown = (e) => { if (e.key === "Enter" && e.target.id === "bkPct") runBulk("price"); };
+  const body = $("#pBody");
+  body.onclick = async (e) => {
+    const ed = e.target.closest("[data-edit-product]"), dl = e.target.closest("[data-delete-product]"), st = e.target.closest("[data-qfeat]");
+    const tick = e.target.closest(".bulkSel");
+    if (tick) { // shift-click ticks a whole range
+      const bx = boxes(), i = bx.indexOf(tick);
+      if (e.shiftKey && lastTick > -1) { const [a, z] = [Math.min(i, lastTick), Math.max(i, lastTick)]; for (let k = a; k <= z; k++) { bx[k].checked = tick.checked; setPicked(Number(bx[k].value), tick.checked); } }
+      else setPicked(Number(tick.value), tick.checked);
+      lastTick = i; if (!tick.checked) allMode = false; return drawSel();
+    }
+    if (ed) return productForm(rows.find((x) => x.id == ed.dataset.editProduct));
+    if (st) {
+      const p = rows.find((x) => x.id == st.dataset.qfeat), on = !p.featured;
+      st.classList.toggle("on", on); st.setAttribute("aria-pressed", on);
+      return saveField(p, { featured: on }, on ? "Marked as featured." : "Removed from featured.", () => { st.classList.toggle("on", !on); st.setAttribute("aria-pressed", !on); });
+    }
+    if (dl) {
+      if (!confirm("Permanently delete this product and its unsold codes? (Products with past orders can only be hidden.)")) return;
+      try {
+        await api(`/api/admin/products/${dl.dataset.deleteProduct}?hard=1`, { method: "DELETE" });
+        toast("Product deleted.");
+        picked.delete(Number(dl.dataset.deleteProduct));
+        await load();
+        refreshStore();
+      } catch (er) { toast(er.message); }
+    }
+  };
+  body.onchange = async (e) => {
+    const t = e.target, tr = t.closest("tr");
+    if (t.matches("[data-qprice]")) {
+      const p = rows.find((x) => x.id == t.dataset.qprice), v = Number(t.value);
+      if (t.value === "" || !(v >= 0)) { toast("Enter a valid price."); t.value = p.price; return; }
+      return saveField(p, { price: v }, "Price saved.", () => (t.value = p.price));
+    }
+    if (t.matches("[data-qcat]")) {
+      const p = rows.find((x) => x.id == t.dataset.qcat), prev = p.category_id ?? "";
+      return saveField(p, { category_id: t.value ? Number(t.value) : null }, "Category saved.", () => (t.value = prev));
+    }
+    if (t.matches("[data-qactive]")) {
+      const p = rows.find((x) => x.id == t.dataset.qactive), on = t.checked;
+      tr.classList.toggle("is-off", !on);
+      try {
+        await api(`/api/admin/products/${p.id}/active`, { method: "POST", body: JSON.stringify({ active: on }) });
+        p.active = on ? 1 : 0; toast(on ? "Now visible in the store." : "Hidden from the store."); refreshStore();
+      } catch (er) { toast(er.message); t.checked = !on; tr.classList.toggle("is-off", on); }
+    }
+  };
+  body.onkeydown = (e) => { // Enter saves a price and moves down to the next one, like a spreadsheet; Escape puts the old value back
+    const t = e.target; if (!t.matches?.("[data-qprice]")) return;
+    if (e.key === "Escape") { t.value = rows.find((x) => x.id == t.dataset.qprice).price; t.blur(); }
+    else if (e.key === "Enter") { e.preventDefault(); const all = $$("[data-qprice]", body), nx = all[all.indexOf(t) + 1]; t.blur(); (nx || t).focus(); (nx || t).select?.(); }
+  };
+  await load();
 }
 function productForm(p = null) {
   const vars = p?.variants || [];
   openModal(
     p ? "Edit product" : "Add product",
-    `<form id="productForm"><div class="notice" id="aiBox" style="margin-bottom:12px"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><div style="flex:1;min-width:200px"><b>✨ AI auto-fill</b><br><small id="aiStatus">Type the name (add an image if you have one), then Gemini fills the Arabic name, both descriptions, platform, region and category. Review before saving.</small></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><button type="button" class="btn ghost" id="aiFill">Auto-fill with AI</button><label style="font-size:12px"><input type="checkbox" id="aiOverwrite"> Replace existing text</label></div></div></div><div class="form-grid"><div class="field"><label>Name</label><input id="pName" value="${escapeHTML(p?.name || "")}" required></div><div class="field"><label>${t("Name (Arabic)")}</label><input id="pNameAr" dir="rtl" value="${escapeHTML(p?.name_ar || "")}"></div><div class="field"><label>Slug</label><input id="pSlug" value="${escapeHTML(p?.slug || "")}"></div><div class="field"><label>Price (EGP)</label><input id="pPrice" type="number" step="0.01" value="${p?.price ?? ""}" required></div><div class="field"><label>Old price (EGP)</label><input id="pOld" type="number" step="0.01" value="${p?.old_price ?? ""}"></div><div class="field"><label>Category</label><select id="pCategory"><option value="">Uncategorized</option>${state.categories.map((c) => `<option value="${c.id}" ${p?.category_id == c.id ? "selected" : ""}>${escapeHTML(c.name)}</option>`).join("")}</select></div><div class="field"><label>Delivery</label><select id="pDelivery"><option value="manual" ${p?.delivery_type !== "code" ? "selected" : ""}>Manual</option><option value="code" ${p?.delivery_type === "code" ? "selected" : ""}>Digital code</option></select></div><div class="field"><label>Gift product <small>(you send the gift yourself)</small></label><select id="pGift" onchange="document.getElementById('pGiftLabelBox').hidden=this.value!=='custom';if(this.value)document.getElementById('pDelivery').value='manual'"><option value="">No</option><option value="steam" ${p?.gift_type === "steam" ? "selected" : ""}>Steam gift (buyer gives friend code or invite link)</option><option value="custom" ${p?.gift_type === "custom" ? "selected" : ""}>Other gift (buyer gives details you ask for)</option></select></div>${p?.steam_app_id ? `<label class="field"><span><input id="pSteamAuto" type="checkbox" ${p.steam_auto === 0 ? "" : "checked"}> Update this price from Steam automatically (Steam app ${Number(p.steam_app_id)})</span></label>` : ""}<div class="field" id="pGiftLabelBox" ${p?.gift_type === "custom" ? "" : "hidden"}><label>What to ask the buyer for <small>(English / Arabic)</small></label><input id="pGiftLabel" value="${escapeHTML(p?.gift_label || "")}" placeholder="e.g. Epic Games account email"><input id="pGiftLabelAr" dir="rtl" value="${escapeHTML(p?.gift_label_ar || "")}" placeholder="مثال: إيميل حساب إبك"></div><div class="field"><label>Platform</label><input id="pPlatform" value="${escapeHTML(p?.platform || "")}" placeholder="PC, PlayStation..."></div><div class="field"><label>Region</label><input id="pRegion" value="${escapeHTML(p?.region || "")}" placeholder="EG, Global..."></div><div class="field"><label>Low-stock alert at (codes left, empty = default)</label><input id="pLow" type="number" min="0" value="${p?.low_stock_threshold ?? ""}"></div><div class="field"><label>Cost price (manual products, for profit)</label><input id="pCost" type="number" step="0.01" min="0" value="${p?.cost_price ?? ""}"></div></div><div class="field"><label>Image URL</label><input id="pImage" value="${escapeHTML(p?.image_url || "")}" placeholder="https://..."></div><div class="field"><label>${t("Image upload")}</label><input id="pImageFile" type="file" accept="image/*"></div><div class="field" id="galBox"><label>Gallery images <small>(extra photos shown after the cover, up to 8)</small></label><div class="gal-admin" id="galList"></div><div style="display:flex;flex-wrap:wrap;gap:8px"><input id="galUrl" placeholder="https://... image link" style="flex:1;min-width:180px"><button type="button" class="btn ghost" id="galAddUrl">Add link</button><button type="button" class="btn ghost" id="galAddFile">Upload images</button><input id="galFiles" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden></div><small id="galNote" style="display:block;margin-top:6px"></small></div><div class="notice" id="imgAiBox" style="margin-bottom:12px"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><div style="flex:1;min-width:200px"><b>✨ Clean up image</b><br><small id="imgAiStatus">Turns a messy screenshot into a clean cover on your standard background. You see the result first and nothing changes until you press Save product.</small></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><button type="button" class="btn ghost" id="imgAiGo">Clean up with AI</button>${p?.image_original ? `<button type="button" class="btn ghost" id="imgRestore">Restore original image</button>` : ""}</div></div><div id="imgAiPreview" style="margin-top:10px" hidden></div></div><div class="form-grid"><div class="field"><label>Description</label><textarea id="pDescription">${escapeHTML(p?.description || "")}</textarea></div><div class="field"><label>${t("Description (Arabic)")}</label><textarea id="pDescriptionAr" dir="rtl">${escapeHTML(p?.description_ar || "")}</textarea></div></div><div class="form-grid"><div class="field"><label>How to redeem <small>(shown on the product page and in the delivered email; one step per line)</small></label><textarea id="pRedeem" rows="4" placeholder="1. Open the store on your device&#10;2. Choose Redeem code&#10;3. Enter the code">${escapeHTML(p?.redeem_steps || "")}</textarea></div><div class="field"><label>How to redeem (Arabic)</label><textarea id="pRedeemAr" dir="rtl" rows="4">${escapeHTML(p?.redeem_steps_ar || "")}</textarea></div></div><details style="margin-top:12px" ${p?.meta_title || p?.meta_description || p?.seo_keywords ? "open" : ""}><summary><b>Search / SEO text</b></summary><div class="notice" style="margin:10px 0"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><div style="flex:1;min-width:200px"><small id="seoStatus">Written for Google: a title (about 60 characters), a description (about 155) and search keywords, in Arabic and English. Empty fields fall back to the product name and description.</small></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><button type="button" class="btn ghost" id="seoGo">✨ Write SEO text</button><label style="font-size:12px"><input type="checkbox" id="seoOver"> Replace existing</label></div></div></div><div class="form-grid"><div class="field"><label>Meta title <small id="cMt"></small></label><input id="pMetaTitle" maxlength="70" value="${escapeHTML(p?.meta_title || "")}"></div><div class="field"><label>Meta title (Arabic) <small id="cMtA"></small></label><input id="pMetaTitleAr" dir="rtl" maxlength="70" value="${escapeHTML(p?.meta_title_ar || "")}"></div><div class="field"><label>Meta description <small id="cMd"></small></label><textarea id="pMetaDesc" maxlength="170">${escapeHTML(p?.meta_description || "")}</textarea></div><div class="field"><label>Meta description (Arabic) <small id="cMdA"></small></label><textarea id="pMetaDescAr" dir="rtl" maxlength="170">${escapeHTML(p?.meta_description_ar || "")}</textarea></div><div class="field"><label>Search keywords</label><input id="pKeywords" maxlength="220" value="${escapeHTML(p?.seo_keywords || "")}" placeholder="comma, separated"></div><div class="field"><label>Search keywords (Arabic)</label><input id="pKeywordsAr" dir="rtl" maxlength="220" value="${escapeHTML(p?.seo_keywords_ar || "")}" placeholder="كلمة، كلمة"></div></div></details><details open style="margin-top:12px"><summary><b>${t("Variants / denominations")}</b></summary><div id="variantRows" style="margin-top:10px">${vars.map((v) => `<div class="form-grid variant-row" data-variant-id="${v.id}"><input class="vName" value="${escapeHTML(v.name)}" placeholder="${t("Option name")}"><input class="vPrice" type="number" step="0.01" value="${v.price}" placeholder="Price"><input class="vOld" type="number" step="0.01" value="${v.old_price ?? ""}" placeholder="Old price"><label><input class="vActive" type="checkbox" ${v.active ? "checked" : ""}> Active</label><button type="button" class="mini danger vRemove">Remove</button></div>`).join("")}</div><button type="button" class="mini" id="addVariantRow" style="margin-top:8px">${t("Add")}</button><small style="display:block;margin-top:6px">For digital products, add codes to each option from Digital codes.</small></details><div class="form-grid" style="margin-top:12px"><label><input id="pActive" type="checkbox" ${p?.active !== 0 ? "checked" : ""}> Active</label><label><input id="pFeatured" type="checkbox" ${p?.featured ? "checked" : ""}> Featured</label></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelP">Cancel</button><button class="btn primary">Save product</button></div></form>`,
+    `<form id="productForm"><div class="notice" id="aiBox" style="margin-bottom:12px"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><div style="flex:1;min-width:200px"><b>✨ AI auto-fill</b><br><small id="aiStatus">Type the name (add an image if you have one), then Gemini fills the Arabic name, both descriptions, platform, region and category. Review before saving.</small></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><button type="button" class="btn ghost" id="aiFill">Auto-fill with AI</button><label style="font-size:12px"><input type="checkbox" id="aiOverwrite"> Replace existing text</label></div></div></div><div class="form-grid"><div class="field"><label>Name</label><input id="pName" value="${escapeHTML(p?.name || "")}" required></div><div class="field"><label>${t("Name (Arabic)")}</label><input id="pNameAr" dir="rtl" value="${escapeHTML(p?.name_ar || "")}"></div><div class="field"><label>Slug</label><input id="pSlug" value="${escapeHTML(p?.slug || "")}"></div><div class="field"><label>Price (EGP)</label><input id="pPrice" type="number" step="0.01" value="${p?.price ?? ""}" required></div><div class="field"><label>Old price (EGP)</label><input id="pOld" type="number" step="0.01" value="${p?.old_price ?? ""}"></div><div class="field"><label>Category</label><select id="pCategory"><option value="">Uncategorized</option>${state.categories.map((c) => `<option value="${c.id}" ${p?.category_id == c.id ? "selected" : ""}>${escapeHTML(c.name)}</option>`).join("")}</select></div><div class="field"><label>Delivery</label><select id="pDelivery"><option value="manual" ${p?.delivery_type !== "code" ? "selected" : ""}>Manual</option><option value="code" ${p?.delivery_type === "code" ? "selected" : ""}>Digital code</option></select></div><div class="field"><label>Gift product <small>(you send the gift yourself)</small></label><select id="pGift" onchange="document.getElementById('pGiftLabelBox').hidden=this.value!=='custom';if(this.value)document.getElementById('pDelivery').value='manual'"><option value="">No</option><option value="steam" ${p?.gift_type === "steam" ? "selected" : ""}>Steam gift (buyer gives friend code or invite link)</option><option value="custom" ${p?.gift_type === "custom" ? "selected" : ""}>Other gift (buyer gives details you ask for)</option></select></div>${p?.steam_app_id ? `<label class="field"><span><input id="pSteamAuto" type="checkbox" ${p.steam_auto === 0 ? "" : "checked"}> Update this price from Steam automatically (Steam app ${Number(p.steam_app_id)})</span></label>` : ""}<div class="field" id="pGiftLabelBox" ${p?.gift_type === "custom" ? "" : "hidden"}><label>What to ask the buyer for <small>(English / Arabic)</small></label><input id="pGiftLabel" value="${escapeHTML(p?.gift_label || "")}" placeholder="e.g. Epic Games account email"><input id="pGiftLabelAr" dir="rtl" value="${escapeHTML(p?.gift_label_ar || "")}" placeholder="مثال: إيميل حساب إبك"></div><div class="field"><label>Platform</label><input id="pPlatform" value="${escapeHTML(p?.platform || "")}" placeholder="PC, PlayStation..."></div><div class="field"><label>Genres <small>(comma separated; used for the filters in Games)</small></label><input id="pGenres" value="${escapeHTML(p?.genres || "")}" placeholder="Action, RPG"></div><div class="field"><label>Region</label><input id="pRegion" value="${escapeHTML(p?.region || "")}" placeholder="EG, Global..."></div><div class="field"><label>Low-stock alert at (codes left, empty = default)</label><input id="pLow" type="number" min="0" value="${p?.low_stock_threshold ?? ""}"></div><div class="field"><label>Cost price (manual products, for profit)</label><input id="pCost" type="number" step="0.01" min="0" value="${p?.cost_price ?? ""}"></div></div><div class="field"><label>Image URL</label><input id="pImage" value="${escapeHTML(p?.image_url || "")}" placeholder="https://..."></div><div class="field"><label>${t("Image upload")}</label><input id="pImageFile" type="file" accept="image/*"></div><div class="field" id="galBox"><label>Gallery images <small>(extra photos shown after the cover, up to 8)</small></label><div class="gal-admin" id="galList"></div><div style="display:flex;flex-wrap:wrap;gap:8px"><input id="galUrl" placeholder="https://... image link" style="flex:1;min-width:180px"><button type="button" class="btn ghost" id="galAddUrl">Add link</button><button type="button" class="btn ghost" id="galAddFile">Upload images</button><input id="galFiles" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden></div><small id="galNote" style="display:block;margin-top:6px"></small></div><div class="notice" id="imgAiBox" style="margin-bottom:12px"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><div style="flex:1;min-width:200px"><b>✨ Clean up image</b><br><small id="imgAiStatus">Turns a messy screenshot into a clean cover on your standard background. You see the result first and nothing changes until you press Save product.</small></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><button type="button" class="btn ghost" id="imgAiGo">Clean up with AI</button>${p?.image_original ? `<button type="button" class="btn ghost" id="imgRestore">Restore original image</button>` : ""}</div></div><div id="imgAiPreview" style="margin-top:10px" hidden></div></div><div class="form-grid"><div class="field"><label>Description</label><textarea id="pDescription">${escapeHTML(p?.description || "")}</textarea></div><div class="field"><label>${t("Description (Arabic)")}</label><textarea id="pDescriptionAr" dir="rtl">${escapeHTML(p?.description_ar || "")}</textarea></div></div><div class="form-grid"><div class="field"><label>How to redeem <small>(shown on the product page and in the delivered email; one step per line)</small></label><textarea id="pRedeem" rows="4" placeholder="1. Open the store on your device&#10;2. Choose Redeem code&#10;3. Enter the code">${escapeHTML(p?.redeem_steps || "")}</textarea></div><div class="field"><label>How to redeem (Arabic)</label><textarea id="pRedeemAr" dir="rtl" rows="4">${escapeHTML(p?.redeem_steps_ar || "")}</textarea></div></div><details style="margin-top:12px" ${p?.meta_title || p?.meta_description || p?.seo_keywords ? "open" : ""}><summary><b>Search / SEO text</b></summary><div class="notice" style="margin:10px 0"><div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between"><div style="flex:1;min-width:200px"><small id="seoStatus">Written for Google: a title (about 60 characters), a description (about 155) and search keywords, in Arabic and English. Empty fields fall back to the product name and description.</small></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start"><button type="button" class="btn ghost" id="seoGo">✨ Write SEO text</button><label style="font-size:12px"><input type="checkbox" id="seoOver"> Replace existing</label></div></div></div><div class="form-grid"><div class="field"><label>Meta title <small id="cMt"></small></label><input id="pMetaTitle" maxlength="70" value="${escapeHTML(p?.meta_title || "")}"></div><div class="field"><label>Meta title (Arabic) <small id="cMtA"></small></label><input id="pMetaTitleAr" dir="rtl" maxlength="70" value="${escapeHTML(p?.meta_title_ar || "")}"></div><div class="field"><label>Meta description <small id="cMd"></small></label><textarea id="pMetaDesc" maxlength="170">${escapeHTML(p?.meta_description || "")}</textarea></div><div class="field"><label>Meta description (Arabic) <small id="cMdA"></small></label><textarea id="pMetaDescAr" dir="rtl" maxlength="170">${escapeHTML(p?.meta_description_ar || "")}</textarea></div><div class="field"><label>Search keywords</label><input id="pKeywords" maxlength="220" value="${escapeHTML(p?.seo_keywords || "")}" placeholder="comma, separated"></div><div class="field"><label>Search keywords (Arabic)</label><input id="pKeywordsAr" dir="rtl" maxlength="220" value="${escapeHTML(p?.seo_keywords_ar || "")}" placeholder="كلمة، كلمة"></div></div></details><details open style="margin-top:12px"><summary><b>${t("Variants / denominations")}</b></summary><div id="variantRows" style="margin-top:10px">${vars.map((v) => `<div class="form-grid variant-row" data-variant-id="${v.id}"><input class="vName" value="${escapeHTML(v.name)}" placeholder="${t("Option name")}"><input class="vPrice" type="number" step="0.01" value="${v.price}" placeholder="Price"><input class="vOld" type="number" step="0.01" value="${v.old_price ?? ""}" placeholder="Old price"><label><input class="vActive" type="checkbox" ${v.active ? "checked" : ""}> Active</label><button type="button" class="mini danger vRemove">Remove</button></div>`).join("")}</div><button type="button" class="mini" id="addVariantRow" style="margin-top:8px">${t("Add")}</button><small style="display:block;margin-top:6px">For digital products, add codes to each option from Digital codes.</small></details><div class="form-grid" style="margin-top:12px"><label><input id="pActive" type="checkbox" ${p?.active !== 0 ? "checked" : ""}> Active</label><label><input id="pFeatured" type="checkbox" ${p?.featured ? "checked" : ""}> Featured</label></div><div class="modal-actions"><button type="button" class="btn ghost" id="cancelP">Cancel</button><button class="btn primary">Save product</button></div></form>`,
   );
   $("#cancelP").onclick = () => { closeModal(); state.adminOpen = true; };
   $("#aiFill").onclick = () => aiFillProductForm();
@@ -4286,6 +4526,7 @@ function productForm(p = null) {
       gift_label_ar: $("#pGiftLabelAr").value,
       ...($("#pSteamAuto") ? { steam_auto: $("#pSteamAuto").checked } : {}),
       platform: $("#pPlatform").value,
+      genres: $("#pGenres").value,
       region: $("#pRegion").value,
       low_stock_threshold: $("#pLow").value,
       cost_price: $("#pCost").value,
@@ -4590,49 +4831,6 @@ function productImportModal(existing) {
   };
 }
 // ---- Products: select several and change them together ----
-function bindBulkEdit(rows) {
-  const bar = $("#bulkBar"), boxes = () => $$(".bulkSel"), picked = () => boxes().filter((b) => b.checked).map((b) => Number(b.value));
-  const draw = () => {
-    const ids = picked();
-    $("#bulkAll").checked = ids.length > 0 && ids.length === boxes().length;
-    if (!ids.length) { bar.hidden = true; bar.style.display = "none"; return; }
-    bar.hidden = false; bar.style.display = "flex";
-    bar.innerHTML = `<b>${ids.length} selected</b><select id="bkCat"><option value="">Set category…</option>${state.categories.map((c) => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join("")}</select><button type="button" class="mini" data-bk="show">Show</button><button type="button" class="mini" data-bk="hide">Hide</button><button type="button" class="mini" data-bk="feature">Feature</button><button type="button" class="mini" data-bk="unfeature">Unfeature</button><button type="button" class="mini" data-bk="aiimg">✨ Clean images</button><span style="display:inline-flex;gap:4px;align-items:center">Price <input id="bkPct" type="number" step="0.1" placeholder="±%" style="width:70px"><button type="button" class="mini" data-bk="pct">Apply %</button></span><button type="button" class="mini" data-bk="clear">Clear</button>`;
-  };
-  $("#bulkAll").onchange = (e) => { boxes().forEach((b) => (b.checked = e.target.checked)); draw(); };
-  $("#adminMain").onchange = (e) => {
-    if (e.target.classList.contains("bulkSel")) draw();
-    if (e.target.id === "bkCat" && e.target.value) run("cat", e.target.value);
-  };
-  $("#adminMain").onclick = (e) => { const b = e.target.closest("[data-bk]"); if (b) run(b.dataset.bk); };
-  async function run(kind, val) {
-    const ids = picked();
-    if (!ids.length) return;
-    if (kind === "clear") { boxes().forEach((b) => (b.checked = false)); return draw(); }
-    if (kind === "aiimg") return aiImageBulk(ids, rows);
-    let pct = 0;
-    if (kind === "pct") {
-      pct = Number($("#bkPct").value);
-      if (!pct || pct < -90 || pct > 500) return toast("Enter a percentage between -90 and 500.");
-      if (!confirm(`Change the price of ${ids.length} products by ${pct > 0 ? "+" : ""}${pct}%? Options (variants) are not changed.`)) return;
-    } else if (!confirm(`Apply to ${ids.length} selected products?`)) { draw(); return; }
-    let ok = 0, bad = 0;
-    for (const id of ids) {
-      const p = rows.find((x) => x.id === id), body = { ...p };
-      if (kind === "show") body.active = true;
-      else if (kind === "hide") body.active = false;
-      else if (kind === "feature") body.featured = true;
-      else if (kind === "unfeature") body.featured = false;
-      else if (kind === "cat") body.category_id = Number(val);
-      else if (kind === "pct") body.price = Math.max(0, Math.round(p.price * (1 + pct / 100) * 100) / 100);
-      if (kind === "pct" && p.old_price != null && p.old_price !== "") body.old_price = Math.max(0, Math.round(p.old_price * (1 + pct / 100) * 100) / 100);
-      try { await api("/api/admin/products/" + id, { method: "PUT", body: JSON.stringify(body) }); ok++; } catch { bad++; }
-    }
-    toast(`${ok} products updated${bad ? `, ${bad} failed` : ""}.`);
-    await adminRerender();
-    refreshStore();
-  }
-}
 // ---- Bulk AI fill: every product missing its Arabic name or a description ----
 const aiMissing = (p) => !String(p.name_ar || "").trim() || !String(p.description || "").trim() || !String(p.description_ar || "").trim() || !String(p.redeem_steps || "").trim() || !String(p.redeem_steps_ar || "").trim();
 function aiBulkModal(rows) {
@@ -5764,8 +5962,19 @@ function renderAdminPage() {
     return;
   }
   state.adminOpen = true;
-  $("main").innerHTML = `<section class="admin-page container"><div class="admin-page-head"><div><span class="eyebrow">KARDIVO MANAGEMENT</span><h1>Admin dashboard</h1></div><div class="modal-actions" style="margin:0"><a class="btn ghost" href="/account" id="adminAccountLink">Account</a><a class="btn ghost" href="/" id="adminStoreLink">Back to store</a></div></div><div class="admin-searchbar"><input id="adminSearch" type="search" placeholder="Search everything: orders, products, customers, settings, pages...   ( / )" autocomplete="off" aria-label="Search the admin"><div class="admin-results" id="adminResults" hidden></div></div><div class="admin-shell"><aside class="admin-side" id="adminSide">${ADMIN_GROUPS.map(([g, ks]) => `<div class="admin-group">${g}</div>${ks.map((k) => `<button data-admin-tab="${k}">${adminTabName(k)}<span class="badge red" data-badge="${k}" hidden></span></button>`).join("")}`).join("")}</aside><section class="admin-main" id="adminMain"></section></div></section>`;
-  $$("#adminSide button").forEach(b => b.onclick = () => { state.admin.tab = b.dataset.adminTab; renderAdminTab(); });
+  const logo = document.querySelector(".site-header [data-logo]")?.outerHTML || `<b>Kardivo</b>`;
+  $("main").innerHTML = `<div class="adm" id="adm">
+  <aside class="adm-side"><div class="adm-brand">${logo}<span class="adm-brand-tag">Admin</span></div>
+    <nav class="adm-nav" id="adminSide" aria-label="Admin sections">${ADMIN_GROUPS.map(([g, ks]) => `<div class="adm-group">${g}</div>${ks.map((k) => `<button type="button" data-admin-tab="${k}"><svg class="adm-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ADMIN_ICONS[k] || ""}</svg><span class="adm-label">${adminTabName(k)}</span><span class="badge red" data-badge="${k}" hidden></span></button>`).join("")}`).join("")}</nav>
+    <div class="adm-side-foot"><a href="/" id="adminStoreLink" data-home>View store <span aria-hidden="true">↗</span></a><a href="/account" id="adminAccountLink">My account</a><button type="button" id="admTheme">Light / dark</button></div></aside>
+  <div class="adm-scrim" id="admScrim"></div>
+  <div class="adm-col"><header class="adm-bar"><button type="button" class="adm-burger" id="admBurger" aria-label="Menu"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><div class="admin-searchbar"><svg class="adm-search-ico" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg><input id="adminSearch" type="search" placeholder="Search orders, products, customers, settings…" autocomplete="off" aria-label="Search the admin"><kbd class="adm-kbd" aria-hidden="true">/</kbd><div class="admin-results" id="adminResults" hidden></div></div></header>
+  <section class="admin-main" id="adminMain"></section></div></div>`;
+  const adm = $("#adm"), shut = () => adm.classList.remove("nav-open");
+  $$("#adminSide button").forEach(b => b.onclick = () => { state.admin.tab = b.dataset.adminTab; shut(); renderAdminTab(); window.scrollTo(0, 0); });
+  $("#admBurger").onclick = () => adm.classList.toggle("nav-open");
+  $("#admScrim").onclick = shut;
+  $("#admTheme").onclick = () => $("#themeBtn")?.click();
   bindAdminSearch();
   adminData.at = 0;
   renderAdminTab().then(() => { if (state.admin.tab !== "dashboard") adminBadges(); });
@@ -5987,6 +6196,7 @@ document.addEventListener("click", (e) => {
     e.metaKey ||
     e.ctrlKey ||
     e.shiftKey ||
+    a.hasAttribute("download") || // file downloads (CSV export, backups) must not be turned into page navigation
     a.target === "_blank"
   )
     return;
@@ -7621,13 +7831,14 @@ function openerGo() {
 function renderProductsPage() {
   document.body.classList.remove("product-route", "account-route", "admin-route");
   if (state.catSaved) { Object.assign(state, state.catSaved); state.catSaved = null; }
-  if (state.freshProducts) { state.category = "all"; state.discovery = "all"; state.query = ""; }
+  if (state.freshProducts) { state.category = "all"; state.genre = "all"; state.discovery = "all"; state.query = ""; }
   state.freshProducts = false;
   const qs = new URLSearchParams(location.search);
   if (qs.has("q")) state.query = (qs.get("q") || "").slice(0, 120);
-  $("main").innerHTML = `<section class="products-page container"><nav class="product-breadcrumb" aria-label="Breadcrumb"><a href="/" data-home data-i18n="Home">Home</a><span>/</span><span data-i18n="Products">Products</span></nav><div class="pp-head"><span class="eyebrow">KARDIVO</span><h1 data-i18n="All products">All products</h1><p class="section-subtitle" data-i18n="Search, filter and sort the whole catalog.">Search, filter and sort the whole catalog.</p></div><div class="pp-toolbar"><div class="search-wrap"><label class="search"><span>⌕</span><input id="search" type="search" autocomplete="off" enterkeyhint="search" placeholder="Search..." data-i18n-ph="Search..."></label><div id="searchSuggestions" class="search-suggestions" hidden></div></div><select id="sort" aria-label="Sort"><option value="featured" data-i18n="Featured">Featured</option><option value="newest" data-i18n="Newest">Newest</option><option value="price-low" data-i18n="Price: low to high">Price: low to high</option><option value="price-high" data-i18n="Price: high to low">Price: high to low</option><option value="name" data-i18n="Name">Name</option></select></div><div id="categories" class="chips"></div><div class="discovery-toolbar"><div class="discovery-toolbar-copy"><span class="eyebrow" data-i18n="QUICK FILTERS">QUICK FILTERS</span><span id="discoverySummary" class="discovery-summary"></span></div><div id="smartFilters" class="smart-filters" aria-label="Product filters"></div></div><div id="productGrid" class="product-grid"></div></section>`;
+  $("main").innerHTML = `<section class="products-page container"><nav class="product-breadcrumb" aria-label="Breadcrumb"><a href="/" data-home data-i18n="Home">Home</a><span>/</span><span data-i18n="Products">Products</span></nav><div class="pp-head"><h1 data-i18n="Products">Products</h1></div><div id="ppGames"></div></div><div class="pp-toolbar"><div class="search-wrap"><label class="search"><span>⌕</span><input id="search" type="search" autocomplete="off" enterkeyhint="search" placeholder="Search..." data-i18n-ph="Search..."></label><div id="searchSuggestions" class="search-suggestions" hidden></div></div><select id="sort" aria-label="Sort"><option value="featured" data-i18n="Featured">Featured</option><option value="newest" data-i18n="Newest">Newest</option><option value="price-low" data-i18n="Price: low to high">Price: low to high</option><option value="price-high" data-i18n="Price: high to low">Price: high to low</option><option value="name" data-i18n="Name">Name</option></select></div><div id="categories" class="chips"></div><div id="ppGenres" class="pp-genres"></div><div class="discovery-toolbar"><div class="discovery-toolbar-copy"><span class="eyebrow" data-i18n="QUICK FILTERS">QUICK FILTERS</span><span id="discoverySummary" class="discovery-summary"></span></div><div id="smartFilters" class="smart-filters" aria-label="Product filters"></div></div><div id="productGrid" class="product-grid pp-list"></div></section>`;
   translateStatic();
   renderCategories();
+  renderGamesExtras();
   renderSmartFilters();
   renderProducts();
   $("#sort").value = state.sort;
