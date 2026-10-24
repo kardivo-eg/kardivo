@@ -1765,7 +1765,7 @@ function renderGamesExtras() {
   for (const p of state.products) if (String(p.category_id) === String(gid)) for (const g of productGenres(p)) count.set(g, (count.get(g) || 0) + 1);
   const list = [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   if (state.genre !== "all" && !count.has(state.genre)) state.genre = "all";
-  gen.innerHTML = list.length ? `<button type="button" class="pp-genre ${state.genre === "all" ? "active" : ""}" data-genre="all">${t("All genres")}</button>` + list.map(([g, n]) => `<button type="button" class="pp-genre ${state.genre === g ? "active" : ""}" data-genre="${escapeHTML(g)}">${escapeHTML(t(g))} <small>${n}</small></button>`).join("") : "";
+  gen.innerHTML = list.length ? `<button type="button" class="pp-genre ${state.genre === "all" ? "active" : ""}" data-genre="all">${t("All genres")}</button>` + list.map(([g, n]) => `<button type="button" class="pp-genre ${state.genre === g ? "active" : ""}" data-genre="${escapeHTML(g)}" style="--ch:${strHue(g)}">${escapeHTML(t(g))} <small>${n}</small></button>`).join("") : "";
   gen.onclick = (e) => {
     const b = e.target.closest("[data-genre]"); if (!b) return;
     state.genre = b.dataset.genre;
@@ -1773,18 +1773,20 @@ function renderGamesExtras() {
     renderProducts();
   };
 }
+const catHue = (id) => (((Number(id) || 0) * 53 + 262) % 360);
+const strHue = (str) => { let h = 7; for (const ch of String(str)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % 360; };
 function renderCategories() {
   const el = $("#categories");
   if (!el) return;
   el.innerHTML =
     `<button class="chip ${state.category === "all" ? "active" : ""}" data-cat="all">${t("All")}</button>` +
     (state.products.some((p) => Number(p.featured))
-      ? `<button class="chip ${state.category === "featured" ? "active" : ""}" data-cat="featured">${t("★ Featured")}</button>`
+      ? `<button class="chip chip-gold ${state.category === "featured" ? "active" : ""}" data-cat="featured">${t("★ Featured")}</button>`
       : "") +
     state.categories
       .map(
         (c) =>
-          `<button class="chip ${String(state.category) === String(c.id) ? "active" : ""}" data-cat="${c.id}">${escapeHTML(cName(c))}</button>`,
+          `<button class="chip ${String(state.category) === String(c.id) ? "active" : ""}" data-cat="${c.id}" style="--ch:${catHue(c.id)}">${escapeHTML(cName(c))}</button>`,
       )
       .join("");
   $$(".chip").forEach(
@@ -1936,7 +1938,7 @@ function renderProducts() {
         cat = cName({ name: p.category_name, name_ar: p.category_name_ar });
       if (compact) {
         const low = !soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5;
-        return `<article class="pp-row${soldOut ? " is-out" : ""}"><a class="pp-thumb" href="${href}" tabindex="-1" aria-hidden="true">${stockImg(p.image_url, name, stockArtFor(p))}</a><a class="pp-info" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><span class="pp-name">${escapeHTML(name)}</span><span class="pp-sub">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}${low ? ` · <b class="pp-low">${escapeHTML(t("Only {0} left", totalStock))}</b>` : ""}</span></a><div class="pp-price"><b>${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}</b>${sale ? `<s>${money(displayOld)}</s>` : ""}</div><button type="button" class="add-btn pp-add" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></article>`;
+        return `<article class="pp-row${soldOut ? " is-out" : ""}${sale ? " is-sale" : ""}" style="--ch:${catHue(p.category_id)}"><a class="pp-thumb" href="${href}" tabindex="-1" aria-hidden="true">${stockImg(p.image_url, name, stockArtFor(p))}${sale ? `<em class="pp-sale">${escapeHTML(saveBadgeText(displayPrice, displayOld))}</em>` : ""}</a><a class="pp-info" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}">${cat ? `<span class="pp-cat">${escapeHTML(cat)}</span>` : ""}<span class="pp-name">${escapeHTML(name)}</span><span class="pp-sub">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}${low ? ` · <b class="pp-low">${escapeHTML(t("Only {0} left", totalStock))}</b>` : ""}</span></a><div class="pp-price"><b>${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}</b>${sale ? `<s>${money(displayOld)}</s>` : ""}</div><button type="button" class="add-btn pp-add" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></article>`;
       }
       return `<article class="product-card product-card-link"><div class="product-image">${stockImg(p.image_url, name, stockArtFor(p))}<a class="product-image-link" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"></a>${favoriteButton(p)}${quickViewButton(p)}${sale ? `<span class="sale">${escapeHTML(saveBadgeText(displayPrice, displayOld))}</span>` : ""}<span class="stock${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? " low" : ""}">${!soldOut && p.delivery_type === "code" && showStock && totalStock > 0 && totalStock <= 5 ? t("Only {0} left", totalStock) : badge}</span></div><a class="product-card-anchor" href="${href}" aria-label="${escapeHTML(t("View {0}", name))}"><div class="product-body"><div class="product-cat">${escapeHTML(cat || t("Digital"))}</div><div class="product-name" title="${escapeHTML(name)}">${escapeHTML(name)}</div><div class="product-meta">${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || dlv(p))}</div></div></a><div class="price-row"><div class="price">${variants.length ? `${t("From")} ` : ""}${money(displayPrice)}${sale ? `<span class="old">${money(displayOld)}</span><small class="save-line">${escapeHTML(t("You save {0}", moneyShort(displayOld - displayPrice)))}</small>` : ""}${rewardPreview(displayPrice)}</div><button type="button" class="add-btn" data-add="${p.id}" ${soldOut ? "disabled" : ""}>${soldOut ? t("Sold out") : variants.length ? t("Choose options") : t("Add")}</button></div></article>`;
     })
@@ -4203,22 +4205,22 @@ async function adminProducts(main) {
   const cur = escapeHTML(state.settings.store_currency || "EGP");
   const opt = (v, label) => `<option value="${v}" ${adminProdView.status === v ? "selected" : ""}>${label}</option>`;
   const catOpts = (id) => `<option value="">No category</option>${state.categories.map((c) => `<option value="${c.id}" ${String(c.id) === String(id) ? "selected" : ""}>${escapeHTML(c.name)}</option>`).join("")}`;
-  main.innerHTML = `<div class="admin-top"><div><h2>Products</h2><p class="admin-sub" id="pCount" aria-live="polite">Loading…</p></div><div class="admin-top-actions"><details class="adm-menu" id="pMenu"><summary class="btn ghost">Import &amp; tools <span aria-hidden="true">▾</span></summary><div class="adm-menu-pop">
+  main.innerHTML = `<div class="pg-products"><div class="admin-top pg-top"><div><span class="pg-eyebrow">Catalogue</span><h2>Products</h2><p class="admin-sub" id="pCount" aria-live="polite">Loading…</p></div><div class="admin-top-actions"><details class="adm-menu" id="pMenu"><summary class="btn ghost">Import &amp; tools <span aria-hidden="true">▾</span></summary><div class="adm-menu-pop">
       <div class="adm-menu-h">Spreadsheet</div><button type="button" id="pExport">Export CSV</button><button type="button" id="pImport">Import CSV</button><button type="button" id="pTemplate">Download template</button>
       <div class="adm-menu-h">Steam</div><button type="button" id="pSteamTop">Fill with top Steam games</button><button type="button" id="pSteam">Import Steam games</button>
       <div class="adm-menu-h">AI</div><button type="button" id="pAiBulk">Fill missing text</button><button type="button" id="pAiSeo">Write SEO text</button></div></details><button class="btn primary" id="addProduct" type="button">Add product</button></div></div>
-    <div class="adm-toolbar"><input id="pSearch" type="search" placeholder="Search by name, platform, category…" value="${escapeHTML(adminProdView.q)}" aria-label="Search products"><select id="pStatus" aria-label="Filter products">${opt("all", "All products")}${opt("active", "Visible")}${opt("hidden", "Hidden")}${opt("featured", "Featured")}${opt("code", "Digital codes")}${opt("manual", "Manual delivery")}${opt("out", "Out of stock")}</select></div>
+    <div class="adm-toolbar pg-toolbar"><label class="pg-search"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="pSearch" type="search" placeholder="Search by name, platform, category…" value="${escapeHTML(adminProdView.q)}" aria-label="Search products"></label><div class="pg-chips" id="pStatus" role="group" aria-label="Filter products">${[["all","All","c-all"],["active","Visible","c-ok"],["hidden","Hidden","c-mute"],["featured","Featured","c-gold"],["code","Digital codes","c-cyan"],["manual","Manual","c-pink"],["out","Out of stock","c-bad"]].map(([v,l,c])=>`<button type="button" class="pg-chip ${c} ${adminProdView.status===v?"on":""}" data-status="${v}" aria-pressed="${adminProdView.status===v}">${l}</button>`).join("")}</div></div>
     <div class="adm-selnote" id="pSelNote" hidden></div>
-    <div class="admin-panel adm-table-panel"><div class="table-wrap"><table class="admin-table adm-products"><thead><tr><th class="c-sel"><input type="checkbox" id="bulkAll" aria-label="Select all on this page"></th><th>Product</th><th class="c-cat">Category</th><th class="c-price">Price</th><th class="c-stock">Stock</th><th class="c-vis">Visible</th><th class="c-feat">Featured</th><th class="c-act"></th></tr></thead><tbody id="pBody"><tr><td colspan="8" class="empty">Loading products…</td></tr></tbody></table></div></div>
+    <div class="admin-panel adm-table-panel"><div class="table-wrap"><table class="admin-table adm-products pg-table"><thead><tr><th class="c-sel"><input type="checkbox" id="bulkAll" aria-label="Select all on this page"></th><th class="c-name">Product</th><th class="c-cat">Category</th><th class="c-price">Price</th><th class="c-stock">Stock</th><th class="c-vis">Visible</th><th class="c-feat">Featured</th><th class="c-act"></th></tr></thead><tbody id="pBody"><tr><td colspan="8" class="empty">Loading products…</td></tr></tbody></table></div></div>
     <div id="pPager" class="prod-pager"></div>
-    <div class="adm-bulk" id="bulkBar" hidden></div>`;
+    <div class="adm-bulk" id="bulkBar" hidden></div></div>`;
   const rowHTML = (p) => {
     const stock = p.delivery_type === "code" ? Number(p.stock) || 0 : null;
-    return `<tr data-id="${p.id}" class="${p.active ? "" : "is-off"}"><td class="c-sel"><input type="checkbox" class="bulkSel" value="${p.id}" ${picked.has(p.id) ? "checked" : ""} aria-label="Select ${escapeHTML(p.name)}"></td>
-    <td><button type="button" class="p-name" data-edit-product="${p.id}"><span class="p-thumb">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : ""}</span><span class="p-text"><b>${escapeHTML(p.name)}</b><small>${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || (p.delivery_type === "code" ? "Digital code" : "Manual delivery"))}</small></span></button></td>
-    <td class="c-cat"><select class="cell-in" data-qcat="${p.id}" aria-label="Category">${catOpts(p.category_id)}</select></td>
-    <td class="c-price"><span class="money-in"><input class="cell-in" type="number" step="0.01" min="0" value="${p.price}" data-qprice="${p.id}" aria-label="Price"><i>${cur}</i></span></td>
-    <td class="c-stock">${stock === null ? `<span class="pill">Manual</span>` : `<span class="pill ${stock === 0 ? "pill-bad" : stock <= (Number(p.low_stock_threshold) || 3) ? "pill-warn" : "pill-ok"}">${stock} left</span>`}</td>
+    return `<tr data-id="${p.id}" class="pg-row ${p.active ? "" : "is-off"}" style="--ch:${((Number(p.category_id) || 0) * 53 + 262) % 360}"><td class="c-sel"><input type="checkbox" class="bulkSel" value="${p.id}" ${picked.has(p.id) ? "checked" : ""} aria-label="Select ${escapeHTML(p.name)}"></td>
+    <td class="c-name"><button type="button" class="p-name" data-edit-product="${p.id}"><span class="p-thumb">${p.image_url ? `<img src="${escapeHTML(p.image_url)}" alt="" loading="lazy">` : ""}</span><span class="p-text"><b>${escapeHTML(p.name)}</b><small>${escapeHTML([p.platform, p.region].filter(Boolean).join(" · ") || (p.delivery_type === "code" ? "Digital code" : "Manual delivery"))}</small></span></button></td>
+    <td class="c-cat" data-l="Category"><select class="cell-in" data-qcat="${p.id}" aria-label="Category">${catOpts(p.category_id)}</select></td>
+    <td class="c-price" data-l="Price"><span class="money-in"><input class="cell-in" type="number" step="0.01" min="0" value="${p.price}" data-qprice="${p.id}" aria-label="Price"><i>${cur}</i></span></td>
+    <td class="c-stock" data-l="Stock">${stock === null ? `<span class="pill">Manual</span>` : `<span class="pill ${stock === 0 ? "pill-bad" : stock <= (Number(p.low_stock_threshold) || 3) ? "pill-warn" : "pill-ok"}">${stock} left</span>`}</td>
     <td class="c-vis"><label class="sw" title="${p.active ? "Visible in the store" : "Hidden from the store"}"><input type="checkbox" data-qactive="${p.id}" ${p.active ? "checked" : ""} aria-label="Visible in the store"><span></span></label></td>
     <td class="c-feat"><button type="button" class="star ${p.featured ? "on" : ""}" data-qfeat="${p.id}" aria-pressed="${p.featured ? "true" : "false"}" aria-label="Featured" title="Featured">★</button></td>
     <td class="c-act"><button type="button" class="mini" data-edit-product="${p.id}">Edit</button><button type="button" class="mini danger" data-delete-product="${p.id}" aria-label="Delete ${escapeHTML(p.name)}" title="Delete">✕</button></td></tr>`;
@@ -4344,7 +4346,12 @@ async function adminProducts(main) {
   $("#pAiSeo").onclick = async () => aiSeoBulk(await allRows());
   let timer;
   $("#pSearch").oninput = (e) => { clearTimeout(timer); timer = setTimeout(() => { adminProdView.q = e.target.value; adminProdView.page = 1; allMode = false; load(); }, 250); };
-  $("#pStatus").onchange = (e) => { adminProdView.status = e.target.value; adminProdView.page = 1; allMode = false; load(); };
+  $("#pStatus").onclick = (e) => {
+    const b = e.target.closest("[data-status]"); if (!b) return;
+    adminProdView.status = b.dataset.status; adminProdView.page = 1; allMode = false;
+    $$(".pg-chip", $("#pStatus")).forEach((c) => { const on = c === b; c.classList.toggle("on", on); c.setAttribute("aria-pressed", on); });
+    load();
+  };
   $("#pPager").onclick = (e) => {
     const b = e.target.closest("[data-pp]"); if (!b || b.disabled) return;
     const k = b.dataset.pp, v = adminProdView;
@@ -7726,6 +7733,8 @@ function skRowsHTML() {
     [".search-suggestion", "img"], // search dropdown
     [".hero-product-tile", ".hero-product-art img"], // hero
     [".category-card", ".category-art img"], // category cards (product art)
+    [".pg-row", ".p-thumb img"], // admin Products tab rows
+    [".pp-row", ".pp-thumb img"], // storefront Products page rows
     [".qv", ".qv-media img"], // quick view
     [".product-page:not(.sk-page)", ".pgal-slide img, .product-detail-media img"], // product page
     ["#toast", "img.toast-thumb"], // added-to-cart toast
@@ -7835,7 +7844,7 @@ function renderProductsPage() {
   state.freshProducts = false;
   const qs = new URLSearchParams(location.search);
   if (qs.has("q")) state.query = (qs.get("q") || "").slice(0, 120);
-  $("main").innerHTML = `<section class="products-page container"><nav class="product-breadcrumb" aria-label="Breadcrumb"><a href="/" data-home data-i18n="Home">Home</a><span>/</span><span data-i18n="Products">Products</span></nav><div class="pp-head"><h1 data-i18n="Products">Products</h1></div><div id="ppGames"></div></div><div class="pp-toolbar"><div class="search-wrap"><label class="search"><span>⌕</span><input id="search" type="search" autocomplete="off" enterkeyhint="search" placeholder="Search..." data-i18n-ph="Search..."></label><div id="searchSuggestions" class="search-suggestions" hidden></div></div><select id="sort" aria-label="Sort"><option value="featured" data-i18n="Featured">Featured</option><option value="newest" data-i18n="Newest">Newest</option><option value="price-low" data-i18n="Price: low to high">Price: low to high</option><option value="price-high" data-i18n="Price: high to low">Price: high to low</option><option value="name" data-i18n="Name">Name</option></select></div><div id="categories" class="chips"></div><div id="ppGenres" class="pp-genres"></div><div class="discovery-toolbar"><div class="discovery-toolbar-copy"><span class="eyebrow" data-i18n="QUICK FILTERS">QUICK FILTERS</span><span id="discoverySummary" class="discovery-summary"></span></div><div id="smartFilters" class="smart-filters" aria-label="Product filters"></div></div><div id="productGrid" class="product-grid pp-list"></div></section>`;
+  $("main").innerHTML = `<section class="products-page container"><nav class="product-breadcrumb" aria-label="Breadcrumb"><a href="/" data-home data-i18n="Home">Home</a><span>/</span><span data-i18n="Products">Products</span></nav><div class="pp-head"><h1 data-i18n="Products">Products</h1><span class="pp-count" aria-hidden="true">${state.products.length}</span></div><div id="ppGames"></div><div class="pp-toolbar"><div class="search-wrap"><label class="search"><span>⌕</span><input id="search" type="search" autocomplete="off" enterkeyhint="search" placeholder="Search..." data-i18n-ph="Search..."></label><div id="searchSuggestions" class="search-suggestions" hidden></div></div><select id="sort" aria-label="Sort"><option value="featured" data-i18n="Featured">Featured</option><option value="newest" data-i18n="Newest">Newest</option><option value="price-low" data-i18n="Price: low to high">Price: low to high</option><option value="price-high" data-i18n="Price: high to low">Price: high to low</option><option value="name" data-i18n="Name">Name</option></select></div><div id="categories" class="chips"></div><div id="ppGenres" class="pp-genres"></div><div class="discovery-toolbar"><div class="discovery-toolbar-copy"><span class="eyebrow" data-i18n="QUICK FILTERS">QUICK FILTERS</span><span id="discoverySummary" class="discovery-summary"></span></div><div id="smartFilters" class="smart-filters" aria-label="Product filters"></div></div><div id="productGrid" class="product-grid pp-list"></div></section>`;
   translateStatic();
   renderCategories();
   renderGamesExtras();
