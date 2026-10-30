@@ -21,3 +21,4 @@ CREATE INDEX IF NOT EXISTS idx_products_active ON products(active);
 CREATE INDEX IF NOT EXISTS idx_inventory_stock ON inventory(product_id,status);
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
+CREATE TABLE IF NOT EXISTS kd_agent_actions(id INTEGER PRIMARY KEY AUTOINCREMENT,admin_user_id INTEGER,tool TEXT NOT NULL,args TEXT NOT NULL DEFAULT '{}',plan TEXT NOT NULL DEFAULT '{}',status TEXT NOT NULL DEFAULT 'pending',prior TEXT DEFAULT '',error TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,applied_at TEXT,undone_at TEXT);

@@ -354,7 +354,7 @@ const DEFAULTS = {
   email_winback_days: "45",
   email_winback_code: "",
 };
-const SCHEMA_VERSION = 24; // 24 (V94): products.genres (Steam genres, comma separated, for the genre mini-categories in Games) // 23 (V88): products.steam_app_id/steam_auto/steam_price_at (Steam import + automatic prices) // 22: products.gift_type/gift_label(+_ar) and order_items.gift_target (Steam gift products: the buyer gives a friend code or invite link, you send the gift by hand) // 21: products.redeem_steps (+_ar) "how to redeem" text // 20: email automations (saved carts, email log, opt-in + reminder flags) // 19: promo_campaigns (many promo campaigns for /deals, optionally also on the homepage) // 18: products.gallery (extra product images, JSON list) // 17: products SEO fields + image_original (AI SEO text, AI image cleanup) // 16: users.points_redeemed (V41 added the column but never bumped the version, so existing DBs skipped the migration)
+const SCHEMA_VERSION = 25; // 25 (V97): kd_agent_actions (AI admin assistant: planned/applied/undone actions) // 24 (V94): products.genres (Steam genres, comma separated, for the genre mini-categories in Games) // 23 (V88): products.steam_app_id/steam_auto/steam_price_at (Steam import + automatic prices) // 22: products.gift_type/gift_label(+_ar) and order_items.gift_target (Steam gift products: the buyer gives a friend code or invite link, you send the gift by hand) // 21: products.redeem_steps (+_ar) "how to redeem" text // 20: email automations (saved carts, email log, opt-in + reminder flags) // 19: promo_campaigns (many promo campaigns for /deals, optionally also on the homepage) // 18: products.gallery (extra product images, JSON list) // 17: products SEO fields + image_original (AI SEO text, AI image cleanup) // 16: users.points_redeemed (V41 added the column but never bumped the version, so existing DBs skipped the migration)
 // Columns added over time. Each is added only if missing (additive, never destructive).
 const COLUMN_ADDS = [
   ["discounts", "max_uses", "INTEGER"],
@@ -467,6 +467,7 @@ const SCHEMA_TABLES = [
   "CREATE TABLE IF NOT EXISTS kd_saved_carts(user_id INTEGER PRIMARY KEY,items TEXT NOT NULL DEFAULT '[]',lang TEXT DEFAULT 'ar',updated_at TEXT NOT NULL,reminded_at TEXT)",
   "CREATE TABLE IF NOT EXISTS kd_email_log(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,to_email TEXT NOT NULL,subject TEXT DEFAULT '',ok INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
   "CREATE INDEX IF NOT EXISTS idx_email_log_id ON kd_email_log(id)",
+  "CREATE TABLE IF NOT EXISTS kd_agent_actions(id INTEGER PRIMARY KEY AUTOINCREMENT,admin_user_id INTEGER,tool TEXT NOT NULL,args TEXT NOT NULL DEFAULT '{}',plan TEXT NOT NULL DEFAULT '{}',status TEXT NOT NULL DEFAULT 'pending',prior TEXT DEFAULT '',error TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,applied_at TEXT,undone_at TEXT)",
 ];
 async function ensureSchema(env) {
   if (schemaReady) return;
@@ -3011,6 +3012,469 @@ async function emailDelivered(env, ctx, order, origin) {
   }
   sendEmail(env, ctx, { to, ...mailTemplate(order.lang, "delivered", { order: order.order_number, extra, redeem, url: origin ? `${origin}/?track=${encodeURIComponent(order.order_number)}` : "" }, s.store_name) });
 }
+// ===================== V97: AI admin assistant =====================
+// A chat in the admin panel. The owner types what he wants ("change X's price to 450", "find pictures for Y", "run a campaign for Z")
+// and Gemini (the key already set in Settings > AI auto-fill) picks from the tools below.
+//  - Reading tools (search, look up, research, find pictures, sales) run at once.
+//  - Tools that CHANGE something are first turned into a plan the owner sees as a card (Apply / Cancel). They only run when he
+//    presses Apply, or at once when "apply small changes automatically" is on and the change is small and safe.
+//  - Every applied action goes to the audit log and keeps what it replaced, so it can be undone from the card.
+const AGENT_WRITE = new Set(["set_price", "adjust_prices", "set_visibility", "set_featured", "set_image", "update_text", "create_discount", "create_campaign", "set_campaign_active"]);
+// These are public-facing or touch many rows, so they always wait for Apply, even when automatic mode is on.
+const AGENT_ALWAYS_ASK = new Set(["create_discount", "create_campaign", "adjust_prices"]);
+const AGENT_MAX_STEPS = 6;
+const agentObj = (properties, required = []) => (Object.keys(properties).length ? { type: "object", properties, ...(required.length ? { required } : {}) } : undefined);
+const AGENT_DECLS = [
+  { name: "search_products", description: "Find products by name (English or Arabic), slug, platform or category. Returns id, name, price (EGP), old price, cost, stock, visibility, category and whether the product has variants. ALWAYS call this before changing or promoting a product; never guess an id.", parameters: agentObj({ query: { type: "string", description: "Words from the product name, e.g. 'elden ring'" }, limit: { type: "integer", description: "Max results, default 8" } }, ["query"]) },
+  { name: "get_product", description: "Full details of one product: description, variants with their own prices, image, Steam info.", parameters: agentObj({ product_id: { type: "integer" } }, ["product_id"]) },
+  { name: "list_campaigns", description: "List the promo campaigns (banners on /deals and the homepage).", parameters: agentObj({}) },
+  { name: "list_discounts", description: "List discount codes with their type, amount, expiry and use counts.", parameters: agentObj({}) },
+  { name: "sales_report", description: "Paid revenue, order count and best sellers for the last N days.", parameters: agentObj({ days: { type: "integer", description: "1 to 365, default 7" } }) },
+  { name: "research_web", description: "Look something up on the web (what a product is, who publishes it, what a brand's offer is). Returns a short answer with sources. Never use it for the store's own prices or stock.", parameters: agentObj({ question: { type: "string" } }, ["question"]) },
+  { name: "find_images", description: "Find candidate pictures for a product (Steam art for games, otherwise the official page's picture). The owner sees them as a picker and chooses one. Give product_id when the product exists in the store.", parameters: agentObj({ product_id: { type: "integer" }, query: { type: "string", description: "Product name to search when there is no product_id" } }) },
+  { name: "set_price", description: "Change one product's selling price in EGP (or one variant's price when the product has variants). Set mark_as_sale true to show the previous price crossed out.", parameters: agentObj({ product_id: { type: "integer" }, price: { type: "number" }, variant_id: { type: "integer" }, mark_as_sale: { type: "boolean" } }, ["product_id", "price"]) },
+  { name: "adjust_prices", description: "Raise or lower prices by a percentage for several products (give product_ids or a category name). Negative percent = discount; with mark_as_sale the old price is shown crossed out. Skips products with variants, Steam auto-priced games, and anything that would drop below cost.", parameters: agentObj({ product_ids: { type: "array", items: { type: "integer" } }, category: { type: "string" }, percent: { type: "number" }, mark_as_sale: { type: "boolean" } }, ["percent"]) },
+  { name: "set_visibility", description: "Show or hide a product in the store.", parameters: agentObj({ product_id: { type: "integer" }, active: { type: "boolean" } }, ["product_id", "active"]) },
+  { name: "set_featured", description: "Feature or un-feature a product (featured products are listed first).", parameters: agentObj({ product_id: { type: "integer" }, featured: { type: "boolean" } }, ["product_id", "featured"]) },
+  { name: "set_image", description: "Use a picture as a product's main image. image_url must be an https link taken from find_images or from the owner.", parameters: agentObj({ product_id: { type: "integer" }, image_url: { type: "string" } }, ["product_id", "image_url"]) },
+  { name: "update_text", description: "Change a product's English/Arabic description, Arabic name or search-result title/description. Plain text only, no invented facts.", parameters: agentObj({ product_id: { type: "integer" }, description: { type: "string" }, description_ar: { type: "string" }, name_ar: { type: "string" }, meta_title: { type: "string" }, meta_description: { type: "string" } }, ["product_id"]) },
+  { name: "create_discount", description: "Create a discount code. type is 'percentage' or 'fixed' (EGP). Only create one when the owner asked for a discount or gave the amount.", parameters: agentObj({ code: { type: "string", description: "Letters and digits, e.g. EID20" }, type: { type: "string", enum: ["percentage", "fixed"] }, amount: { type: "number" }, expires_at: { type: "string", description: "ISO date-time" }, min_order: { type: "number" }, product_id: { type: "integer" }, category: { type: "string" }, max_uses: { type: "integer" }, auto_apply: { type: "boolean" } }, ["code", "type", "amount"]) },
+  { name: "create_campaign", description: "Create a promo campaign banner for /deals (and optionally the homepage) with English and Arabic copy, linked products, an optional discount code and a schedule. Write the copy yourself. Never invent claims, countdowns or scarcity.", parameters: agentObj({ title: { type: "string" }, title_ar: { type: "string" }, eyebrow: { type: "string", description: "Tiny label above the title, max 60 chars" }, eyebrow_ar: { type: "string" }, body: { type: "string", description: "1-2 short sentences, max 500 chars" }, body_ar: { type: "string" }, cta_text: { type: "string", description: "Button text, max 40 chars" }, cta_text_ar: { type: "string" }, link: { type: "string", description: "A store path like /deals or /product-slug, or an https link" }, image_url: { type: "string", description: "https artwork, usually the product's own picture" }, discount_code: { type: "string" }, product_ids: { type: "array", items: { type: "integer" } }, starts_at: { type: "string", description: "ISO date-time, omit to start now" }, ends_at: { type: "string", description: "ISO date-time" }, show_on_home: { type: "boolean" } }, ["title", "body"]) },
+  { name: "set_campaign_active", description: "Turn a campaign on or off.", parameters: agentObj({ campaign_id: { type: "integer" }, active: { type: "boolean" } }, ["campaign_id", "active"]) },
+];
+const agentNum = (v) => { const n = Number(v); return Number.isFinite(n) ? n : NaN; };
+const egp = (n) => `${money(n)} EGP`;
+const agentParse = (s, d = null) => { try { return JSON.parse(s); } catch { return d; } };
+const agentLike = (w) => `%${String(w).toLowerCase().replace(/[%_\\]/g, "")}%`;
+async function agentProduct(env, id) {
+  return await env.DB.prepare("SELECT p.id,p.name,p.name_ar,p.slug,p.price,p.old_price,p.cost_price,p.active,p.featured,p.image_url,p.image_original,p.platform,p.steam_app_id,p.steam_auto,p.gift_type,p.description,p.description_ar,p.meta_title,p.meta_description,p.category_id,(SELECT COUNT(*) FROM product_variants v WHERE v.product_id=p.id) variants FROM products p WHERE p.id=?").bind(Math.floor(Number(id)) || 0).first();
+}
+async function agentSearch(env, query, limit = 8) {
+  const words = clean(query).toLowerCase().split(/\s+/).map((w) => w.replace(/[%_\\]/g, "")).filter(Boolean).slice(0, 5);
+  if (!words.length) return [];
+  const where = words.map(() => "(lower(p.name) LIKE ? OR lower(COALESCE(p.name_ar,'')) LIKE ? OR lower(p.slug) LIKE ? OR lower(COALESCE(c.name,'')) LIKE ? OR lower(COALESCE(p.platform,'')) LIKE ?)").join(" AND ");
+  const binds = words.flatMap((w) => [agentLike(w), agentLike(w), agentLike(w), agentLike(w), agentLike(w)]);
+  const rows = (await env.DB.prepare(`SELECT p.id,p.name,p.name_ar,p.price,p.old_price,p.cost_price,p.active,p.featured,p.delivery_type,p.steam_app_id,p.steam_auto,c.name category,(SELECT COUNT(*) FROM inventory i WHERE i.product_id=p.id AND i.status='available') stock,(SELECT COUNT(*) FROM product_variants v WHERE v.product_id=p.id) variants FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE ${where} ORDER BY (lower(p.name)=?) DESC,p.active DESC,p.id DESC LIMIT ?`).bind(...binds, clean(query).toLowerCase(), Math.max(1, Math.min(15, Math.floor(Number(limit)) || 8))).all()).results;
+  return rows.map((r) => ({ id: r.id, name: r.name, name_ar: r.name_ar || "", price: r.price, old_price: r.old_price, cost: r.cost_price, visible: !!r.active, featured: !!r.featured, category: r.category || "", stock: r.delivery_type === "code" ? r.stock : "manual", variants: r.variants, steam_auto_price: !!(r.steam_app_id && r.steam_auto) }));
+}
+// ---- pictures ----
+const AGENT_UA = { "User-Agent": "Mozilla/5.0 (compatible; KardivoStore/1.0)" };
+async function agentImageOk(u) {
+  try {
+    const r = await fetch(u, { headers: { ...AGENT_UA, accept: "image/*" }, signal: AbortSignal.timeout(8000) });
+    const type = (r.headers.get("content-type") || "").split(";")[0].trim().toLowerCase(), len = Number(r.headers.get("content-length") || 0);
+    try { await r.body?.cancel(); } catch {}
+    return r.ok && /^image\/(jpeg|png|webp|gif|avif)$/.test(type) && len < 6 * 1024 * 1024;
+  } catch { return false; }
+}
+async function agentPageImages(pageUrl) {
+  try {
+    const r = await fetch(pageUrl, { headers: { ...AGENT_UA, accept: "text/html" }, redirect: "follow", signal: AbortSignal.timeout(8000) });
+    if (!r.ok || !/html/i.test(r.headers.get("content-type") || "")) return [];
+    const html = (await r.text()).slice(0, 400000), out = [];
+    for (const m of html.matchAll(/<meta\b[^>]*>/gi)) {
+      const tag = m[0];
+      if (!/(property|name)\s*=\s*["'](og:image(:secure_url)?|twitter:image(:src)?)["']/i.test(tag)) continue;
+      const c = tag.match(/content\s*=\s*["']([^"']+)["']/i);
+      if (c) try { const u = new URL(c[1].replace(/&amp;/g, "&"), r.url || pageUrl); if (u.protocol === "https:") out.push(u.toString()); } catch {}
+    }
+    return [...new Set(out)].slice(0, 2);
+  } catch { return []; }
+}
+async function agentFindImages(env, req, cfg, args) {
+  const p = args.product_id ? await agentProduct(env, args.product_id) : null;
+  if (args.product_id && !p) return { error: `No product with id ${args.product_id}.` };
+  const name = clean(p?.name || args.query).slice(0, 120);
+  if (!name) return { error: "Give a product_id or a name to search." };
+  const found = [], add = (url, source) => { if (url && !found.some((f) => f.url === url)) found.push({ url, source }); };
+  const s = await allSettings(env);
+  let appId = p?.steam_app_id ? Number(p.steam_app_id) : 0;
+  if (!appId) {
+    // Steam is asked for any product, but a hit only counts when the names are the same once words like "key", "gift" or "PC" are ignored.
+    // (So "Elden Ring Nightreign" never gets the art of "Elden Ring", and "Hades" never gets "Hades II".)
+    const norm = (x) => String(x || "").toLowerCase().replace(/\b(steam|gift|key|code|card|pc|global|digital|region|free)\b/g, " ").replace(/[^a-z0-9]+/g, "");
+    try {
+      const r = await fetch(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(name)}&l=english&cc=us`, { headers: AGENT_UA, signal: AbortSignal.timeout(8000) });
+      const hit = ((await r.json())?.items || []).slice(0, 3).find((x) => x?.id && norm(x.name) && norm(x.name) === norm(name));
+      if (hit) appId = Number(hit.id);
+    } catch {}
+  }
+  if (appId) {
+    const f = await steamFetch(appId, s);
+    if (f.data) {
+      add(f.data.header_image, "Steam header");
+      add(f.data.capsule_image, "Steam capsule");
+      for (const sc of (f.data.screenshots || []).slice(0, 2)) add(sc.path_full, "Steam screenshot");
+    }
+  }
+  if (found.length < 3 && cfg.key) {
+    try {
+      const res = await geminiGenerate(cfg, cfg.model, {
+        contents: [{ role: "user", parts: [{ text: `Find up to 4 official or reputable web pages (publisher, brand or major store product pages) that show the official cover art or logo of: "${name}". Reply ONLY with JSON: {"pages":["https://..."]}` }] }],
+        tools: [{ google_search: {} }], generationConfig: { temperature: 0.1, maxOutputTokens: 600 },
+      }, 30000);
+      const d = await res.json().catch(() => ({})), cand = d?.candidates?.[0], urls = new Set();
+      const text = (cand?.content?.parts || []).map((x) => x.text || "").join("");
+      const obj = agentParse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1), {});
+      for (const u of Array.isArray(obj.pages) ? obj.pages : []) if (/^https:\/\//i.test(String(u))) urls.add(String(u));
+      for (const c of cand?.groundingMetadata?.groundingChunks || []) if (c.web?.uri) urls.add(c.web.uri);
+      const pages = await Promise.all([...urls].slice(0, 5).map(agentPageImages));
+      pages.flat().forEach((u) => add(u, "Official page"));
+    } catch {}
+  }
+  const checked = await Promise.all(found.slice(0, 8).map(async (f) => (/steamstatic\.com|steamcdn|akamai/.test(f.url) ? f : (await agentImageOk(f.url)) ? f : null)));
+  const images = checked.filter(Boolean);
+  return { product_id: p?.id || null, product_name: name, images, none: !images.length };
+}
+// ---- planning (no writes) ----
+async function agentPlan(env, req, tool, a = {}) {
+  const origin = clean(env.PUBLIC_ORIGIN) || new URL(req.url).origin;
+  switch (tool) {
+    case "set_price": {
+      const p = await agentProduct(env, a.product_id);
+      if (!p) return { error: `No product with id ${a.product_id}. Use search_products first.` };
+      const price = money(agentNum(a.price));
+      if (!(price > 0) || price > 1e6) return { error: "The price must be a number above 0." };
+      let cur = p, variant = null;
+      if (p.variants > 0) {
+        const vs = (await env.DB.prepare("SELECT id,name,price,old_price FROM product_variants WHERE product_id=? ORDER BY sort_order,id").bind(p.id).all()).results;
+        if (!a.variant_id) return { error: `"${p.name}" has variants, so each option has its own price: ${vs.map((v) => `#${v.id} ${v.name} (${v.price})`).join("; ")}. Ask the owner which one.` };
+        variant = vs.find((v) => v.id === Math.floor(Number(a.variant_id)));
+        if (!variant) return { error: "That variant does not belong to this product." };
+        cur = variant;
+      }
+      let oldPrice = cur.old_price == null ? null : Number(cur.old_price);
+      if (a.mark_as_sale && price < Number(cur.price)) oldPrice = Number(cur.price);
+      else if (oldPrice != null && price >= oldPrice) oldPrice = null;
+      const pct = ((price - Number(cur.price)) / Math.max(0.01, Number(cur.price))) * 100, warnings = [];
+      const steamOff = !variant && !!(p.steam_app_id && p.steam_auto && p.gift_type === "steam");
+      let risky = Math.abs(pct) > 30;
+      if (Math.abs(pct) > 30) warnings.push(`That is a ${Math.abs(Math.round(pct))}% ${pct < 0 ? "drop" : "rise"}.`);
+      if (p.cost_price != null && p.cost_price !== "" && price < Number(p.cost_price)) { risky = true; warnings.push(`Below your cost price (${egp(p.cost_price)}).`); }
+      if (steamOff) warnings.push("This game is priced automatically from Steam. Applying turns that off for this game so your price stays.");
+      const label = `${p.name}${variant ? ` (${variant.name})` : ""}`;
+      return { plan: { summary: `Change the price of ${label} to ${egp(price)}`, lines: [`${label}: ${egp(cur.price)} → ${egp(price)} (${pct >= 0 ? "+" : ""}${Math.round(pct)}%)`, ...(a.mark_as_sale && oldPrice ? [`Shown as a sale with ${egp(oldPrice)} crossed out`] : [])], warnings, risky, below_cost: p.cost_price != null && price < Number(p.cost_price), image: p.image_url || "", args: { product_id: p.id, variant_id: variant?.id || null, price, old_price: oldPrice, steam_off: steamOff } } };
+    }
+    case "adjust_prices": {
+      const pct = agentNum(a.percent);
+      if (!Number.isFinite(pct) || pct === 0 || pct < -60 || pct > 100) return { error: "The percentage must be between -60 and +100 and not zero." };
+      let rows = [];
+      const ids = [...new Set((Array.isArray(a.product_ids) ? a.product_ids : []).map((n) => Math.floor(Number(n))).filter((n) => n > 0))].slice(0, 40);
+      if (ids.length) rows = (await env.DB.prepare(`SELECT id,name,price,old_price,cost_price,steam_app_id,steam_auto,gift_type,(SELECT COUNT(*) FROM product_variants v WHERE v.product_id=products.id) variants FROM products WHERE id IN (${ids.map(() => "?").join(",")})`).bind(...ids).all()).results;
+      else if (clean(a.category)) rows = (await env.DB.prepare("SELECT p.id,p.name,p.price,p.old_price,p.cost_price,p.steam_app_id,p.steam_auto,p.gift_type,(SELECT COUNT(*) FROM product_variants v WHERE v.product_id=p.id) variants FROM products p JOIN categories c ON c.id=p.category_id WHERE lower(c.name)=lower(?) AND p.active=1 LIMIT 40").bind(clean(a.category)).all()).results;
+      else return { error: "Give product_ids or a category name." };
+      if (!rows.length) return { error: "No matching products." };
+      const items = [], skipped = [];
+      for (const r of rows) {
+        if (r.variants > 0) { skipped.push(`${r.name} (has variants)`); continue; }
+        if (r.steam_app_id && r.steam_auto && r.gift_type === "steam") { skipped.push(`${r.name} (Steam auto price)`); continue; }
+        let np = Number(r.price) * (1 + pct / 100);
+        np = np >= 20 ? Math.round(np) : money(np);
+        if (!(np > 0) || (r.cost_price != null && r.cost_price !== "" && np < Number(r.cost_price))) { skipped.push(`${r.name} (would go below cost)`); continue; }
+        let op = r.old_price == null ? null : Number(r.old_price);
+        if (a.mark_as_sale && np < Number(r.price)) op = Number(r.price); else if (op != null && np >= op) op = null;
+        items.push({ id: r.id, name: r.name, from: Number(r.price), to: np, old_price: op });
+      }
+      if (!items.length) return { error: `Nothing can be changed. Skipped: ${skipped.join("; ") || "none"}.` };
+      return { plan: { summary: `${pct < 0 ? "Lower" : "Raise"} the price of ${items.length} product${items.length > 1 ? "s" : ""} by ${Math.abs(pct)}%`, lines: items.slice(0, 10).map((i) => `${i.name}: ${egp(i.from)} → ${egp(i.to)}`).concat(items.length > 10 ? [`…and ${items.length - 10} more`] : []), warnings: skipped.length ? [`Skipped: ${skipped.slice(0, 6).join("; ")}${skipped.length > 6 ? "…" : ""}`] : [], risky: true, image: "", args: { items } } };
+    }
+    case "set_visibility":
+    case "set_featured": {
+      const p = await agentProduct(env, a.product_id);
+      if (!p) return { error: `No product with id ${a.product_id}.` };
+      const key = tool === "set_visibility" ? "active" : "featured", on = key === "active" ? !!a.active : !!a.featured;
+      const text = key === "active" ? (on ? "Show" : "Hide") : (on ? "Feature" : "Remove from featured");
+      return { plan: { summary: `${text} ${p.name}`, lines: [`${p.name}: ${key === "active" ? (p.active ? "visible" : "hidden") : (p.featured ? "featured" : "not featured")} → ${on ? (key === "active" ? "visible" : "featured") : (key === "active" ? "hidden" : "not featured")}`], warnings: [], risky: false, image: p.image_url || "", args: { product_id: p.id, [key]: on } } };
+    }
+    case "set_image": {
+      const p = await agentProduct(env, a.product_id), u = clean(a.image_url);
+      if (!p) return { error: `No product with id ${a.product_id}.` };
+      if (!/^https:\/\/[^\s"'<>]{4,900}$/i.test(u)) return { error: "The picture link must start with https://." };
+      return { plan: { summary: `Use this picture for ${p.name}`, lines: [p.image_url ? "The current picture is kept so it can be restored." : "The product has no picture yet."], warnings: [], risky: false, image: u, args: { product_id: p.id, image_url: u } } };
+    }
+    case "update_text": {
+      const p = await agentProduct(env, a.product_id);
+      if (!p) return { error: `No product with id ${a.product_id}.` };
+      const lim = { description: 2500, description_ar: 2500, name_ar: 200, meta_title: 70, meta_description: 170 }, fields = {}, lines = [];
+      for (const k of Object.keys(lim)) if (a[k] !== undefined) {
+        const v = String(a[k] ?? "").replace(/\s+/g, " ").trim().slice(0, lim[k]);
+        fields[k] = v; lines.push(`${k.replace(/_/g, " ")}: ${v.length > 140 ? v.slice(0, 140) + "…" : v || "(empty)"}`);
+      }
+      if (!lines.length) return { error: "No text fields were given." };
+      return { plan: { summary: `Update the text of ${p.name}`, lines, warnings: [], risky: false, image: p.image_url || "", args: { product_id: p.id, fields } } };
+    }
+    case "create_discount": {
+      const b = { code: clean(a.code).toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 40), type: a.type === "fixed" ? "fixed" : "percentage", amount: a.amount, min_order: a.min_order ?? 0, expires_at: a.expires_at || "" };
+      const err = validateDiscount(b);
+      if (err) return { error: err };
+      if (await env.DB.prepare("SELECT id FROM discounts WHERE code=?").bind(b.code).first()) return { error: `The code ${b.code} already exists. Pick another.` };
+      let productId = null, categoryId = null;
+      if (a.product_id) { const p = await agentProduct(env, a.product_id); if (!p) return { error: `No product with id ${a.product_id}.` }; productId = p.id; }
+      if (clean(a.category)) { const c = await env.DB.prepare("SELECT id FROM categories WHERE lower(name)=lower(?)").bind(clean(a.category)).first(); if (!c) return { error: `No category called ${a.category}.` }; categoryId = c.id; }
+      const warnings = [];
+      if (b.type === "percentage" && Number(b.amount) > 30) warnings.push("That is a big discount.");
+      if (a.auto_apply) warnings.push("Auto-apply means every matching cart gets it without typing the code.");
+      return { plan: { summary: `Create discount code ${b.code}`, lines: [`${b.type === "fixed" ? egp(b.amount) : b.amount + "%"} off${productId ? " one product" : categoryId ? ` ${a.category}` : " everything"}${Number(b.min_order) ? `, minimum order ${egp(b.min_order)}` : ""}`, b.expires_at ? `Expires ${new Date(Date.parse(b.expires_at)).toISOString().slice(0, 16).replace("T", " ")} UTC` : "No expiry date", ...(a.max_uses ? [`Limited to ${Math.floor(Number(a.max_uses))} uses`] : [])], warnings, risky: true, image: "", args: { ...b, product_id: productId, category_id: categoryId, max_uses: a.max_uses == null ? "" : Math.floor(Number(a.max_uses)) || 0, auto_apply: !!a.auto_apply } } };
+    }
+    case "create_campaign": {
+      const ids = [...new Set((Array.isArray(a.product_ids) ? a.product_ids : []).map((n) => Math.floor(Number(n))).filter((n) => n > 0))].slice(0, 24);
+      let prods = [];
+      if (ids.length) prods = (await env.DB.prepare(`SELECT id,name,slug,image_url FROM products WHERE id IN (${ids.map(() => "?").join(",")})`).bind(...ids).all()).results;
+      if (prods.length !== ids.length) return { error: "One of the product ids does not exist. Use search_products first." };
+      const abs = (u) => { u = clean(u); return u.startsWith("/") && !u.startsWith("//") ? origin + u : u; };
+      let link = clean(a.link) || (prods.length === 1 ? "/" + encodeURIComponent(prods[0].slug) : "/deals");
+      const b = { title: a.title, title_ar: a.title_ar, eyebrow: a.eyebrow, eyebrow_ar: a.eyebrow_ar, body: a.body, body_ar: a.body_ar, cta_text: a.cta_text, cta_text_ar: a.cta_text_ar, link, image_url: (u => (/^https:\/\//i.test(u) ? u : ""))(abs(a.image_url || (prods.length === 1 ? prods[0].image_url : ""))), discount_code: a.discount_code, product_ids: ids, starts_at: a.starts_at || "", ends_at: a.ends_at || "", active: true, show_on_home: !!a.show_on_home, sort_order: 0 };
+      const err = validateCampaign(b);
+      if (err) return { error: err };
+      const warnings = [];
+      const code = clean(b.discount_code).toUpperCase();
+      if (code && !(await env.DB.prepare("SELECT id FROM discounts WHERE code=?").bind(code).first())) warnings.push(`The code ${code} does not exist yet. Apply its discount card first.`);
+      if (!b.ends_at) warnings.push("No end date: it stays up until you turn it off.");
+      return { plan: { summary: `Create campaign: ${clean(b.title)}`, lines: [clean(b.title_ar) ? `${clean(b.title)}  /  ${clean(b.title_ar)}` : clean(b.title), clean(b.body), ...(prods.length ? [`Products: ${prods.map((x) => x.name).join(", ")}`] : []), `Button goes to ${link}${code ? ` · code ${code}` : ""}`, `${b.starts_at ? "From " + b.starts_at.slice(0, 16).replace("T", " ") : "Starts now"}${b.ends_at ? ", until " + b.ends_at.slice(0, 16).replace("T", " ") : ""}${b.show_on_home ? " · also on the homepage" : ""}`], warnings, risky: true, image: b.image_url, args: b } };
+    }
+    case "set_campaign_active": {
+      const c = await env.DB.prepare("SELECT id,title,active FROM promo_campaigns WHERE id=?").bind(Math.floor(Number(a.campaign_id)) || 0).first();
+      if (!c) return { error: `No campaign with id ${a.campaign_id}.` };
+      return { plan: { summary: `${a.active ? "Turn on" : "Turn off"} the campaign "${c.title}"`, lines: [`${c.title}: ${c.active ? "on" : "off"} → ${a.active ? "on" : "off"}`], warnings: [], risky: false, image: "", args: { campaign_id: c.id, active: !!a.active } } };
+    }
+  }
+  return { error: `Unknown action ${tool}.` };
+}
+// ---- applying (the only place that writes) ----
+async function agentExecute(env, req, tool, a) {
+  switch (tool) {
+    case "set_price": {
+      if (a.variant_id) {
+        const v = await env.DB.prepare("SELECT price,old_price FROM product_variants WHERE id=?").bind(a.variant_id).first();
+        if (!v) throw new Error("The variant no longer exists.");
+        await env.DB.prepare("UPDATE product_variants SET price=?,old_price=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(a.price, a.old_price, a.variant_id).run();
+        return { before: { variant_id: a.variant_id, price: v.price, old_price: v.old_price }, target: a.product_id };
+      }
+      const p = await env.DB.prepare("SELECT price,old_price,steam_auto FROM products WHERE id=?").bind(a.product_id).first();
+      if (!p) throw new Error("The product no longer exists.");
+      await env.DB.prepare("UPDATE products SET price=?,old_price=?,steam_auto=CASE WHEN ?=1 THEN 0 ELSE steam_auto END,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(a.price, a.old_price, a.steam_off ? 1 : 0, a.product_id).run();
+      return { before: { product_id: a.product_id, price: p.price, old_price: p.old_price, steam_auto: p.steam_auto }, target: a.product_id };
+    }
+    case "adjust_prices": {
+      const before = [], stmts = [];
+      for (const i of a.items) {
+        const p = await env.DB.prepare("SELECT price,old_price FROM products WHERE id=?").bind(i.id).first();
+        if (!p) continue;
+        before.push({ id: i.id, price: p.price, old_price: p.old_price });
+        stmts.push(env.DB.prepare("UPDATE products SET price=?,old_price=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(i.to, i.old_price, i.id));
+      }
+      if (stmts.length) await env.DB.batch(stmts);
+      return { before: { items: before }, target: 0 };
+    }
+    case "set_visibility":
+    case "set_featured": {
+      const col = tool === "set_visibility" ? "active" : "featured", p = await env.DB.prepare(`SELECT ${col} v FROM products WHERE id=?`).bind(a.product_id).first();
+      if (!p) throw new Error("The product no longer exists.");
+      await env.DB.prepare(`UPDATE products SET ${col}=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(a[col] ? 1 : 0, a.product_id).run();
+      return { before: { product_id: a.product_id, col, value: p.v }, target: a.product_id };
+    }
+    case "set_image": {
+      const p = await env.DB.prepare("SELECT image_url,image_original FROM products WHERE id=?").bind(a.product_id).first();
+      if (!p) throw new Error("The product no longer exists.");
+      const r = await fetch(a.image_url, { headers: { ...AGENT_UA, accept: "image/*" }, signal: AbortSignal.timeout(20000) });
+      const type = (r.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+      if (!r.ok || !/^image\/(jpeg|png|webp|gif|avif)$/.test(type)) throw new Error("That link is not a picture the store can use.");
+      let imageUrl = a.image_url;
+      const bucket = bucketOf(env);
+      if (bucket) {
+        const buf = await r.arrayBuffer();
+        if (buf.byteLength > 6 * 1024 * 1024) throw new Error("That picture is bigger than 6 MB.");
+        const key = `products/${a.product_id}/${crypto.randomUUID()}.${extFromType(type)}`;
+        await bucket.put(key, buf, { httpMetadata: { contentType: type, cacheControl: "public, max-age=31536000, immutable" } });
+        imageUrl = `/media/product/${encodeURIComponent(key)}`;
+      } else try { await r.body?.cancel(); } catch {}
+      await env.DB.prepare("UPDATE products SET image_original=CASE WHEN COALESCE(image_original,'')='' THEN image_url ELSE image_original END,image_url=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(imageUrl, a.product_id).run();
+      return { before: { product_id: a.product_id, image_url: p.image_url, image_original: p.image_original }, target: a.product_id, result: { image_url: imageUrl } };
+    }
+    case "update_text": {
+      const cols = Object.keys(a.fields), p = await env.DB.prepare(`SELECT ${cols.join(",")} FROM products WHERE id=?`).bind(a.product_id).first();
+      if (!p) throw new Error("The product no longer exists.");
+      await env.DB.prepare(`UPDATE products SET ${cols.map((c) => c + "=?").join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(...cols.map((c) => a.fields[c]), a.product_id).run();
+      return { before: { product_id: a.product_id, fields: { ...p } }, target: a.product_id };
+    }
+    case "create_discount": {
+      let r;
+      try {
+        r = await env.DB.prepare("INSERT INTO discounts(code,type,amount,min_order,active,expires_at,max_uses,first_order_only,product_id,category_id,min_qty,auto_apply) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)").bind(a.code, a.type, Number(a.amount), Number(a.min_order) || 0, 1, expiryOf(a.expires_at), a.max_uses === "" ? null : a.max_uses, 0, a.product_id || null, a.category_id || null, 0, a.auto_apply ? 1 : 0).run();
+      } catch { throw new Error("That code already exists."); }
+      return { before: { discount_id: r.meta?.last_row_id }, target: r.meta?.last_row_id || 0 };
+    }
+    case "create_campaign": {
+      const r = await env.DB.prepare("INSERT INTO promo_campaigns(title,title_ar,eyebrow,eyebrow_ar,body,body_ar,cta_text,cta_text_ar,link,image_url,discount_code,product_ids,starts_at,ends_at,active,show_on_home,sort_order) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(...campaignBind(a)).run();
+      return { before: { campaign_id: r.meta?.last_row_id }, target: r.meta?.last_row_id || 0 };
+    }
+    case "set_campaign_active": {
+      const c = await env.DB.prepare("SELECT active FROM promo_campaigns WHERE id=?").bind(a.campaign_id).first();
+      if (!c) throw new Error("The campaign no longer exists.");
+      await env.DB.prepare("UPDATE promo_campaigns SET active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(a.active ? 1 : 0, a.campaign_id).run();
+      return { before: { campaign_id: a.campaign_id, active: c.active }, target: a.campaign_id };
+    }
+  }
+  throw new Error("Unknown action.");
+}
+async function agentUndo(env, tool, b) {
+  switch (tool) {
+    case "set_price":
+      if (b.variant_id) await env.DB.prepare("UPDATE product_variants SET price=?,old_price=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(b.price, b.old_price, b.variant_id).run();
+      else await env.DB.prepare("UPDATE products SET price=?,old_price=?,steam_auto=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(b.price, b.old_price, b.steam_auto ?? 1, b.product_id).run();
+      return;
+    case "adjust_prices":
+      if (b.items?.length) await env.DB.batch(b.items.map((i) => env.DB.prepare("UPDATE products SET price=?,old_price=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(i.price, i.old_price, i.id)));
+      return;
+    case "set_visibility":
+    case "set_featured":
+      await env.DB.prepare(`UPDATE products SET ${b.col === "featured" ? "featured" : "active"}=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(b.value, b.product_id).run();
+      return;
+    case "set_image":
+      await env.DB.prepare("UPDATE products SET image_url=?,image_original=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(b.image_url || "", b.image_original || "", b.product_id).run();
+      return;
+    case "update_text": {
+      const cols = Object.keys(b.fields || {});
+      if (cols.length) await env.DB.prepare(`UPDATE products SET ${cols.map((c) => c + "=?").join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(...cols.map((c) => b.fields[c] ?? ""), b.product_id).run();
+      return;
+    }
+    case "create_discount":
+      await env.DB.prepare("DELETE FROM discounts WHERE id=?").bind(b.discount_id).run();
+      return;
+    case "create_campaign":
+      await env.DB.prepare("DELETE FROM promo_campaigns WHERE id=?").bind(b.campaign_id).run();
+      return;
+    case "set_campaign_active":
+      await env.DB.prepare("UPDATE promo_campaigns SET active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(b.active, b.campaign_id).run();
+      return;
+  }
+}
+const agentCard = (r) => {
+  const plan = agentParse(r.plan, {});
+  return { id: r.id, tool: r.tool, status: r.status, summary: plan.summary || r.summary || "", lines: plan.lines || [], warnings: plan.warnings || [], image: plan.image || "", risky: !!plan.risky, error: r.error || "", created_at: r.created_at };
+};
+async function agentStore(env, me, tool, plan, status = "pending") {
+  const r = await env.DB.prepare("INSERT INTO kd_agent_actions(admin_user_id,tool,args,plan,status) VALUES(?,?,?,?,?)").bind(me.id, tool, JSON.stringify(plan.args), JSON.stringify(plan), status).run();
+  return r.meta?.last_row_id;
+}
+// Claims the pending action first (so a double click cannot run it twice), then runs it.
+async function agentApply(env, req, me, id) {
+  const row = await env.DB.prepare("SELECT * FROM kd_agent_actions WHERE id=?").bind(Number(id) || 0).first();
+  if (!row) return { error: "That action no longer exists.", status: 404 };
+  const claim = await env.DB.prepare("UPDATE kd_agent_actions SET status='applying' WHERE id=? AND status='pending'").bind(row.id).run();
+  if (!claim.meta?.changes) return { error: `This action is already ${row.status}.`, status: 409 };
+  try {
+    const out = await agentExecute(env, req, row.tool, agentParse(row.args, {}));
+    await env.DB.prepare("UPDATE kd_agent_actions SET status='applied',prior=?,error='',applied_at=CURRENT_TIMESTAMP WHERE id=?").bind(JSON.stringify(out.before || {}), row.id).run();
+    const plan = agentParse(row.plan, {});
+    if (out.result?.image_url) { plan.image = out.result.image_url; await env.DB.prepare("UPDATE kd_agent_actions SET plan=? WHERE id=?").bind(JSON.stringify(plan), row.id).run(); }
+    await audit(env, me, "agent_" + row.tool, "agent", out.target || row.id, String(plan.summary || row.tool).slice(0, 300));
+    return { card: agentCard({ ...row, status: "applied", plan: JSON.stringify(plan), error: "" }) };
+  } catch (e) {
+    const msg = String(e?.message || e).slice(0, 200);
+    await env.DB.prepare("UPDATE kd_agent_actions SET status='failed',error=? WHERE id=?").bind(msg, row.id).run();
+    return { error: msg, status: 400 };
+  }
+}
+// ---- the chat loop ----
+async function agentWeb(cfg, question) {
+  try {
+    const res = await geminiGenerate(cfg, cfg.model, { systemInstruction: { parts: [{ text: "Answer in at most 5 short plain sentences. Use Google Search. Say so if you cannot confirm something." }] }, contents: [{ role: "user", parts: [{ text: String(question).slice(0, 500) }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.2, maxOutputTokens: 700 } }, 40000);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: "Web research is not available right now." };
+    const cand = d?.candidates?.[0];
+    return { answer: (cand?.content?.parts || []).map((x) => x.text || "").join("").trim().slice(0, 1800), sources: (cand?.groundingMetadata?.groundingChunks || []).map((c) => c.web?.uri).filter(Boolean).slice(0, 4) };
+  } catch { return { error: "Web research timed out." }; }
+}
+async function agentTool(env, req, me, cfg, name, args, auto, out) {
+  args = args && typeof args === "object" ? args : {};
+  if (AGENT_WRITE.has(name)) {
+    const r = await agentPlan(env, req, name, args);
+    if (r.error) return { error: r.error };
+    const id = await agentStore(env, me, name, r.plan);
+    if (auto && !AGENT_ALWAYS_ASK.has(name) && !r.plan.risky) {
+      const ap = await agentApply(env, req, me, id);
+      if (ap.error) return { error: ap.error };
+      out.actions.push(ap.card);
+      return { status: "applied", action_id: id, summary: r.plan.summary };
+    }
+    out.actions.push(agentCard({ id, tool: name, status: "pending", plan: JSON.stringify(r.plan) }));
+    return { status: "waiting_for_owner_to_press_Apply", action_id: id, summary: r.plan.summary, note: "Nothing has changed yet." };
+  }
+  switch (name) {
+    case "search_products": return { products: await agentSearch(env, args.query, args.limit) };
+    case "get_product": {
+      const p = await agentProduct(env, args.product_id);
+      if (!p) return { error: "No such product." };
+      const vs = (await env.DB.prepare("SELECT id,name,price,old_price,active FROM product_variants WHERE product_id=? ORDER BY sort_order,id").bind(p.id).all()).results;
+      return { id: p.id, name: p.name, name_ar: p.name_ar, slug: p.slug, price: p.price, old_price: p.old_price, cost: p.cost_price, visible: !!p.active, featured: !!p.featured, image_url: p.image_url, steam_app_id: p.steam_app_id, steam_auto_price: !!(p.steam_app_id && p.steam_auto), description: String(p.description || "").slice(0, 400), description_ar: String(p.description_ar || "").slice(0, 400), variants: vs };
+    }
+    case "list_campaigns": return { campaigns: (await env.DB.prepare("SELECT id,title,active,starts_at,ends_at,discount_code,show_on_home FROM promo_campaigns ORDER BY id DESC LIMIT 20").all()).results };
+    case "list_discounts": return { discounts: (await env.DB.prepare("SELECT id,code,type,amount,min_order,active,expires_at,max_uses,used_count FROM discounts ORDER BY id DESC LIMIT 30").all()).results };
+    case "sales_report": {
+      const d = Math.max(1, Math.min(365, Math.floor(Number(args.days)) || 7)), mod = `-${d} days`;
+      const tot = await env.DB.prepare("SELECT COUNT(*) orders,COALESCE(SUM(total),0) revenue FROM orders WHERE payment_status='paid' AND date(created_at)>=date('now',?)").bind(mod).first();
+      const top = (await env.DB.prepare("SELECT oi.product_name name,SUM(oi.quantity) qty,SUM(oi.quantity*oi.unit_price) revenue FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE o.payment_status='paid' AND date(o.created_at)>=date('now',?) GROUP BY oi.product_name ORDER BY qty DESC LIMIT 5").bind(mod).all()).results;
+      return { days: d, paid_orders: tot.orders, revenue_egp: money(tot.revenue), best_sellers: top.map((t) => ({ name: t.name, qty: t.qty, revenue_egp: money(t.revenue) })) };
+    }
+    case "research_web": return await agentWeb(cfg, args.question);
+    case "find_images": {
+      const r = await agentFindImages(env, req, cfg, args);
+      if (!r.error) out.images.push({ product_id: r.product_id, product_name: r.product_name, images: r.images });
+      return r.error ? r : { found: r.images.length, note: r.none ? "No usable pictures found." : "The owner now sees these pictures as a picker and will choose one. Do not call set_image unless he asks you to use a specific one.", images: r.images.map((i) => i.url) };
+    }
+  }
+  return { error: `Unknown tool ${name}.` };
+}
+function agentSystem(cfg) {
+  const now = new Date();
+  return "You are the store assistant inside the admin panel of Kardivo (kardivo.store), an Egyptian online store selling digital goods: game codes, Steam gifts, gift cards, subscriptions. You talk to the store owner and act for him through tools. Prices are in Egyptian pounds (EGP).\n" +
+    `Today is ${now.toISOString().slice(0, 10)} (UTC). Egypt time is UTC+2/+3. Use full ISO date-times for schedules.\n` +
+    "Rules:\n" +
+    "- Always look a product up with search_products before changing or promoting it. Never guess ids, prices, stock or what a product is. If several products could match and it is not obvious which one is meant, ask a short question that lists them; do not pick for the owner.\n" +
+    "- Tools that change something only create a card the owner must Apply (unless the tool result says applied). Never say a change is done while the result says waiting. Say what is waiting for his approval, briefly.\n" +
+    "- A campaign request: look up the product(s), research the product only if you do not know what it is, use find_images when the product has no good picture, then create_campaign with English and natural Egyptian-friendly Arabic copy (short, honest, no invented claims, no fake countdown or scarcity). Do not invent a discount: only create a code or lower prices when the owner gave the discount or asked for one; otherwise make the campaign without one and offer to add a discount. If he gives a discount, create the discount code first, then the campaign using that code. Default length is 3 days unless he says otherwise.\n" +
+    "- Picture requests: call find_images and tell him to pick one from the picker.\n" +
+    "- If a tool returns an error, fix the arguments and retry once if it is obvious, otherwise explain plainly.\n" +
+    "- Reply in the same language the owner writes in (Arabic, English or Arabizi-style mix: answer in Arabic or English). Keep replies short and plain text: no markdown, no tables, no emojis. Never show API keys or internal ids unless useful.\n" +
+    (cfg.instructions ? `Owner's extra instructions: ${cfg.instructions.slice(0, 1000)}\n` : "");
+}
+async function agentChat(env, req, me, cfg, message, history, auto) {
+  const out = { actions: [], images: [] };
+  const contents = [];
+  for (const h of (Array.isArray(history) ? history : []).slice(-12)) {
+    const text = aiText(h?.text, 1500);
+    if (text) contents.push({ role: h.role === "assistant" ? "model" : "user", parts: [{ text }] });
+  }
+  contents.push({ role: "user", parts: [{ text: aiText(message, 2000) }] });
+  const system = agentSystem(cfg);
+  for (let step = 0; step < AGENT_MAX_STEPS; step++) {
+    let res;
+    try {
+      res = await geminiGenerate(cfg, cfg.model, { systemInstruction: { parts: [{ text: system }] }, contents, tools: [{ functionDeclarations: AGENT_DECLS }], generationConfig: { temperature: 0.2, maxOutputTokens: 2500 } }, 50000);
+    } catch (e) {
+      return { error: e?.name === "AbortError" || e?.name === "TimeoutError" ? "Gemini took too long to answer. Try again." : "Could not reach Gemini.", status: 504, ...out };
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ...geminiHttpError(res, data, cfg.model), ...out };
+    const cand = data?.candidates?.[0], parts = cand?.content?.parts || [], calls = parts.filter((p) => p.functionCall);
+    if (!calls.length) {
+      const text = parts.map((p) => p.text || "").join("").trim();
+      return { reply: text || (out.actions.length || out.images.length ? "Done. See below." : "I could not answer that. Try rephrasing."), ...out };
+    }
+    contents.push(cand.content);
+    const replies = [];
+    for (const c of calls.slice(0, 6)) {
+      let result;
+      try { result = await agentTool(env, req, me, cfg, c.functionCall.name, c.functionCall.args, auto, out); }
+      catch (e) { result = { error: String(e?.message || e).slice(0, 200) }; }
+      replies.push({ functionResponse: { name: c.functionCall.name, response: { result } } });
+    }
+    contents.push({ role: "user", parts: replies });
+  }
+  return { reply: "That took more steps than I allow in one go. Here is where it stands; tell me to continue if you want the rest.", ...out };
+}
+
 async function api(req, env, url, ctx) {
   if (!env.DB)
     return json(
@@ -4243,6 +4707,83 @@ async function api(req, env, url, ctx) {
       return json({ ok: true, image_url: imageUrl });
     }
     return json(r);
+  }
+  // ---- V97: AI admin assistant (chat that can change prices, find pictures, run campaigns; every change is a card the owner applies, and can undo) ----
+  if (path === "/api/admin/agent" && method === "GET") {
+    await env.DB.prepare("DELETE FROM kd_agent_actions WHERE created_at<datetime('now','-30 days')").run();
+    const c = await geminiConfig(env),
+      s = await settings(env);
+    const rows = (await env.DB.prepare("SELECT * FROM kd_agent_actions ORDER BY id DESC LIMIT 80").all()).results;
+    return json({ configured: !!c.key, auto: s.agent_auto === "1", model: c.model, actions: rows.map(agentCard) });
+  }
+  if (path === "/api/admin/agent" && method === "PUT") {
+    const b = await readJson(req);
+    await env.DB.prepare("INSERT INTO settings(key,value) VALUES('agent_auto',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(b.auto ? "1" : "0").run();
+    await audit(env, me, "agent_settings", "settings", null, b.auto ? "automatic small changes on" : "automatic small changes off");
+    return json({ ok: true, auto: !!b.auto });
+  }
+  if (path === "/api/admin/agent/chat" && method === "POST") {
+    const cfg = await geminiConfig(env);
+    if (!cfg.key) return json({ error: "Add your Gemini API key first: Admin > Settings > AI auto-fill." }, 400);
+    if (!(await throttle(env, `agent:${me.id}`, 150, 3600000))) return json({ error: "Too many assistant messages this hour. Try again later." }, 429);
+    const b = await readJson(req),
+      message = aiText(b.message, 2000);
+    if (!message) return json({ error: "Type a message first." }, 400);
+    const s = await settings(env),
+      r = await agentChat(env, req, me, cfg, message, b.history, s.agent_auto === "1");
+    if (r.error && !r.actions?.length && !r.images?.length) return json({ error: r.error }, r.status || 500);
+    return json({ reply: r.reply || r.error, actions: r.actions || [], images: r.images || [] });
+  }
+  if (path === "/api/admin/agent/act" && method === "POST") {
+    // A button the owner pressed (for example a picture he chose), so it is applied at once.
+    const b = await readJson(req),
+      tool = clean(b.tool);
+    if (!AGENT_WRITE.has(tool)) return json({ error: "Unknown action." }, 400);
+    const r = await agentPlan(env, req, tool, b.args && typeof b.args === "object" ? b.args : {});
+    if (r.error) return json({ error: r.error }, 400);
+    const id = await agentStore(env, me, tool, r.plan),
+      ap = await agentApply(env, req, me, id);
+    if (ap.error) return json({ error: ap.error }, ap.status || 400);
+    return json({ card: ap.card });
+  }
+  if (path === "/api/admin/agent/apply-all" && method === "POST") {
+    const b = await readJson(req),
+      ids = (Array.isArray(b.ids) ? b.ids : []).map(Number).filter((n) => n > 0).slice(0, 12),
+      cards = [];
+    let error = "";
+    for (const id of ids) {
+      const ap = await agentApply(env, req, me, id);
+      if (ap.error) { error = ap.error; break; }
+      cards.push(ap.card);
+    }
+    return json({ cards, error });
+  }
+  const agentActMatch = path.match(/^\/api\/admin\/agent\/actions\/(\d+)\/(apply|cancel|undo)$/);
+  if (agentActMatch && method === "POST") {
+    const id = Number(agentActMatch[1]),
+      op = agentActMatch[2];
+    if (op === "apply") {
+      const ap = await agentApply(env, req, me, id);
+      return ap.error ? json({ error: ap.error }, ap.status || 400) : json({ card: ap.card });
+    }
+    const row = await env.DB.prepare("SELECT * FROM kd_agent_actions WHERE id=?").bind(id).first();
+    if (!row) return json({ error: "That action no longer exists." }, 404);
+    if (op === "cancel") {
+      const r = await env.DB.prepare("UPDATE kd_agent_actions SET status='cancelled' WHERE id=? AND status='pending'").bind(id).run();
+      if (!r.meta?.changes) return json({ error: `This action is already ${row.status}.` }, 409);
+      return json({ card: agentCard({ ...row, status: "cancelled" }) });
+    }
+    const claim = await env.DB.prepare("UPDATE kd_agent_actions SET status='undoing' WHERE id=? AND status='applied'").bind(id).run();
+    if (!claim.meta?.changes) return json({ error: `This action is ${row.status}, so it cannot be undone.` }, 409);
+    try {
+      await agentUndo(env, row.tool, agentParse(row.prior, {}));
+    } catch (e) {
+      await env.DB.prepare("UPDATE kd_agent_actions SET status='applied' WHERE id=?").bind(id).run();
+      return json({ error: "Could not undo: " + String(e?.message || e).slice(0, 160) }, 500);
+    }
+    await env.DB.prepare("UPDATE kd_agent_actions SET status='undone',undone_at=CURRENT_TIMESTAMP WHERE id=?").bind(id).run();
+    await audit(env, me, "agent_undo_" + row.tool, "agent", id, String(agentParse(row.plan, {}).summary || "").slice(0, 300));
+    return json({ card: agentCard({ ...row, status: "undone" }) });
   }
   const productMatch = path.match(/^\/api\/admin\/products\/(\d+)$/);
   const galleryMatch = path.match(/^\/api\/admin\/products\/(\d+)\/gallery$/);

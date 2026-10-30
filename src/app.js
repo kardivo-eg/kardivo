@@ -3110,6 +3110,7 @@ async function openUserAccount() {
 }
 const ADMIN_TABS = [
   ["dashboard", "Dashboard"],
+  ["assistant", "AI assistant"],
   ["queue", "Needs review"],
   ["inbox", "Messages"],
   ["orders", "Orders"],
@@ -3129,6 +3130,7 @@ const ADMIN_TABS = [
 ];
 // Small line icons for the admin menu (24px grid, drawn with strokes).
 const ADMIN_ICONS = {
+  assistant: '<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
   dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
   queue: '<circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/>',
   inbox: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
@@ -3150,7 +3152,7 @@ const ADMIN_ICONS = {
 const BADGE_OF = { queue: "review_queue", inbox: "unread_messages", waitlist: "waitlist_ready" };
 // ---- V82 admin: grouped menu, search across everything, a filter box on every list ----
 const ADMIN_GROUPS = [
-  ["Every day", ["dashboard", "queue", "inbox", "orders"]],
+  ["Every day", ["dashboard", "assistant", "queue", "inbox", "orders"]],
   ["Catalog", ["products", "categories", "inventory", "merge", "waitlist"]],
   ["Marketing", ["discounts", "campaigns", "emails", "reviews"]],
   ["People & money", ["customers", "refunds"]],
@@ -3158,6 +3160,7 @@ const ADMIN_GROUPS = [
 ];
 const ADMIN_HINTS = {
   dashboard: "home overview revenue sales stats chart funnel backup quick actions test email whatsapp",
+  assistant: "ai assistant chat gemini agent change price find images pictures campaign discount sale automatic undo",
   queue: "payment proof review pending paid verify screenshot",
   inbox: "messages chat support threads unread",
   orders: "orders export csv refund fulfil deliver status paid",
@@ -3276,7 +3279,7 @@ document.addEventListener("keydown", (e) => {
 });
 // A filter box above every long list (orders and settings have their own).
 function addAdminFilter(main, tab) {
-  if (["orders", "dashboard", "settings", "merge", "products"].includes(tab)) return;
+  if (["orders", "dashboard", "settings", "merge", "products", "assistant"].includes(tab)) return;
   const panels = $$(".admin-panel", main).filter((p) => p.querySelector("table.admin-table tbody tr"));
   const rows = $$("table.admin-table tbody tr", main).filter((tr) => !tr.querySelector("td.empty"));
   if (!panels.length || rows.length < 5) return;
@@ -3357,6 +3360,127 @@ async function adminBadges(d) {
     }
   } catch {}
 }
+// ---- V97: AI assistant tab (a chat that can change prices, find pictures and run campaigns; every change is a card you Apply, and can Undo) ----
+const AGENT_KEY = "kd_agent_chat_v1";
+const agentLoad = () => { try { const a = JSON.parse(localStorage.getItem(AGENT_KEY) || "[]"); return Array.isArray(a) ? a : []; } catch { return []; } };
+const agentSave = (m) => { try { localStorage.setItem(AGENT_KEY, JSON.stringify(m.slice(-40))); } catch {} };
+const AGENT_STATUS = { pending: "Waiting for you", applied: "Applied", cancelled: "Cancelled", undone: "Undone", failed: "Failed", applying: "Applying…", undoing: "Undoing…", gone: "No longer available" };
+const AGENT_IDEAS = [
+  ["Change a price", "Change the price of … to … EGP"],
+  ["Find pictures", "Find pictures for …"],
+  ["Run a campaign", "Run a 3-day campaign for …"],
+  ["Campaign with a discount", "Run a campaign for … with 15% off"],
+  ["Put on sale", "Put … on sale at … EGP and show the old price"],
+  ["Sales this week", "How did we sell this week?"],
+];
+async function adminAssistant(main) {
+  const info = await api("/api/admin/agent");
+  let msgs = agentLoad(), busy = false;
+  const byId = new Map(info.actions.map((a) => [a.id, a]));
+  const syncCards = (list) => {
+    const m = new Map(list.map((a) => [a.id, a]));
+    msgs.forEach((x) => (x.actions || []).forEach((c, i) => { const f = m.get(c.id); if (f) x.actions[i] = f; else if (c.status === "pending") c.status = "gone"; }));
+  };
+  syncCards(info.actions);
+  main.innerHTML = `<div class="admin-top"><div><h2>AI assistant</h2><small class="ag-sub">Tell it what you want: change a price, find pictures, run a campaign. It shows every change as a card first, and you press Apply.</small></div>
+    <div class="ag-tools"><label class="ag-auto" title="Small, safe changes (a price within 30%, show/hide, a picture) are applied without asking. Discounts, campaigns and bulk price changes always wait for you."><input type="checkbox" id="agAuto" ${info.auto ? "checked" : ""}> Apply small changes automatically</label><button type="button" class="mini" id="agClear">Clear chat</button></div></div>
+    ${info.configured ? "" : `<div class="notice danger-text" style="margin-bottom:12px">Add your Gemini API key first: Settings, AI auto-fill. The assistant uses the same key.</div>`}
+    <div class="ag-wrap"><div class="ag-log" id="agLog" aria-live="polite"></div>
+    <div class="ag-chips" id="agChips">${AGENT_IDEAS.map(([l, t], i) => `<button type="button" class="ag-chip" data-idea="${i}">${escapeHTML(l)}</button>`).join("")}</div>
+    <div class="ag-input"><textarea id="agText" dir="auto" rows="1" placeholder="Example: change the price of Elden Ring to 850" aria-label="Message to the assistant"></textarea><button type="button" class="btn primary" id="agSend">Send</button></div></div>`;
+  const log = $("#agLog"), box = $("#agText"), send = $("#agSend");
+  const nl = (s) => escapeHTML(s).replace(/\n/g, "<br>");
+  const cardHTML = (c) => `<div class="ag-card st-${escapeHTML(c.status)}" data-card="${c.id}">
+      <div class="ag-card-head"><b dir="auto">${escapeHTML(c.summary)}</b><span class="ag-st">${AGENT_STATUS[c.status] || escapeHTML(c.status)}</span></div>
+      ${c.image ? `<img class="ag-card-img" src="${escapeHTML(c.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}
+      <ul dir="auto">${(c.lines || []).map((l) => `<li>${escapeHTML(l)}</li>`).join("")}</ul>
+      ${(c.warnings || []).map((w) => `<div class="ag-warn">${escapeHTML(w)}</div>`).join("")}
+      ${c.error ? `<div class="ag-warn">${escapeHTML(c.error)}</div>` : ""}
+      <div class="ag-card-actions">${c.status === "pending" ? `<button type="button" class="btn primary" data-act="apply" data-id="${c.id}">Apply</button><button type="button" class="btn ghost" data-act="cancel" data-id="${c.id}">Cancel</button>` : c.status === "applied" ? `<button type="button" class="btn ghost" data-act="undo" data-id="${c.id}">Undo</button>` : ""}</div></div>`;
+  const pickHTML = (s, mi, si) => `<div class="ag-pick"><div class="ag-pick-head">${s.images.length ? (s.product_id ? `Pictures for <b dir="auto">${escapeHTML(s.product_name)}</b>. Click one to use it.` : `Pictures found for <b dir="auto">${escapeHTML(s.product_name)}</b> (not linked to a product).`) : `No usable pictures found for <b dir="auto">${escapeHTML(s.product_name)}</b>. Try a more exact name, or paste a picture link.`}</div>
+      <div class="ag-grid">${s.images.map((i) => `<button type="button" class="ag-img ${s.done === i.url ? "chosen" : ""}" ${s.product_id && !s.done ? "" : "disabled"} data-act="pick" data-m="${mi}" data-s="${si}" data-url="${escapeHTML(i.url)}"><img src="${escapeHTML(i.url)}" alt="" loading="lazy" referrerpolicy="no-referrer"><span>${escapeHTML(i.source)}</span></button>`).join("")}</div></div>`;
+  const draw = () => {
+    log.innerHTML = msgs.length ? msgs.map((m, mi) => {
+      if (m.role === "user") return `<div class="ag-msg user"><div class="ag-bubble" dir="auto">${nl(m.text)}</div></div>`;
+      const pend = (m.actions || []).filter((c) => c.status === "pending");
+      return `<div class="ag-msg"><div class="ag-bubble ${m.error ? "err" : ""}" dir="auto">${nl(m.text || "")}</div>
+        ${(m.images || []).map((s, si) => pickHTML(s, mi, si)).join("")}
+        ${pend.length > 1 ? `<div class="ag-all"><button type="button" class="btn primary" data-act="all" data-m="${mi}">Apply all ${pend.length}</button><small>in the order shown</small></div>` : ""}
+        ${(m.actions || []).map(cardHTML).join("")}</div>`;
+    }).join("") : `<div class="ag-empty"><b>What should we do?</b><span>Try one of the ideas below, or just type it in your own words (Arabic or English).</span></div>`;
+    if (busy) log.insertAdjacentHTML("beforeend", `<div class="ag-msg"><div class="ag-bubble ag-typing"><i></i><i></i><i></i></div></div>`);
+    $("#agChips").hidden = msgs.length > 0;
+    send.disabled = busy;
+    log.scrollTop = log.scrollHeight;
+  };
+  const historyOf = () => msgs.slice(-12).map((m) => ({ role: m.role, text: (m.text || "") + ((m.actions || []).length ? "\n[Cards: " + m.actions.map((c) => `#${c.id} ${c.summary} (${c.status})`).join("; ") + "]" : "") }));
+  const replace = (card) => { msgs.forEach((m) => (m.actions || []).forEach((c, i) => { if (c.id === card.id) m.actions[i] = card; })); agentSave(msgs); draw(); };
+  const sync = async () => { try { syncCards((await api("/api/admin/agent")).actions); agentSave(msgs); draw(); } catch {} };
+  const say = async (text) => {
+    text = text.trim();
+    if (!text || busy) return;
+    const history = historyOf();
+    msgs.push({ role: "user", text });
+    box.value = ""; box.style.height = "";
+    busy = true; draw(); agentSave(msgs);
+    try {
+      const r = await api("/api/admin/agent/chat", { method: "POST", body: JSON.stringify({ message: text, history }) });
+      msgs.push({ role: "assistant", text: r.reply || "", actions: r.actions || [], images: r.images || [] });
+    } catch (e) {
+      msgs.push({ role: "assistant", text: e.message, error: true });
+    }
+    busy = false; agentSave(msgs); draw(); box.focus();
+  };
+  const run = async (btn, path) => {
+    btn.disabled = true;
+    try { return await api(path, { method: "POST" }); }
+    catch (e) { toast(e.message); btn.disabled = false; sync(); return null; }
+  };
+  log.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-act]");
+    if (!b || busy) return;
+    const act = b.dataset.act, id = b.dataset.id;
+    if (act === "apply" || act === "cancel" || act === "undo") {
+      const r = await run(b, `/api/admin/agent/actions/${id}/${act}`);
+      if (r) { replace(r.card); toast(act === "apply" ? "Applied" : act === "undo" ? "Undone" : "Cancelled"); }
+    } else if (act === "all") {
+      const m = msgs[Number(b.dataset.m)], ids = (m.actions || []).filter((c) => c.status === "pending").map((c) => c.id);
+      b.disabled = true;
+      try {
+        const r = await api("/api/admin/agent/apply-all", { method: "POST", body: JSON.stringify({ ids }) });
+        r.cards.forEach(replace);
+        toast(r.error ? `Stopped: ${r.error}` : `Applied ${r.cards.length}`);
+        if (r.error) sync();
+      } catch (err) { toast(err.message); b.disabled = false; sync(); }
+    } else if (act === "pick") {
+      const m = msgs[Number(b.dataset.m)], s = m.images[Number(b.dataset.s)];
+      b.disabled = true;
+      try {
+        const r = await api("/api/admin/agent/act", { method: "POST", body: JSON.stringify({ tool: "set_image", args: { product_id: s.product_id, image_url: b.dataset.url } }) });
+        s.done = b.dataset.url; (m.actions = m.actions || []).push(r.card); agentSave(msgs); draw(); toast("Picture applied");
+      } catch (err) { toast(err.message); b.disabled = false; }
+    }
+  });
+  send.onclick = () => say(box.value);
+  box.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); say(box.value); } });
+  box.addEventListener("input", () => { box.style.height = "auto"; box.style.height = Math.min(box.scrollHeight, 150) + "px"; });
+  $("#agChips").addEventListener("click", (e) => {
+    const c = e.target.closest("[data-idea]");
+    if (!c) return;
+    const t = AGENT_IDEAS[Number(c.dataset.idea)][1], i = t.indexOf("…");
+    box.value = t; box.focus();
+    if (i >= 0 && t.includes("…")) box.setSelectionRange(i, i + 1);
+    if (!t.includes("…")) say(t);
+  });
+  $("#agAuto").onchange = async (e) => {
+    try { await api("/api/admin/agent", { method: "PUT", body: JSON.stringify({ auto: e.target.checked }) }); toast(e.target.checked ? "Small changes will be applied automatically" : "Every change will wait for your Apply"); }
+    catch (err) { e.target.checked = !e.target.checked; toast(err.message); }
+  };
+  $("#agClear").onclick = () => { if (busy) return; msgs = []; agentSave(msgs); draw(); };
+  draw();
+  if (!matchMedia("(max-width:700px)").matches) box.focus();
+}
+
 async function renderAdminTab() {
   const main = $("#adminMain");
   if (!main) return;
@@ -3367,6 +3491,7 @@ async function renderAdminTab() {
   main.innerHTML = `<div class="empty">Loading...</div>`;
   const pages = {
     dashboard: adminDashboard,
+    assistant: adminAssistant,
     queue: adminQueue,
     inbox: adminInbox,
     orders: adminOrders,
